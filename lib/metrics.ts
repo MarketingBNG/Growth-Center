@@ -103,11 +103,18 @@ export type Kpi = {
   hint?: string;
 };
 
-export async function kpis(days: number): Promise<Kpi[]> {
+/**
+ * The KPI row, plus the funnel it was computed from.
+ *
+ * Returns `current` so callers do not recompute it — the dashboard needs both the
+ * cards and the funnel, and calling funnel() again cost another 7 queries at ~280ms
+ * round trip each.
+ */
+export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funnel; previous: Funnel }> {
   const { current, previous } = rangeFor(days);
   const [now, before] = await Promise.all([funnel(current), funnel(previous)]);
 
-  return [
+  const cards: Kpi[] = [
     { key: 'visitors', label: 'Visitors', value: now.visitors, previous: before.visitors, format: 'number', higherIsBetter: true },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
@@ -119,6 +126,8 @@ export async function kpis(days: number): Promise<Kpi[]> {
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Revenue ÷ spend' },
     { key: 'cvr', label: 'Visitor → lead', value: now.visitorToLead, previous: before.visitorToLead, format: 'percent', higherIsBetter: true },
   ];
+
+  return { cards, current: now, previous: before };
 }
 
 export const kpiDelta = (k: Kpi) =>

@@ -1,11 +1,12 @@
 import { PageHeader } from '@/components/patterns/page-header';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
+import { redirect } from 'next/navigation';
 import { hasDb } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { cards } from '@/lib/integrations/service';
 import { can } from '@/lib/roles';
-import { requireUser } from '@/lib/auth';
+import { currentUser } from '@/lib/auth';
 import { IntegrationGrid } from './IntegrationGrid';
 
 export const metadata = { title: 'Integrations · Growth Center' };
@@ -26,7 +27,12 @@ export default async function IntegrationsPage({
     );
   }
 
-  const user = await requireUser();
+  // currentUser + redirect, never requireUser: requireUser throws HttpError, which is
+  // the contract route handlers expect. In a page it logged a stack trace on every
+  // signed-out request and only avoided a 500 because the layout's redirect won the
+  // race.
+  const user = await currentUser();
+  if (!user) redirect('/signin');
   const params = await searchParams;
   const list = await cards();
 

@@ -22,6 +22,35 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
+
+  // Distinct cookie names, because COOKIES IGNORE PORT NUMBERS. bng-command-center also
+  // runs on localhost and also uses NextAuth, so with the default names the two apps
+  // overwrite each other's session cookie. Growth Center then receives a token signed
+  // with the other app's NEXTAUTH_SECRET and fails with JWT_SESSION_ERROR
+  // ("decryption operation failed") — which looks like a broken login but is really a
+  // cookie collision.
+  cookies: {
+    sessionToken: {
+      name: 'growth-center.session-token',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: process.env.NODE_ENV === 'production' },
+    },
+    callbackUrl: {
+      name: 'growth-center.callback-url',
+      options: { sameSite: 'lax', path: '/', secure: process.env.NODE_ENV === 'production' },
+    },
+    csrfToken: {
+      name: 'growth-center.csrf-token',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: process.env.NODE_ENV === 'production' },
+    },
+    state: {
+      name: 'growth-center.state',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 900 },
+    },
+    pkceCodeVerifier: {
+      name: 'growth-center.pkce.code_verifier',
+      options: { httpOnly: true, sameSite: 'lax', path: '/', secure: process.env.NODE_ENV === 'production', maxAge: 900 },
+    },
+  },
   pages: { signIn: '/signin', error: '/signin' },
   callbacks: {
     async signIn({ user }) {

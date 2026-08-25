@@ -20,12 +20,12 @@ stack and conventions on purpose, so the team reads one codebase.
    - `DATABASE_URL` — a Neon connection string (use the **pooled** `-pooler` host)
    - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
    - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — redirect URI
-     `http://localhost:3100/api/auth/callback/google`
+     `http://localhost:3000/api/auth/callback/google`
    - `APP_ENCRYPTION_KEY` — `openssl rand -hex 32` (exactly 64 hex chars)
 2. `npm install`
 3. `npm run db:migrate` — creates the schema
 4. `npm run db:seed` — 12 months of coherent demo data
-5. `npm run dev` → http://localhost:3100
+5. `npm run dev` → http://localhost:3000
 
 Without `DATABASE_URL` the app still boots: every page renders a "no database
 configured" state rather than a stack trace, and `/api/health` reports exactly what is
@@ -46,7 +46,9 @@ npm run smoke      # exercise the lead -> deal -> revenue write path
 npm run smoke:metrics  # exercise the dashboard/marketing/analytics queries
 ```
 
-The dev server runs on **port 3100** — `bng-command-center` holds 3000.
+The dev server runs on port 3000. `bng-command-center` uses the same port, so run
+one at a time — Next silently falls back to another port if 3000 is taken, which makes
+`NEXTAUTH_URL` and the Google redirect URI wrong.
 
 ## Layout
 

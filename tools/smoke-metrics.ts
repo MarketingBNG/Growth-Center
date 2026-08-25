@@ -30,7 +30,7 @@ check(f.roas !== null && f.roas > 0, `ROAS is computable (${f.roas?.toFixed(2)}x
 check(f.cac !== null, `CAC is computable (${f.cac ? money(f.cac) : 'null'})`);
 
 console.log('\nKPIs');
-const cardList = await kpis(30);
+const { cards: cardList } = await kpis(30);
 check(cardList.length === 10, `10 KPI cards (${cardList.length})`);
 check(
   cardList.every((k) => k.value === null || Number.isFinite(k.value)),

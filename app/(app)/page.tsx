@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { funnel, kpis, openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { kpis, openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
 import { campaignPerformance } from '@/lib/campaigns';
 import { rangeParam } from '@/lib/range';
 import { fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
@@ -42,10 +42,9 @@ export default async function DashboardPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [cards, f, pipeline, series, channels, campaigns, recentLeads, tasks, insights, demoIntegrations] =
+  const [kpiResult, pipeline, series, channels, campaigns, recentLeads, tasks, insights, demoIntegrations] =
     await Promise.all([
       kpis(days),
-      funnel(current),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
@@ -73,6 +72,7 @@ export default async function DashboardPage({
       db().integration.count({ where: { state: 'demo_data' } }),
     ]);
 
+  const { cards, current: f } = kpiResult;
   const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
 
   return (
