@@ -368,7 +368,9 @@ async function main() {
   console.log('Opportunities, customers and revenue…');
   // Every opportunity comes from a converted or qualified lead, so the funnel counts
   // line up with the pipeline board.
-  const convertible = leads.filter((l) => l.status === 'converted' || l.status === 'qualified');
+  const convertible = leads.filter(
+    (l) => (l.status === 'converted' || l.status === 'qualified') && l.companyId,
+  );
   let wonCount = 0;
 
   for (const lead of convertible) {
@@ -425,13 +427,13 @@ async function main() {
       },
     });
 
-    if (!stage.isWon || !lead.companyId) continue;
+    if (!stage.isWon) continue;
     wonCount++;
 
     const wonAt = closedAt!;
     const customer = await db.customer.upsert({
-      where: { companyId: lead.companyId },
-      create: { companyId: lead.companyId, opportunityId: opp.id, wonAt },
+      where: { companyId: lead.companyId! },
+      create: { companyId: lead.companyId!, opportunityId: opp.id, wonAt },
       update: {},
       select: { id: true, wonAt: true },
     });
@@ -758,10 +760,11 @@ async function main() {
   const revenue = await db.revenueEntry.aggregate({ _sum: { amount: true } });
   const spend = await db.marketingSpend.aggregate({ _sum: { amount: true } });
 
-  console.log('\\nSeeded:');
+  console.log('');
+  console.log('Seeded:');
   for (const [k, v] of Object.entries(counts)) console.log(`  ${k.padEnd(14)} ${v}`);
-  console.log(`  revenue       $${Number(revenue._sum.amount ?? 0).toLocaleString()}`);
-  console.log(`  spend         $${Number(spend._sum.amount ?? 0).toLocaleString()}`);
+  console.log(`  revenue       $${Number(revenue._sum.amount ?? 0).toLocaleString('en-US')}`);
+  console.log(`  spend         $${Number(spend._sum.amount ?? 0).toLocaleString('en-US')}`);
   console.log('\nAll integrations are seeded as demo_data or disconnected — none are connected.');
 }
 

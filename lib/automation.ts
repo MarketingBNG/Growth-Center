@@ -6,7 +6,27 @@
 
 import { on } from './events.ts';
 import { db } from './prisma.ts';
-import { pickOwner } from './leads.ts';
+import { ASSIGNABLE } from './roles.ts';
+
+/**
+ * Round-robins unassigned leads across the marketing team so nothing sits ownerless.
+ * Deliberately simple — least-loaded rather than any scoring model.
+ */
+export async function pickOwner(): Promise<string | null> {
+  const eligible = ASSIGNABLE.filter((e) => e.team === 'Digital Marketing');
+  if (!eligible.length) return null;
+
+  const counts = await db().lead.groupBy({
+    by: ['ownerEmail'],
+    where: { ownerEmail: { in: eligible.map((e) => e.email) }, status: { in: ['new', 'contacted'] } },
+    _count: { _all: true },
+  });
+
+  const load = new Map(counts.map((c) => [c.ownerEmail as string, c._count._all]));
+  return eligible.reduce((best, e) =>
+    (load.get(e.email) ?? 0) < (load.get(best.email) ?? 0) ? e : best,
+  ).email;
+}
 
 let registered = false;
 

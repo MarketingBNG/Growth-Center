@@ -24,11 +24,29 @@ export function on<T extends GrowthEvent['type']>(
   handlers.set(type, list);
 }
 
+let ready = false;
+
+/**
+ * Handlers register on the first dispatch rather than at server start.
+ *
+ * This used to live in instrumentation.ts, which Next evaluates for every runtime —
+ * webpack then bundled the Postgres driver for the edge runtime and every route
+ * returned 500 with "Can't resolve 'fs'". A dynamic import here keeps the driver on
+ * the server, and means nothing has to remember to import the handlers.
+ */
+async function ensureRegistered(): Promise<void> {
+  if (ready) return;
+  ready = true;
+  const { registerAutomations } = await import('./automation.ts');
+  registerAutomations();
+}
+
 /**
  * A handler that throws must not fail the write that caused the event — a lead is
  * still created even if assigning its owner fails. Errors are logged, not propagated.
  */
 export async function dispatch(event: GrowthEvent): Promise<void> {
+  await ensureRegistered();
   for (const handler of handlers.get(event.type) ?? []) {
     try {
       await handler(event);
