@@ -41,7 +41,12 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 npm run build      # prisma generate && next build
 npm run db:studio  # browse the data
+npm run db:verify  # assert the demo data reconciles
+npm run smoke      # exercise the lead -> deal -> revenue write path
+npm run smoke:metrics  # exercise the dashboard/marketing/analytics queries
 ```
+
+The dev server runs on **port 3100** — `bng-command-center` holds 3000.
 
 ## Layout
 
@@ -96,6 +101,20 @@ Two decisions carry most of the weight:
 - **`MetricSnapshot` is the only time-series table.** Every integration writes into it
   and every chart reads from it, so adding a provider adds rows, not tables.
 
+## Charts
+
+Series colours are the six `--chart-*` tokens in `app/globals.css`, stepped for this
+dark surface and **validated** rather than chosen by eye: lightness band, chroma floor,
+adjacent-pair CVD separation (worst ΔE 8.4 protan), normal-vision floor (worst ΔE 19.3)
+and 3:1 contrast all pass. Assign them in order and never cycle them.
+`--success`/`--warning`/`--destructive` are status colours and are never reused as a
+series.
+
+Two rules the charts follow: **never a second y-axis** (two measures of different scale
+get two charts — a dual axis lets the author choose which line appears to be winning),
+and **a rate with no denominator is null, not zero** — a 0% CTR on a campaign that
+served nothing is a false statement.
+
 ## Integration honesty
 
 An integration is `disconnected`, `connecting`, `connected`, `syncing`, `error` or
@@ -111,8 +130,8 @@ Credentials are AES-256-GCM sealed under `APP_ENCRYPTION_KEY` in a separate tabl
 |---|---|
 | 1 · Foundation — auth, roster, schema, shell | done |
 | 2 · CRM, Leads, Pipeline | done |
-| 3 · Dashboard, Marketing, Analytics, Integration Center | next |
-| 4 · SEO, Social, Outreach, Content, Reports, AI Insights | not started |
+| 3 · Dashboard, Marketing, Analytics, Integration Center | done |
+| 4 · SEO, Social, Outreach, Content, Reports, AI Insights | next |
 | 5 · Polish and automation | not started |
 | 6 · Tests and hardening | ongoing |
 

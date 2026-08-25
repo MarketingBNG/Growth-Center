@@ -557,10 +557,17 @@ model Task {
 /// The unique constraint makes a re-sync idempotent: the same day re-syncs to an
 /// upsert, not a duplicate row.
 model MetricSnapshot {
-  id         String   @id @default(cuid())
+  id         String @id @default(cuid())
   source     String
   entityType String
-  entityId   String?
+
+  /// NOT nullable, and "" means "no particular entity" (a whole-site session count).
+  /// Postgres treats NULLs as distinct in a unique index, so a nullable column here
+  /// would let the same day be inserted twice and make the upsert in
+  /// lib/integrations/service.ts never match — site metrics would double-count the
+  /// moment a real provider synced alongside the seeded rows.
+  entityId String @default("")
+
   metricKey  String
   date       DateTime @db.Date
   value      Decimal  @db.Decimal(18, 4)

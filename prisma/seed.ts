@@ -477,7 +477,7 @@ async function main() {
   console.log('Traffic metrics…');
   // Site sessions per day, the top of the funnel. Weekends dip, and the trend rises
   // in step with lead volume so the funnel's conversion rate stays believable.
-  const snapshots: { source: string; entityType: string; entityId: string | null; metricKey: string; date: Date; value: number }[] = [];
+  const snapshots: { source: string; entityType: string; entityId: string; metricKey: string; date: Date; value: number }[] = [];
   for (let d = MONTHS * 30; d >= 0; d--) {
     const date = dayOffset(d);
     const weekend = date.getUTCDay() === 0 || date.getUTCDay() === 6;
@@ -485,10 +485,10 @@ async function main() {
     const sessions = Math.round(int(380, 520) * growth * (weekend ? 0.55 : 1));
 
     snapshots.push(
-      { source: 'demo', entityType: 'site', entityId: null, metricKey: 'sessions', date, value: sessions },
-      { source: 'demo', entityType: 'site', entityId: null, metricKey: 'users', date, value: Math.round(sessions * 0.82) },
-      { source: 'demo', entityType: 'site', entityId: null, metricKey: 'pageviews', date, value: Math.round(sessions * int(2, 4)) },
-      { source: 'demo', entityType: 'site', entityId: null, metricKey: 'bounce_rate', date, value: Number((int(38, 62) + rnd()).toFixed(2)) },
+      { source: 'demo', entityType: 'site', entityId: '', metricKey: 'sessions', date, value: sessions },
+      { source: 'demo', entityType: 'site', entityId: '', metricKey: 'users', date, value: Math.round(sessions * 0.82) },
+      { source: 'demo', entityType: 'site', entityId: '', metricKey: 'pageviews', date, value: Math.round(sessions * int(2, 4)) },
+      { source: 'demo', entityType: 'site', entityId: '', metricKey: 'bounce_rate', date, value: Number((int(38, 62) + rnd()).toFixed(2)) },
     );
   }
   for (let i = 0; i < snapshots.length; i += 1000) {

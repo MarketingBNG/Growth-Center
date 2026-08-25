@@ -29,11 +29,23 @@
   --input: #3a4060;
   --ring: #4f8ef7;
 
+  /* Categorical series slots, stepped for this dark surface (#161b27) and validated:
+     lightness band, chroma floor, adjacent-pair CVD separation (worst ΔE 8.4 protan),
+     normal-vision floor (worst ΔE 19.3) and 3:1 contrast all pass. Slot 1 is the brand
+     blue; slots 2-6 come from a validated dark ramp.
+
+     Assign these IN ORDER and never cycle them — a 9th series folds into "Other" or
+     becomes small multiples. --success/--warning/--destructive above are STATUS colours
+     and are never reused as a series. */
   --chart-1: #4f8ef7;
-  --chart-2: #22c55e;
-  --chart-3: #f59e0b;
-  --chart-4: #a855f7;
-  --chart-5: #06b6d4;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #9085e9;
+
+  /* Recessive chart furniture. */
+  --grid: #232a3d;
 
   --sidebar: #161b27;
   --radius: 0.625rem;
@@ -66,6 +78,8 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-grid: var(--grid);
   --color-sidebar: var(--sidebar);
 
   --radius-sm: calc(var(--radius) - 4px);

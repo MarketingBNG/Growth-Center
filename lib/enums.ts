@@ -22,3 +22,12 @@ export const CONTENT_STATUSES = [
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 export type SourceType = (typeof SOURCE_TYPES)[number];
+
+/** Date-range choices for the dashboard/marketing/analytics pickers. Lives here rather
+ *  than in lib/metrics because RangePicker is a client component. */
+export const RANGE_OPTIONS = [
+  { value: '7', label: 'Last 7 days' },
+  { value: '30', label: 'Last 30 days' },
+  { value: '90', label: 'Last 90 days' },
+  { value: '365', label: 'Last 12 months' },
+] as const;
