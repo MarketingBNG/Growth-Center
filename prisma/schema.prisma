@@ -1,0 +1,927 @@
+// Growth Center — schema.
+//
+// Single-tenant on purpose: this is BNG's own marketing team's tool, so there is no
+// organizationId anywhere. Access control is the roster in lib/roles.ts, the same
+// mechanism bng-command-center uses. If BNG ever runs growth for client companies,
+// that becomes a migration, not a rewrite.
+//
+// Two decisions carry most of the weight here:
+//
+//   Activity is append-only. Lead status lives on Lead for querying, but every
+//   change also writes an Activity row, so "how did this lead get here" is answerable
+//   from the table rather than lost to the last UPDATE.
+//
+//   MetricSnapshot is the only time-series table. Every integration writes into it
+//   and every chart reads from it, so adding a provider adds rows, not tables.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+// Prisma 7 no longer accepts `url` here — the CLI reads it from prisma.config.ts and
+// the runtime client builds its own in lib/prisma.ts.
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── enums ────────────────────────────────────────────────────────────────────
+
+/// Mirrors lib/roles.ts. Stored on rows only where a row records who did something;
+/// a person's current role is always read from the roster, never from the database.
+enum Role {
+  partner
+  controller
+  manager
+  member
+  viewer
+}
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  unqualified
+  converted
+  lost
+}
+
+enum SourceType {
+  website
+  landing_page
+  form
+  paid_ads
+  organic_search
+  social
+  referral
+  outreach
+  event
+  import
+  manual
+}
+
+enum ActivityType {
+  created
+  status_changed
+  owner_changed
+  note_added
+  email
+  call
+  meeting
+  task_completed
+  stage_changed
+  converted
+  synced
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  done
+  cancelled
+}
+
+enum Priority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum ContentStatus {
+  idea
+  planned
+  draft
+  review
+  published
+  archived
+}
+
+/// The five states an integration card may render. Never inferred — always read from
+/// the Integration row, so nothing shows "connected" without a credential.
+enum IntegrationState {
+  disconnected
+  connecting
+  connected
+  syncing
+  error
+  demo_data
+}
+
+enum SocialNetwork {
+  instagram
+  facebook
+  linkedin
+  x
+  youtube
+  tiktok
+}
+
+enum ProspectStatus {
+  pending
+  active
+  replied
+  bounced
+  unsubscribed
+  completed
+}
+
+enum InsightKind {
+  opportunity
+  risk
+  anomaly
+  recommendation
+}
+
+// ─── marketing structure ──────────────────────────────────────────────────────
+
+/// A route to market: "Google Ads", "Organic Search", "LinkedIn". Deliberately a table
+/// rather than an enum so the team can add one without a migration.
+model Channel {
+  id   String @id @default(cuid())
+  name String @unique
+  slug String @unique
+  kind String @default("other") // paid | organic | social | email | referral | direct | other
+
+  campaigns Campaign[]
+  leads     Lead[]
+  revenue   RevenueEntry[]
+
+  createdAt DateTime @default(now())
+
+  @@map("channel")
+}
+
+model Campaign {
+  id        String    @id @default(cuid())
+  name      String
+  channelId String
+  status    String    @default("active") // active | paused | completed | draft
+  startDate DateTime?
+  endDate   DateTime?
+
+  /// Planned budget. Actual money out is the sum of MarketingSpend rows, which is what
+  /// every ROAS/CAC figure uses — a budget is an intention, not a cost.
+  budget Decimal? @db.Decimal(14, 2)
+
+  /// The provider's own id for this campaign, when it came from one. Lets a sync
+  /// update in place instead of duplicating.
+  externalId String?
+  source     String? // integration id: meta_ads, google_analytics, …
+
+  notes String?
+
+  channel       Channel         @relation(fields: [channelId], references: [id])
+  spend         MarketingSpend[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  revenue       RevenueEntry[]
+  content       ContentPiece[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, externalId])
+  @@index([channelId])
+  @@map("campaign")
+}
+
+/// One day of spend for one campaign. Daily granularity because that is what the ad
+/// platforms report and what a date-range filter needs.
+model MarketingSpend {
+  id         String   @id @default(cuid())
+  campaignId String
+  date       DateTime @db.Date
+
+  amount      Decimal @db.Decimal(14, 2)
+  impressions Int     @default(0)
+  clicks      Int     @default(0)
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+  @@index([date])
+  @@map("marketing_spend")
+}
+
+// ─── CRM ──────────────────────────────────────────────────────────────────────
+
+model Company {
+  id       String  @id @default(cuid())
+  name     String
+  domain   String? @unique
+  industry String?
+  size     String?
+  country  String?
+  website  String?
+  phone    String?
+  notes    String?
+
+  /// Plain string array rather than a Tag table and two join tables. One caller, no
+  /// tag metadata, and Postgres indexes arrays fine.
+  tags String[] @default([])
+
+  ownerEmail String?
+
+  contacts      Contact[]
+  leads         Lead[]
+  opportunities Opportunity[]
+  customer      Customer?
+  activities    Activity[]
+  noteEntries   Note[]
+  tasks         Task[]
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@map("company")
+}
+
+model Contact {
+  id        String  @id @default(cuid())
+  firstName String
+  lastName  String?
+  email     String? @unique
+  phone     String?
+  title     String?
+  linkedin  String?
+  companyId String?
+
+  tags       String[] @default([])
+  ownerEmail String?
+
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  leads         Lead[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  noteEntries   Note[]
+  tasks         Task[]
+  prospects     Prospect[]
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([lastName, firstName])
+  @@map("contact")
+}
+
+// ─── the funnel ───────────────────────────────────────────────────────────────
+
+/// Every inbound hand-raise. Keeps its own contact details so a lead can arrive from a
+/// form before anyone decides it deserves a Contact row; dedupe then links the two.
+model Lead {
+  id        String  @id @default(cuid())
+  firstName String
+  lastName  String?
+  email     String?
+  phone     String?
+  companyName String?
+  title     String?
+  message   String?
+
+  status     LeadStatus @default(new)
+  sourceType SourceType @default(manual)
+  ownerEmail String?
+
+  /// Column only — no scoring rules yet. Present so adding them later is a write path,
+  /// not a migration.
+  score Int @default(0)
+
+  campaignId String?
+  channelId  String?
+
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+  utmTerm     String?
+  utmContent  String?
+  landingPage String?
+  referrer    String?
+
+  contactId String?
+  companyId String?
+
+  /// Set when status first becomes `qualified`, so time-to-qualify is a subtraction
+  /// rather than a scan of the activity log.
+  qualifiedAt DateTime?
+  convertedAt DateTime?
+
+  tags String[] @default([])
+
+  campaign      Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  channel       Channel?      @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  opportunities Opportunity[]
+  activities    Activity[]
+  noteEntries   Note[]
+  tasks         Task[]
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([email])
+  @@index([createdAt])
+  @@index([campaignId])
+  @@map("lead")
+}
+
+model Pipeline {
+  id        String  @id @default(cuid())
+  name      String
+  isDefault Boolean @default(false)
+
+  stages        PipelineStage[]
+  opportunities Opportunity[]
+
+  createdAt DateTime @default(now())
+
+  @@map("pipeline")
+}
+
+model PipelineStage {
+  id         String @id @default(cuid())
+  pipelineId String
+  name       String
+  position   Int
+
+  /// Default win probability for deals in this stage, 0-100. Weighted pipeline value
+  /// uses the opportunity's own probability, which starts from this.
+  probability Int @default(0)
+
+  isWon  Boolean @default(false)
+  isLost Boolean @default(false)
+
+  pipeline      Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  opportunities Opportunity[]
+
+  @@unique([pipelineId, position])
+  @@map("pipeline_stage")
+}
+
+model Opportunity {
+  id         String @id @default(cuid())
+  name       String
+  pipelineId String
+  stageId    String
+
+  value       Decimal  @db.Decimal(14, 2)
+  currency    String   @default("USD")
+  probability Int      @default(0)
+  expectedCloseDate DateTime?
+  closedAt    DateTime?
+
+  ownerEmail String?
+
+  leadId     String?
+  contactId  String?
+  companyId  String?
+  campaignId String?
+
+  lostReason String?
+
+  pipeline   Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage      PipelineStage @relation(fields: [stageId], references: [id])
+  lead       Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  contact    Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  company    Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  campaign   Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  customer   Customer?
+  activities Activity[]
+  noteEntries Note[]
+  tasks      Task[]
+  revenue    RevenueEntry[]
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stageId])
+  @@index([companyId])
+  @@index([campaignId])
+  @@map("opportunity")
+}
+
+/// A won company. Separate from Company because "is a customer" has its own dates and
+/// lifecycle that a CRM record does not.
+model Customer {
+  id        String @id @default(cuid())
+  companyId String @unique
+
+  /// The deal that won them. Kept so first-touch attribution survives even if later
+  /// revenue rows carry no campaign.
+  opportunityId String? @unique
+
+  wonAt    DateTime
+  churnedAt DateTime?
+
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunity Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  revenue     RevenueEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer")
+}
+
+/// Money in. Carries campaign and channel directly so revenue attribution is one join
+/// rather than a walk back up the funnel.
+model RevenueEntry {
+  id         String   @id @default(cuid())
+  customerId String
+  date       DateTime @db.Date
+  amount     Decimal  @db.Decimal(14, 2)
+  currency   String   @default("USD")
+  kind       String   @default("one_time") // one_time | recurring | expansion | refund
+
+  opportunityId String?
+  campaignId    String?
+  channelId     String?
+
+  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  channel     Channel?     @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([campaignId])
+  @@map("revenue_entry")
+}
+
+// ─── history, notes, tasks ────────────────────────────────────────────────────
+
+/// Append-only. Nothing updates or deletes these rows; they are the lifecycle history
+/// for whatever they point at. Exactly one of the entity ids is set.
+model Activity {
+  id      String       @id @default(cuid())
+  type    ActivityType
+  summary String
+
+  /// Who caused it. An email rather than a user id because there is no User table —
+  /// identity comes from the roster.
+  actorEmail String?
+
+  /// Shape depends on `type`: {from,to} for status_changed, {stageId} for
+  /// stage_changed, {provider,rows} for synced.
+  detail Json?
+
+  leadId        String?
+  contactId     String?
+  companyId     String?
+  opportunityId String?
+
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([opportunityId, createdAt])
+  @@index([createdAt])
+  @@map("activity")
+}
+
+model Note {
+  id       String @id @default(cuid())
+  body     String
+  authorEmail String
+
+  leadId        String?
+  contactId     String?
+  companyId     String?
+  opportunityId String?
+
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("note")
+}
+
+model Task {
+  id       String     @id @default(cuid())
+  title    String
+  detail   String?
+  status   TaskStatus @default(open)
+  priority Priority   @default(normal)
+  dueDate  DateTime?
+
+  assigneeEmail String?
+  createdByEmail String?
+  completedAt   DateTime?
+
+  leadId        String?
+  contactId     String?
+  companyId     String?
+  opportunityId String?
+
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, dueDate])
+  @@index([assigneeEmail])
+  @@map("task")
+}
+
+// ─── metrics ──────────────────────────────────────────────────────────────────
+
+/// The one time-series table. Every integration writes here; every chart reads here.
+///
+/// `source` is an integration id ("google_analytics") or "manual". `entityType` and
+/// `entityId` scope the value — ("site", null) for a whole-site session count,
+/// ("campaign", <id>) for one campaign's impressions, ("keyword", <id>) for a ranking.
+/// The unique constraint makes a re-sync idempotent: the same day re-syncs to an
+/// upsert, not a duplicate row.
+model MetricSnapshot {
+  id         String   @id @default(cuid())
+  source     String
+  entityType String
+  entityId   String?
+  metricKey  String
+  date       DateTime @db.Date
+  value      Decimal  @db.Decimal(18, 4)
+
+  createdAt DateTime @default(now())
+
+  @@unique([source, entityType, entityId, metricKey, date])
+  @@index([metricKey, date])
+  @@index([date])
+  @@map("metric_snapshot")
+}
+
+// ─── integrations ─────────────────────────────────────────────────────────────
+
+/// One row per provider. `state` is what the Integration Center renders — it is never
+/// inferred from whether a credential happens to exist.
+model Integration {
+  id       String           @id @default(cuid())
+  provider String           @unique // matches the key in lib/integrations/registry.ts
+  state    IntegrationState @default(disconnected)
+
+  lastSyncAt      DateTime?
+  lastSyncRows    Int?
+  lastError       String?
+  lastErrorAt     DateTime?
+  connectedByEmail String?
+  connectedAt     DateTime?
+
+  /// Non-secret settings: the GA4 property id, the ad account id, the tracked domain.
+  /// Secrets go in IntegrationCredential, never here.
+  config Json?
+
+  credential IntegrationCredential?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integration")
+}
+
+/// Split from Integration so a query that renders a card cannot accidentally select a
+/// secret. `ciphertext` is AES-256-GCM under APP_ENCRYPTION_KEY — see lib/crypto.ts.
+model IntegrationCredential {
+  id            String @id @default(cuid())
+  integrationId String @unique
+
+  ciphertext String
+  iv         String
+  authTag    String
+
+  expiresAt DateTime?
+
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_credential")
+}
+
+/// Lets a website form POST leads to /api/public/v1/leads. Only the hash is stored, so
+/// a leaked database does not leak usable keys; the plaintext is shown once on creation.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  hash       String    @unique
+  prefix     String
+  createdByEmail String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("api_key")
+}
+
+// ─── SEO ──────────────────────────────────────────────────────────────────────
+
+model Website {
+  id     String @id @default(cuid())
+  domain String @unique
+  name   String
+
+  keywords SeoKeyword[]
+  pages    SeoPage[]
+
+  createdAt DateTime @default(now())
+
+  @@map("website")
+}
+
+model SeoKeyword {
+  id        String @id @default(cuid())
+  websiteId String
+  keyword   String
+  country   String @default("us")
+
+  searchVolume Int?
+  difficulty   Int?
+  cpc          Decimal? @db.Decimal(10, 2)
+  intent       String?
+  isTracked    Boolean  @default(true)
+
+  website  Website             @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  rankings SeoKeywordRanking[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([websiteId, keyword, country])
+  @@map("seo_keyword")
+}
+
+/// One position reading on one day. History is the point — a single `position` column
+/// on SeoKeyword could not answer "what moved this month".
+model SeoKeywordRanking {
+  id        String   @id @default(cuid())
+  keywordId String
+  date      DateTime @db.Date
+  position  Int
+  url       String?
+
+  keyword SeoKeyword @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@unique([keywordId, date])
+  @@index([date])
+  @@map("seo_keyword_ranking")
+}
+
+model SeoPage {
+  id        String @id @default(cuid())
+  websiteId String
+  url       String
+  title     String?
+
+  clicks      Int   @default(0)
+  impressions Int   @default(0)
+  ctr         Float @default(0)
+  avgPosition Float @default(0)
+
+  /// Technical findings as [{code, severity, message}]. A JSON column rather than an
+  /// issues table: nothing queries across issues yet, and the shape comes from whichever
+  /// crawler produced it.
+  issues Json?
+
+  website Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, url])
+  @@map("seo_page")
+}
+
+// ─── social ───────────────────────────────────────────────────────────────────
+
+model SocialAccount {
+  id       String        @id @default(cuid())
+  network  SocialNetwork
+  handle   String
+  name     String?
+  followers Int          @default(0)
+
+  /// Whether this account's data is arriving from a live connection. Read from the
+  /// owning Integration, never assumed.
+  integrationId String?
+
+  posts SocialPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([network, handle])
+  @@map("social_account")
+}
+
+model SocialPost {
+  id        String   @id @default(cuid())
+  accountId String
+  externalId String?
+  publishedAt DateTime
+  permalink String?
+  caption   String?
+
+  reach       Int @default(0)
+  impressions Int @default(0)
+  likes       Int @default(0)
+  comments    Int @default(0)
+  shares      Int @default(0)
+  clicks      Int @default(0)
+
+  account SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([accountId, externalId])
+  @@index([publishedAt])
+  @@map("social_post")
+}
+
+// ─── outreach ─────────────────────────────────────────────────────────────────
+
+model Sequence {
+  id     String @id @default(cuid())
+  name   String
+  status String @default("draft") // draft | active | paused | archived
+  ownerEmail String?
+
+  steps     SequenceStep[]
+  prospects Prospect[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("sequence")
+}
+
+model SequenceStep {
+  id         String @id @default(cuid())
+  sequenceId String
+  position   Int
+
+  /// Days to wait after the previous step before this one is due.
+  waitDays Int    @default(0)
+  channel  String @default("email") // email | linkedin | call
+  subject  String?
+  body     String
+
+  sequence Sequence          @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  messages OutreachMessage[]
+
+  @@unique([sequenceId, position])
+  @@map("sequence_step")
+}
+
+model Prospect {
+  id         String         @id @default(cuid())
+  sequenceId String
+  contactId  String?
+  email      String
+  firstName  String?
+  lastName   String?
+  companyName String?
+  status     ProspectStatus @default(pending)
+  currentStep Int           @default(0)
+
+  sequence Sequence          @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contact  Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  messages OutreachMessage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sequenceId, email])
+  @@map("prospect")
+}
+
+model OutreachMessage {
+  id         String @id @default(cuid())
+  prospectId String
+  stepId     String
+
+  /// sent | failed | skipped. Written by whichever EmailProvider handled it — the
+  /// console provider records "sent" without sending, and says so in `providerId`.
+  status     String    @default("sent")
+  providerId String?
+  sentAt     DateTime  @default(now())
+  openedAt   DateTime?
+  repliedAt  DateTime?
+  error      String?
+
+  prospect Prospect     @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  step     SequenceStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId, sentAt])
+  @@map("outreach_message")
+}
+
+// ─── content ──────────────────────────────────────────────────────────────────
+
+model ContentPiece {
+  id     String        @id @default(cuid())
+  title  String
+  status ContentStatus @default(idea)
+  format String        @default("blog") // blog | video | social | email | landing_page | case_study
+
+  authorEmail String?
+  channelSlug String?
+  campaignId  String?
+
+  brief       String?
+  url         String?
+  publishDate DateTime?
+
+  views       Int @default(0)
+  leadsGenerated Int @default(0)
+
+  tags String[] @default([])
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("content_piece")
+}
+
+// ─── AI, notifications, audit ─────────────────────────────────────────────────
+
+/// A generated insight. `provider` records what produced it — "anthropic" for a real
+/// call, "seed" for the labelled examples that ship with the demo data. The UI shows
+/// that distinction rather than presenting seeds as analysis.
+model AiInsight {
+  id       String      @id @default(cuid())
+  kind     InsightKind
+  title    String
+  body     String
+  provider String      @default("seed")
+  model    String?
+
+  /// What the insight is about, for deep-linking: {module:"leads", campaignId:"…"}.
+  context Json?
+
+  /// 0-100, from the model. Null when the provider gave none.
+  confidence Int?
+
+  dismissedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("ai_insight")
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  title     String
+  body      String?
+  level     String    @default("info") // info | success | warning | error
+  href      String?
+  forEmail  String?
+  readAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([forEmail, readAt])
+  @@map("notification")
+}
+
+/// Who changed what. Same purpose as bng-command-center's AuditEvent: a row per write,
+/// so a wrong number has a trail.
+model AuditEvent {
+  id         String @id @default(cuid())
+  actorEmail String
+  action     String
+  entityType String
+  entityId   String?
+  detail     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_event")
+}
