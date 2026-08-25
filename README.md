@@ -20,12 +20,12 @@ stack and conventions on purpose, so the team reads one codebase.
    - `DATABASE_URL` — a Neon connection string (use the **pooled** `-pooler` host)
    - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
    - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — redirect URI
-     `http://localhost:3000/api/auth/callback/google`
+     `http://localhost:3100/api/auth/callback/google`
    - `APP_ENCRYPTION_KEY` — `openssl rand -hex 32` (exactly 64 hex chars)
 2. `npm install`
 3. `npm run db:migrate` — creates the schema
 4. `npm run db:seed` — 12 months of coherent demo data
-5. `npm run dev` → http://localhost:3000
+5. `npm run dev` → http://localhost:3100
 
 Without `DATABASE_URL` the app still boots: every page renders a "no database
 configured" state rather than a stack trace, and `/api/health` reports exactly what is
@@ -148,7 +148,7 @@ Everything below degrades to an honest "requires credentials" state — nothing 
 | Google Analytics, Search Console, Ads | the Google OAuth client, `GOOGLE_ADS_DEVELOPER_TOKEN` |
 | Meta / Instagram Ads | `META_APP_ID`, `META_APP_SECRET` |
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` |
-| Semrush (SEO) | `SEMRUSH_API_KEY` |
+| Semrush (SEO) | none — the key is pasted into the connect form |
 | Zoho CRM | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` |
 | AI insights | `ANTHROPIC_API_KEY` |
 | Outreach sending | `SMTP_*` |
