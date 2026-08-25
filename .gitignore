@@ -8,3 +8,6 @@ lib/generated
 *.tsbuildinfo
 next-env.d.ts
 .DS_Store
+screenshots
+playwright-report
+test-results

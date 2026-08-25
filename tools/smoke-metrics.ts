@@ -27,11 +27,19 @@ check(f.visitors > f.leads, 'the funnel narrows from visitors to leads');
 check(f.leads >= f.qualified, 'qualified never exceeds leads');
 check(f.revenue > 0 && f.spend > 0, 'revenue and spend are both present');
 check(f.roas !== null && f.roas > 0, `ROAS is computable (${f.roas?.toFixed(2)}x)`);
+check(f.newRevenue <= f.revenue, `new business (${money(f.newRevenue)}) does not exceed total revenue (${money(f.revenue)})`);
+// ROAS must divide NEW business by spend. Recurring income from customers won earlier is
+// not a return on this period's spend, and counting it gave an 18x blended figure.
+check(
+  Math.abs((f.roas ?? 0) - f.newRevenue / f.spend) < 0.01,
+  'ROAS is new business over spend, not all revenue over spend',
+);
 check(f.cac !== null, `CAC is computable (${f.cac ? money(f.cac) : 'null'})`);
 
 console.log('\nKPIs');
 const { cards: cardList } = await kpis(30);
 check(cardList.length === 10, `10 KPI cards (${cardList.length})`);
+check(!!cardList.find((k) => k.key === 'newRevenue'), 'a New business card exists');
 check(
   cardList.every((k) => k.value === null || Number.isFinite(k.value)),
   'no KPI value is NaN or Infinity',

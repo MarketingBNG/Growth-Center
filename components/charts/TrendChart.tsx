@@ -87,6 +87,9 @@ export function TrendChart({
               // what makes individual values readable.
               dot={false}
               activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--card)' }}
+              // Off deliberately: the left-to-right reveal made a fully populated
+              // 30-point series read as a 3-point stub for its first second.
+              isAnimationActive={false}
             />
           ))}
         </AreaChart>

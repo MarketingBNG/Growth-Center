@@ -42,7 +42,7 @@ async function sessions(range: Range): Promise<number> {
 export async function funnel(range: Range) {
   const window = { gte: range.from, lte: range.to };
 
-  const [visitors, leads, qualified, opportunities, customers, revenueAgg, spendAgg] =
+  const [visitors, leads, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg] =
     await Promise.all([
       sessions(range),
       db().lead.count({ where: { createdAt: window } }),
@@ -50,10 +50,16 @@ export async function funnel(range: Range) {
       db().opportunity.count({ where: { createdAt: window } }),
       db().customer.count({ where: { wonAt: window } }),
       db().revenueEntry.aggregate({ where: { date: window }, _sum: { amount: true } }),
+      // New business only. Recurring income from customers won in earlier periods is
+      // real revenue but it is NOT a return on this period's marketing spend — counting
+      // it produced an 18x blended ROAS on a month where new business was a third of
+      // the total.
+      db().revenueEntry.aggregate({ where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
       db().marketingSpend.aggregate({ where: { date: window }, _sum: { amount: true } }),
     ]);
 
   const revenue = num(revenueAgg._sum.amount);
+  const newRevenue = num(newRevenueAgg._sum.amount);
   const spend = num(spendAgg._sum.amount);
 
   return {
@@ -63,13 +69,14 @@ export async function funnel(range: Range) {
     opportunities,
     customers,
     revenue,
+    newRevenue,
     spend,
     visitorToLead: rate(leads, visitors),
     leadToQualified: rate(qualified, leads),
     qualifiedToOpportunity: rate(opportunities, qualified),
     opportunityToCustomer: rate(customers, opportunities),
     cac: cac(spend, customers),
-    roas: roas(revenue, spend),
+    roas: roas(newRevenue, spend),
   };
 }
 
@@ -120,11 +127,11 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
     { key: 'opportunities', label: 'Opportunities', value: now.opportunities, previous: before.opportunities, format: 'number', higherIsBetter: true },
     { key: 'customers', label: 'New customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
-    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', higherIsBetter: true },
+    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', higherIsBetter: true, hint: 'All revenue booked, including recurring' },
+    { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', higherIsBetter: true, hint: 'Deals won in this period' },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', higherIsBetter: false },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Spend ÷ new customers' },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Revenue ÷ spend' },
-    { key: 'cvr', label: 'Visitor → lead', value: now.visitorToLead, previous: before.visitorToLead, format: 'percent', higherIsBetter: true },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Spend per new customer' },
+    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
   ];
 
   return { cards, current: now, previous: before };
@@ -184,7 +191,7 @@ export async function channelPerformance(range: Range) {
     await Promise.all([
       db().channel.findMany({ select: { id: true, name: true, kind: true } }),
       db().lead.groupBy({ by: ['channelId'], where: { createdAt: window }, _count: { _all: true } }),
-      db().revenueEntry.groupBy({ by: ['channelId'], where: { date: window }, _sum: { amount: true } }),
+      db().revenueEntry.groupBy({ by: ['channelId'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
       db().marketingSpend.groupBy({
         by: ['campaignId'],
         where: { date: window },

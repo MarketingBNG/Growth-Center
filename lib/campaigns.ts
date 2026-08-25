@@ -44,9 +44,11 @@ export async function campaignPerformance(range: Range, channelId?: string) {
       where: { campaignId: { in: ids }, createdAt: window },
       _count: { _all: true },
     }),
+    // one_time only: recurring income from a customer won last year is not a return on
+    // this period's campaign spend.
     db().revenueEntry.groupBy({
       by: ['campaignId'],
-      where: { campaignId: { in: ids }, date: window },
+      where: { campaignId: { in: ids }, date: window, kind: 'one_time' },
       _sum: { amount: true },
     }),
     db().customer.findMany({

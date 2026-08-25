@@ -60,7 +60,7 @@ export default async function MarketingPage({
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Spend" value={fmtMoney(totals.spend)} />
         <Stat label="Leads" value={fmtNumber(totals.leads)} sub={totals.costPerLead === null ? undefined : `${fmtMoney(totals.costPerLead)} per lead`} />
-        <Stat label="Revenue" value={fmtMoney(totals.revenue)} sub={`${fmtNumber(totals.customers)} customers`} />
+        <Stat label="New revenue" value={fmtMoney(totals.revenue)} sub={`${fmtNumber(totals.customers)} customers won`} />
         <Stat
           label="ROAS"
           value={totals.roas === null ? '—' : fmtRatio(totals.roas)}
@@ -111,7 +111,7 @@ export default async function MarketingPage({
                   <TH className="text-right">CPL</TH>
                   <TH className="text-right">Deals</TH>
                   <TH className="text-right">Cust.</TH>
-                  <TH className="text-right">Revenue</TH>
+                  <TH className="text-right">New revenue</TH>
                   <TH className="text-right">CAC</TH>
                   <TH className="text-right">ROAS</TH>
                 </TR>
@@ -128,7 +128,7 @@ export default async function MarketingPage({
                       ) : null}
                     </TD>
                     <TD className="text-muted-foreground">{c.channelName}</TD>
-                    <TD className="text-right tnum">{c.spend ? fmtMoney(c.spend) : '—'}</TD>
+                    <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.impressions)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.clicks)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
@@ -140,7 +140,7 @@ export default async function MarketingPage({
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(c.opportunities)}</TD>
                     <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
-                    <TD className="text-right tnum">{c.revenue ? fmtMoney(c.revenue) : '—'}</TD>
+                    <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
                       {c.cac === null ? '—' : fmtMoney(c.cac)}
                     </TD>

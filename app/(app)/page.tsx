@@ -144,7 +144,7 @@ export default async function DashboardPage({
                     <TH className="text-right">Spend</TH>
                     <TH className="text-right">Leads</TH>
                     <TH className="text-right">Customers</TH>
-                    <TH className="text-right">Revenue</TH>
+                    <TH className="text-right">New revenue</TH>
                     <TH className="text-right">CAC</TH>
                     <TH className="text-right">ROAS</TH>
                   </TR>
@@ -156,10 +156,10 @@ export default async function DashboardPage({
                         <span className="font-medium">{c.name}</span>
                         <span className="ml-1.5 text-[11px] text-muted-foreground">{c.kind}</span>
                       </TD>
-                      <TD className="text-right tnum">{c.spend ? fmtMoney(c.spend) : '—'}</TD>
+                      <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
                       <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
                       <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
-                      <TD className="text-right tnum">{c.revenue ? fmtMoney(c.revenue) : '—'}</TD>
+                      <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
                       <TD className="text-right tnum text-muted-foreground">
                         {c.cac === null ? '—' : fmtMoney(c.cac)}
                       </TD>
@@ -196,7 +196,7 @@ export default async function DashboardPage({
                       <TH className="text-right">Spend</TH>
                       <TH className="text-right">Leads</TH>
                       <TH className="text-right">CPL</TH>
-                      <TH className="text-right">Revenue</TH>
+                      <TH className="text-right">New revenue</TH>
                       <TH className="text-right">ROAS</TH>
                     </TR>
                   </THead>
@@ -207,12 +207,12 @@ export default async function DashboardPage({
                           <span className="font-medium">{c.name}</span>
                           <p className="text-[11px] text-muted-foreground">{c.channelName}</p>
                         </TD>
-                        <TD className="text-right tnum">{c.spend ? fmtMoney(c.spend) : '—'}</TD>
+                        <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
                         <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
                         <TD className="text-right tnum text-muted-foreground">
                           {c.costPerLead === null ? '—' : fmtMoney(c.costPerLead)}
                         </TD>
-                        <TD className="text-right tnum">{c.revenue ? fmtMoney(c.revenue) : '—'}</TD>
+                        <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
                         <TD className="text-right tnum">
                           {c.roas === null ? (
                             <span className="text-muted-foreground">—</span>
@@ -346,6 +346,11 @@ export default async function DashboardPage({
       </div>
 
       <p className="pt-4 text-[11px] text-muted-foreground">
+        ROAS and the channel and campaign tables use <span className="text-foreground">new business
+        won in this period</span>, not all revenue booked — recurring income from customers won
+        earlier is real, but it is not a return on this period&apos;s spend.
+      </p>
+      <p className="pt-1 text-[11px] text-muted-foreground">
         Conversion: {fmtPercent(f.visitorToLead ?? 0, 2)} visitor → lead ·{' '}
         {fmtPercent(f.leadToQualified ?? 0)} lead → qualified ·{' '}
         {fmtPercent(f.opportunityToCustomer ?? 0)} opportunity → customer

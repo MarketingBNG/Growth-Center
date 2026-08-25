@@ -44,7 +44,18 @@ npm run db:studio  # browse the data
 npm run db:verify  # assert the demo data reconciles
 npm run smoke      # exercise the lead -> deal -> revenue write path
 npm run smoke:metrics  # exercise the dashboard/marketing/analytics queries
+npm run shots      # screenshot every module (needs the dev server running)
 ```
+
+`npm run shots` signs in by minting a NextAuth token with the app's own secret — Google's
+consent screen cannot be automated. It is not a bypass: the email still has to pass the
+roster check on every request. The test FAILS if any static asset 404s or if the body has
+no background colour, because a run once produced seventeen unstyled screenshots and
+still reported success.
+
+**Never run `next build` while `next dev` is running against this directory.** They share
+`.next`, and the dev server will serve HTML pointing at production chunk names — every
+stylesheet 404s and the app renders unstyled. Delete `.next` when switching.
 
 The dev server runs on port 3000. `bng-command-center` uses the same port, so run
 one at a time — Next silently falls back to another port if 3000 is taken, which makes
@@ -117,6 +128,23 @@ get two charts — a dual axis lets the author choose which line appears to be w
 and **a rate with no denominator is null, not zero** — a 0% CTR on a campaign that
 served nothing is a false statement.
 
+## Metric definitions that are easy to get wrong
+
+**ROAS and the channel/campaign revenue columns use new business won in the period**, not
+all revenue booked. Recurring income from a customer won last year is real revenue, but it
+is not a return on this month's spend — counting it gave an 18× blended ROAS in a month
+where new business was a third of the total. The dashboard shows both: "Revenue" is
+everything booked, "New business" is deals won.
+
+**A rate with no denominator is null, not zero.** A 0% CTR on a campaign that served
+nothing is a false statement, and it drags any average down.
+
+**A dash means "not applicable"; zero means zero.** A channel that spent money and
+returned nothing reads `$0` and `0.00×`, not `—`.
+
+**Table footers recompute ratios from the totals**, never average the rows — averaging
+ratios is how a footer ends up disagreeing with its own columns.
+
 ## Integration honesty
 
 An integration is `disconnected`, `connecting`, `connected`, `syncing`, `error` or
@@ -133,8 +161,8 @@ Credentials are AES-256-GCM sealed under `APP_ENCRYPTION_KEY` in a separate tabl
 | 1 · Foundation — auth, roster, schema, shell | done |
 | 2 · CRM, Leads, Pipeline | done |
 | 3 · Dashboard, Marketing, Analytics, Integration Center | done |
-| 4 · SEO, Social, Outreach, Content, Reports, AI Insights | next |
-| 5 · Polish and automation | not started |
+| 4 · SEO, Social, Outreach, Content, Reports, AI Insights | done |
+| 5 · Polish and automation | next |
 | 6 · Tests and hardening | ongoing |
 
 Modules from later phases have real routes and real tables; their pages say which phase

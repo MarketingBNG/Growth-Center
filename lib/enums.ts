@@ -31,3 +31,13 @@ export const RANGE_OPTIONS = [
   { value: '90', label: 'Last 90 days' },
   { value: '365', label: 'Last 12 months' },
 ] as const;
+
+/** Prompts offered on the AI Insights page. Here rather than in lib/ai because AskBox
+ *  is a client component and lib/ai imports the database. */
+export const SUGGESTED_QUESTIONS = [
+  'Which channel produces our highest-quality customers, and what is the evidence?',
+  'Which campaigns have the best and worst return, and by how much?',
+  'What changed between this period and the previous one?',
+  'Where is the funnel leaking most?',
+  'What are the biggest growth opportunities in this data?',
+] as const;

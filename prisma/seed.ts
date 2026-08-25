@@ -109,6 +109,30 @@ const COMPANY_NAMES = [
   ['Riverbend Insurance', 'riverbendins.com', 'Insurance', 'United States'],
   ['Quillon Legal', 'quillonlegal.com', 'Legal', 'United States'],
   ['Sandpiper Travel', 'sandpipertravel.com', 'Travel', 'United States'],
+  // The list is deliberately longer than it needs to look varied. Customer is keyed on
+  // the company, so with only ~24 accounts most wins landed on a company that was
+  // already a customer and kept its original wonAt — "new customers this month" read as
+  // zero however many deals closed.
+  ['Thornfield Logistics', 'thornfieldlogistics.com', 'Logistics', 'United States'],
+  ['Marlowe Diagnostics', 'marlowediagnostics.com', 'Healthcare', 'United States'],
+  ['Everdene Textiles', 'everdenetextiles.com', 'Manufacturing', 'India'],
+  ['Cassidy Robotics', 'cassidyrobotics.com', 'Manufacturing', 'United States'],
+  ['Brightwater Utilities', 'brightwaterutilities.com', 'Energy', 'United States'],
+  ['Hollowell Media', 'hollowellmedia.com', 'Media', 'United Kingdom'],
+  ['Peregrine Fintech', 'peregrinefintech.com', 'Financial Services', 'Singapore'],
+  ['Alderton Foods', 'aldertonfoods.com', 'Consumer Goods', 'United States'],
+  ['Vaughn Aerospace', 'vaughnaerospace.com', 'Aerospace', 'United States'],
+  ['Selby Property Group', 'selbyproperty.com', 'Real Estate', 'United States'],
+  ['Marchetti Wines', 'marchettiwines.com', 'Hospitality', 'Italy'],
+  ['Kingsley Analytics', 'kingsleyanalytics.com', 'Software', 'United States'],
+  ['Ravensworth Legal', 'ravensworthlegal.com', 'Legal', 'United Kingdom'],
+  ['Ondine Marine', 'ondinemarine.com', 'Marine', 'Netherlands'],
+  ['Fairhaven Clinics', 'fairhavenclinics.com', 'Healthcare', 'United States'],
+  ['Bexley Manufacturing', 'bexleymanufacturing.com', 'Manufacturing', 'Canada'],
+  ['Sorrel Agritech', 'sorrelagritech.com', 'Agriculture', 'Australia'],
+  ['Wycombe Education', 'wycombeedu.org', 'Education', 'United Kingdom'],
+  ['Dunmore Insurance', 'dunmoreinsurance.com', 'Insurance', 'Ireland'],
+  ['Lyneham Freight', 'lynehamfreight.com', 'Logistics', 'United States'],
 ] as const;
 
 const FIRST = ['Alice', 'Marcus', 'Priya', 'Daniel', 'Rachel', 'Tom', 'Nadia', 'Owen', 'Grace', 'Victor',
@@ -120,6 +144,18 @@ const LAST = ['Okafor', 'Whitfield', 'Raman', 'Brennan', 'Sokolov', 'Larsen', 'H
 
 const TITLES = ['CEO', 'Founder', 'CFO', 'COO', 'VP Finance', 'Head of Finance', 'Controller',
   'Director of Operations', 'Managing Partner'];
+
+const CHUNK = 12;
+
+/** Runs an independent-per-item task in small parallel batches. One await per row cost
+ *  ~280ms against Neon, which made a full seed take about five minutes. */
+async function inChunks<T, R>(items: T[], fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += CHUNK) {
+    out.push(...(await Promise.all(items.slice(i, i + CHUNK).map((item, j) => fn(item, i + j)))));
+  }
+  return out;
+}
 
 async function wipe() {
   // Child rows first — the schema cascades, but being explicit keeps the order obvious.
@@ -269,6 +305,7 @@ async function main() {
   // Lead volume grows month over month so the trend charts show a real direction.
   type SeededLead = { id: string; companyId: string | null; contactId: string | null; campaignId: string; channelId: string; status: string; createdAt: Date };
   const leads: SeededLead[] = [];
+  const leadSpecs: { status: string; campaignId: string; channelId: string; data: Record<string, unknown> }[] = [];
 
   for (let month = MONTHS - 1; month >= 0; month--) {
     const growth = 1 + (MONTHS - 1 - month) * 0.06;
@@ -292,18 +329,30 @@ async function main() {
         : `${first.toLowerCase()}.${last.toLowerCase()}${int(1, 99)}@${pick(['gmail.com', 'outlook.com', 'proton.me'])}`;
 
       // Older leads have had time to progress; recent ones are mostly still new.
-      const maturity = daysAgo / (MONTHS * 30);
+      //
+      // Gated on DAYS, not on a share of the 12-month window. The first version used
+      // daysAgo/360 > 0.15, which meant nothing created in the last 54 days could ever
+      // be qualified and nothing in the last 90 days converted — so the dashboard's
+      // default 30-day view showed leads arriving and every later funnel stage at zero,
+      // with -100% deltas. A real lead qualifies within a week and converts within a
+      // month.
       let status: string;
       if (chance(0.10)) status = 'unqualified';
       else if (chance(0.08)) status = 'lost';
-      else if (maturity > 0.25 && chance(0.22)) status = 'converted';
-      else if (maturity > 0.15 && chance(0.30)) status = 'qualified';
+      else if (daysAgo >= 12 && chance(0.32)) status = 'converted';
+      else if (daysAgo >= 4 && chance(0.34)) status = 'qualified';
       else if (chance(0.45)) status = 'contacted';
       else status = 'new';
 
       const utmMedium = campaign.leadRate > 0.05 ? 'cpc' : pick(['cpc', 'organic', 'email', 'referral']);
 
-      const lead = await db.lead.create({
+      // The spec is built here so the PRNG is consumed in a fixed order; the writes
+      // happen in parallel batches below, which is what makes the seed fast without
+      // making it non-reproducible.
+      leadSpecs.push({
+        status,
+        campaignId: campaign.id,
+        channelId: campaign.channelId,
         data: {
           firstName: first,
           lastName: last,
@@ -333,36 +382,44 @@ async function main() {
           referrer: chance(0.5) ? pick(['https://www.google.com/', 'https://www.linkedin.com/', 'https://news.ycombinator.com/']) : null,
           companyId: company?.id ?? null,
           contactId: contact?.id ?? null,
-          qualifiedAt: ['qualified', 'converted'].includes(status) ? dayOffset(Math.max(0, daysAgo - int(1, 6))) : null,
-          convertedAt: status === 'converted' ? dayOffset(Math.max(0, daysAgo - int(4, 20))) : null,
+          qualifiedAt: ['qualified', 'converted'].includes(status) ? dayOffset(Math.max(0, daysAgo - int(1, 4))) : null,
+          convertedAt: status === 'converted' ? dayOffset(Math.max(0, daysAgo - int(5, 18))) : null,
           createdAt,
           updatedAt: createdAt,
-        },
-        select: { id: true, companyId: true, contactId: true, createdAt: true },
-      });
-
-      leads.push({
-        id: lead.id,
-        companyId: lead.companyId,
-        contactId: lead.contactId,
-        campaignId: campaign.id,
-        channelId: campaign.channelId,
-        status,
-        createdAt: lead.createdAt,
-      });
-
-      await db.activity.create({
-        data: {
-          type: 'created',
-          summary: 'Lead created from website form',
-          actorEmail: null,
-          detail: { seeded: true },
-          leadId: lead.id,
-          createdAt,
         },
       });
     }
   }
+
+  const created = await inChunks(leadSpecs, (spec) =>
+    db.lead.create({
+      data: spec.data as never,
+      select: { id: true, companyId: true, contactId: true, createdAt: true },
+    }),
+  );
+  created.forEach((row, i) => {
+    leads.push({
+      id: row.id,
+      companyId: row.companyId,
+      contactId: row.contactId,
+      campaignId: leadSpecs[i].campaignId,
+      channelId: leadSpecs[i].channelId,
+      status: leadSpecs[i].status,
+      createdAt: row.createdAt,
+    });
+  });
+
+  await db.activity.createMany({
+    data: leads.map((l) => ({
+      type: 'created' as never,
+      summary: 'Lead created from website form',
+      actorEmail: null,
+      detail: { seeded: true },
+      leadId: l.id,
+      createdAt: l.createdAt,
+    })),
+  });
+
   console.log(`  ${leads.length} leads`);
 
   console.log('Opportunities, customers and revenue…');
@@ -386,10 +443,10 @@ async function main() {
       const roll = rnd();
       if (roll < 0.42) {
         stage = wonStage;
-        closedAt = dayOffset(Math.max(0, daysOld - int(10, 45)));
+        closedAt = dayOffset(Math.max(0, daysOld - int(3, 11)));
       } else if (roll < 0.62) {
         stage = lostStage;
-        closedAt = dayOffset(Math.max(0, daysOld - int(10, 50)));
+        closedAt = dayOffset(Math.max(0, daysOld - int(3, 14)));
       }
     }
 

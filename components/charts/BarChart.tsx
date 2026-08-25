@@ -45,7 +45,13 @@ export function BarChart({
             }}
           />
           {/* 4px rounded data-end, square against the baseline. */}
-          <Bar dataKey="value" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={18} />
+          <Bar
+            dataKey="value"
+            fill={SERIES[0]}
+            radius={[0, 4, 4, 0]}
+            maxBarSize={18}
+            isAnimationActive={false}
+          />
         </ReBarChart>
       </ResponsiveContainer>
     </ChartFrame>

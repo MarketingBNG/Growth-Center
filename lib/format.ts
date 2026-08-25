@@ -27,9 +27,12 @@ export function fmtNumber(n: number | null | undefined): string {
   return new Intl.NumberFormat('en-US').format(n);
 }
 
-export function fmtPercent(n: number | null | undefined, digits = 1): string {
+/** Small rates get more precision automatically: at one decimal a 0.34% conversion
+ *  rendered as "0.3%" in a KPI and "0.34%" in the footer of the same screen. */
+export function fmtPercent(n: number | null | undefined, digits?: number): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  return `${n.toFixed(digits)}%`;
+  const places = digits ?? (Math.abs(n) < 1 ? 2 : 1);
+  return `${n.toFixed(places)}%`;
 }
 
 export function fmtRatio(n: number | null | undefined): string {

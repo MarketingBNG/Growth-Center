@@ -20,9 +20,12 @@
     "test": "node --test --experimental-strip-types \"tools/*.test.ts\"",
     "db:verify": "node --experimental-strip-types tools/verify-seed.ts",
     "smoke": "node --experimental-strip-types tools/smoke.ts",
-    "smoke:metrics": "node --experimental-strip-types tools/smoke-metrics.ts"
+    "smoke:metrics": "node --experimental-strip-types tools/smoke-metrics.ts",
+    "shots": "playwright test e2e/shots.spec.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -49,6 +52,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.6",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.15.0",
     "@types/pg": "^8.15.5",
