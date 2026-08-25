@@ -1,0 +1,304 @@
+import { z } from 'zod';
+import { db } from './prisma.ts';
+import { dispatch } from './events.ts';
+import { companyDomainFromEmail, normalizeCompanyName, normalizeEmail } from './dedupe.ts';
+import { ASSIGNABLE } from './roles.ts';
+import type { ListQuery } from './api.ts';
+import { LEAD_STATUSES, SOURCE_TYPES } from './enums.ts';
+
+
+export const leadInput = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().max(80).optional(),
+  email: z.string().trim().email().max(200).optional(),
+  phone: z.string().trim().max(40).optional(),
+  companyName: z.string().trim().max(160).optional(),
+  title: z.string().trim().max(120).optional(),
+  message: z.string().trim().max(4000).optional(),
+  sourceType: z.enum(SOURCE_TYPES).default('manual'),
+  campaignId: z.string().cuid().optional(),
+  channelId: z.string().cuid().optional(),
+  ownerEmail: z.string().trim().email().optional(),
+  utmSource: z.string().trim().max(120).optional(),
+  utmMedium: z.string().trim().max(120).optional(),
+  utmCampaign: z.string().trim().max(160).optional(),
+  utmTerm: z.string().trim().max(160).optional(),
+  utmContent: z.string().trim().max(160).optional(),
+  landingPage: z.string().trim().max(500).optional(),
+  referrer: z.string().trim().max(500).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+});
+
+export type LeadInput = z.infer<typeof leadInput>;
+
+export const leadFilters = z.object({
+  status: z.enum(LEAD_STATUSES).optional(),
+  sourceType: z.enum(SOURCE_TYPES).optional(),
+  ownerEmail: z.string().trim().optional(),
+  campaignId: z.string().cuid().optional(),
+  channelId: z.string().cuid().optional(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+
+export type LeadFilters = z.infer<typeof leadFilters>;
+
+const SORTABLE = ['createdAt', 'updatedAt', 'status', 'score', 'firstName'] as const;
+
+export function leadWhere(filters: LeadFilters, q: ListQuery) {
+  const where: Record<string, unknown> = {};
+  if (filters.status) where.status = filters.status;
+  if (filters.sourceType) where.sourceType = filters.sourceType;
+  if (filters.ownerEmail) {
+    where.ownerEmail = filters.ownerEmail === 'unassigned' ? null : filters.ownerEmail;
+  }
+  if (filters.campaignId) where.campaignId = filters.campaignId;
+  if (filters.channelId) where.channelId = filters.channelId;
+
+  if (filters.from || filters.to) {
+    where.createdAt = {
+      ...(filters.from ? { gte: new Date(`${filters.from}T00:00:00Z`) } : {}),
+      ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59Z`) } : {}),
+    };
+  }
+
+  if (q.q) {
+    where.OR = [
+      { firstName: { contains: q.q, mode: 'insensitive' } },
+      { lastName: { contains: q.q, mode: 'insensitive' } },
+      { email: { contains: q.q, mode: 'insensitive' } },
+      { companyName: { contains: q.q, mode: 'insensitive' } },
+    ];
+  }
+  return where;
+}
+
+export async function listLeads(filters: LeadFilters, q: ListQuery) {
+  const where = leadWhere(filters, q);
+  const key = (SORTABLE as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
+
+  const [rows, total] = await Promise.all([
+    db().lead.findMany({
+      where,
+      orderBy: { [key]: q.dir },
+      skip: (q.page - 1) * q.perPage,
+      take: q.perPage,
+      include: {
+        campaign: { select: { id: true, name: true } },
+        channel: { select: { id: true, name: true } },
+      },
+    }),
+    db().lead.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function getLead(id: string) {
+  return db().lead.findUnique({
+    where: { id },
+    include: {
+      campaign: { select: { id: true, name: true } },
+      channel: { select: { id: true, name: true } },
+      contact: { select: { id: true, firstName: true, lastName: true, email: true } },
+      company: { select: { id: true, name: true, domain: true } },
+      opportunities: { select: { id: true, name: true, value: true, stage: { select: { name: true } } } },
+      activities: { orderBy: { createdAt: 'desc' } },
+      noteEntries: { orderBy: { createdAt: 'desc' } },
+      tasks: { where: { status: { in: ['open', 'in_progress'] } }, orderBy: { dueDate: 'asc' } },
+    },
+  });
+}
+
+/**
+ * Finds an existing lead for the same person before creating another. Matches on
+ * normalized email only — a name-plus-company match produced false merges in testing
+ * (two people at one company enquiring about different things became one lead).
+ *
+ * Converted and lost leads are excluded: someone returning a year later is a new
+ * opportunity, not an update to a closed record.
+ */
+export async function findDuplicateLead(email: string | null | undefined) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+
+  const candidates = await db().lead.findMany({
+    where: { status: { notIn: ['converted', 'lost'] }, email: { not: null } },
+    select: { id: true, email: true, firstName: true, lastName: true, status: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+
+  return candidates.find((c) => normalizeEmail(c.email) === normalized) ?? null;
+}
+
+/**
+ * Round-robins unassigned leads across the marketing team so nothing sits ownerless.
+ * Deliberately simple — least-loaded rather than any scoring model.
+ */
+export async function pickOwner(): Promise<string | null> {
+  const eligible = ASSIGNABLE.filter((e) => e.team === 'Digital Marketing');
+  if (!eligible.length) return null;
+
+  const counts = await db().lead.groupBy({
+    by: ['ownerEmail'],
+    where: { ownerEmail: { in: eligible.map((e) => e.email) }, status: { in: ['new', 'contacted'] } },
+    _count: { _all: true },
+  });
+
+  const load = new Map(counts.map((c) => [c.ownerEmail as string, c._count._all]));
+  return eligible.reduce((best, e) =>
+    (load.get(e.email) ?? 0) < (load.get(best.email) ?? 0) ? e : best,
+  ).email;
+}
+
+export type CreateLeadResult =
+  | { created: true; leadId: string }
+  | { created: false; leadId: string; reason: 'duplicate' };
+
+export async function createLead(
+  input: LeadInput,
+  actorEmail: string | null,
+): Promise<CreateLeadResult> {
+  const duplicate = await findDuplicateLead(input.email);
+  if (duplicate) {
+    // Record the repeat touch on the existing lead rather than dropping it silently —
+    // "they filled the form again" is information the owner needs.
+    await db().activity.create({
+      data: {
+        type: 'created',
+        summary: 'Duplicate submission merged into this lead',
+        actorEmail,
+        detail: { sourceType: input.sourceType, message: input.message ?? null },
+        leadId: duplicate.id,
+      },
+    });
+    return { created: false, leadId: duplicate.id, reason: 'duplicate' };
+  }
+
+  const lead = await db().lead.create({
+    data: {
+      ...input,
+      email: normalizeEmail(input.email),
+      ownerEmail: input.ownerEmail ?? null,
+    },
+    select: { id: true },
+  });
+
+  await db().activity.create({
+    data: {
+      type: 'created',
+      summary: `Lead created from ${input.sourceType.replace('_', ' ')}`,
+      actorEmail,
+      detail: { sourceType: input.sourceType, utmSource: input.utmSource ?? null },
+      leadId: lead.id,
+    },
+  });
+
+  await linkToCrm(lead.id, input);
+  await dispatch({ type: 'lead.created', leadId: lead.id, actorEmail });
+
+  return { created: true, leadId: lead.id };
+}
+
+/**
+ * Attaches the lead to a Company (by email domain or name) and a Contact (by email),
+ * creating either if absent. Runs on create so the CRM is populated by inbound leads
+ * rather than by hand.
+ */
+async function linkToCrm(leadId: string, input: LeadInput) {
+  const email = normalizeEmail(input.email);
+  const domain = companyDomainFromEmail(input.email);
+
+  let companyId: string | null = null;
+  if (domain) {
+    const company = await db().company.upsert({
+      where: { domain },
+      create: { name: input.companyName?.trim() || domain, domain },
+      update: {},
+      select: { id: true },
+    });
+    companyId = company.id;
+  } else if (input.companyName) {
+    const normalized = normalizeCompanyName(input.companyName);
+    const existing = normalized
+      ? await db().company.findFirst({
+          where: { name: { equals: input.companyName.trim(), mode: 'insensitive' } },
+          select: { id: true },
+        })
+      : null;
+    companyId =
+      existing?.id ??
+      (await db().company.create({ data: { name: input.companyName.trim() }, select: { id: true } })).id;
+  }
+
+  let contactId: string | null = null;
+  if (email) {
+    const contact = await db().contact.upsert({
+      where: { email },
+      create: {
+        firstName: input.firstName,
+        lastName: input.lastName ?? null,
+        email,
+        phone: input.phone ?? null,
+        title: input.title ?? null,
+        companyId,
+      },
+      update: { companyId: companyId ?? undefined },
+      select: { id: true },
+    });
+    contactId = contact.id;
+  }
+
+  if (companyId || contactId) {
+    await db().lead.update({ where: { id: leadId }, data: { companyId, contactId } });
+  }
+}
+
+export async function setLeadStatus(
+  id: string,
+  status: (typeof LEAD_STATUSES)[number],
+  actorEmail: string,
+) {
+  const before = await db().lead.findUnique({ where: { id }, select: { status: true } });
+  if (!before) return null;
+  if (before.status === status) return { unchanged: true as const };
+
+  await db().lead.update({
+    where: { id },
+    data: {
+      status,
+      qualifiedAt: status === 'qualified' ? new Date() : undefined,
+      convertedAt: status === 'converted' ? new Date() : undefined,
+    },
+  });
+
+  await db().activity.create({
+    data: {
+      type: 'status_changed',
+      summary: `Status changed from ${before.status} to ${status}`,
+      actorEmail,
+      detail: { from: before.status, to: status },
+      leadId: id,
+    },
+  });
+
+  if (status === 'qualified') await dispatch({ type: 'lead.qualified', leadId: id, actorEmail });
+  return { unchanged: false as const };
+}
+
+export async function setLeadOwner(id: string, ownerEmail: string | null, actorEmail: string) {
+  const before = await db().lead.findUnique({ where: { id }, select: { ownerEmail: true } });
+  if (!before) return null;
+
+  await db().lead.update({ where: { id }, data: { ownerEmail } });
+  await db().activity.create({
+    data: {
+      type: 'owner_changed',
+      summary: ownerEmail ? `Assigned to ${ownerEmail}` : 'Owner cleared',
+      actorEmail,
+      detail: { from: before.ownerEmail, to: ownerEmail },
+      leadId: id,
+    },
+  });
+  return { ok: true };
+}

@@ -1,0 +1,238 @@
+import { z } from 'zod';
+import { db } from './prisma.ts';
+import { normalizeDomain, normalizeEmail } from './dedupe.ts';
+import type { ListQuery } from './api.ts';
+
+export const companyInput = z.object({
+  name: z.string().trim().min(1).max(160),
+  domain: z.string().trim().max(200).optional(),
+  industry: z.string().trim().max(80).optional(),
+  size: z.string().trim().max(40).optional(),
+  country: z.string().trim().max(80).optional(),
+  website: z.string().trim().max(300).optional(),
+  phone: z.string().trim().max(40).optional(),
+  notes: z.string().trim().max(4000).optional(),
+  ownerEmail: z.string().trim().email().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+});
+
+export const contactInput = z.object({
+  firstName: z.string().trim().min(1).max(80),
+  lastName: z.string().trim().max(80).optional(),
+  email: z.string().trim().email().max(200).optional(),
+  phone: z.string().trim().max(40).optional(),
+  title: z.string().trim().max(120).optional(),
+  linkedin: z.string().trim().max(300).optional(),
+  companyId: z.string().cuid().optional(),
+  ownerEmail: z.string().trim().email().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+});
+
+export const noteInput = z.object({
+  body: z.string().trim().min(1).max(8000),
+  leadId: z.string().cuid().optional(),
+  contactId: z.string().cuid().optional(),
+  companyId: z.string().cuid().optional(),
+  opportunityId: z.string().cuid().optional(),
+});
+
+export const taskInput = z.object({
+  title: z.string().trim().min(1).max(200),
+  detail: z.string().trim().max(4000).optional(),
+  priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
+  dueDate: z.string().date().optional(),
+  assigneeEmail: z.string().trim().email().optional(),
+  leadId: z.string().cuid().optional(),
+  contactId: z.string().cuid().optional(),
+  companyId: z.string().cuid().optional(),
+  opportunityId: z.string().cuid().optional(),
+});
+
+export type CompanyInput = z.infer<typeof companyInput>;
+export type ContactInput = z.infer<typeof contactInput>;
+export type NoteInput = z.infer<typeof noteInput>;
+export type TaskInput = z.infer<typeof taskInput>;
+
+/** Exactly one parent must be named, or a note/task would attach to nothing (or to
+ *  several records at once, which the detail views would each claim as their own). */
+export function singleParent(input: {
+  leadId?: string;
+  contactId?: string;
+  companyId?: string;
+  opportunityId?: string;
+}): boolean {
+  return (
+    [input.leadId, input.contactId, input.companyId, input.opportunityId].filter(Boolean).length === 1
+  );
+}
+
+const COMPANY_SORT = ['name', 'createdAt', 'updatedAt'] as const;
+const CONTACT_SORT = ['lastName', 'firstName', 'createdAt', 'updatedAt'] as const;
+
+export async function listCompanies(q: ListQuery, ownerEmail?: string) {
+  const where: Record<string, unknown> = {};
+  if (ownerEmail) where.ownerEmail = ownerEmail;
+  if (q.q) {
+    where.OR = [
+      { name: { contains: q.q, mode: 'insensitive' } },
+      { domain: { contains: q.q, mode: 'insensitive' } },
+      { industry: { contains: q.q, mode: 'insensitive' } },
+    ];
+  }
+  const key = (COMPANY_SORT as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'name';
+
+  const [rows, total] = await Promise.all([
+    db().company.findMany({
+      where,
+      orderBy: { [key]: key === 'name' ? 'asc' : q.dir },
+      skip: (q.page - 1) * q.perPage,
+      take: q.perPage,
+      include: {
+        _count: { select: { contacts: true, opportunities: true } },
+        customer: { select: { wonAt: true } },
+      },
+    }),
+    db().company.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function listContacts(q: ListQuery, companyId?: string) {
+  const where: Record<string, unknown> = {};
+  if (companyId) where.companyId = companyId;
+  if (q.q) {
+    where.OR = [
+      { firstName: { contains: q.q, mode: 'insensitive' } },
+      { lastName: { contains: q.q, mode: 'insensitive' } },
+      { email: { contains: q.q, mode: 'insensitive' } },
+      { title: { contains: q.q, mode: 'insensitive' } },
+    ];
+  }
+  const key = (CONTACT_SORT as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
+
+  const [rows, total] = await Promise.all([
+    db().contact.findMany({
+      where,
+      orderBy: { [key]: q.dir },
+      skip: (q.page - 1) * q.perPage,
+      take: q.perPage,
+      include: { company: { select: { id: true, name: true } } },
+    }),
+    db().contact.count({ where }),
+  ]);
+  return { rows, total };
+}
+
+export async function getCompany(id: string) {
+  return db().company.findUnique({
+    where: { id },
+    include: {
+      contacts: { orderBy: { createdAt: 'desc' } },
+      leads: { orderBy: { createdAt: 'desc' }, take: 20 },
+      opportunities: {
+        orderBy: { updatedAt: 'desc' },
+        include: { stage: { select: { name: true, isWon: true, isLost: true } } },
+      },
+      customer: { include: { revenue: { orderBy: { date: 'desc' }, take: 24 } } },
+      noteEntries: { orderBy: { createdAt: 'desc' } },
+      activities: { orderBy: { createdAt: 'desc' }, take: 50 },
+      tasks: { orderBy: { dueDate: 'asc' } },
+    },
+  });
+}
+
+export async function getContact(id: string) {
+  return db().contact.findUnique({
+    where: { id },
+    include: {
+      company: { select: { id: true, name: true, domain: true } },
+      leads: { orderBy: { createdAt: 'desc' } },
+      opportunities: {
+        orderBy: { updatedAt: 'desc' },
+        include: { stage: { select: { name: true } } },
+      },
+      noteEntries: { orderBy: { createdAt: 'desc' } },
+      activities: { orderBy: { createdAt: 'desc' }, take: 50 },
+      tasks: { orderBy: { dueDate: 'asc' } },
+    },
+  });
+}
+
+export async function createCompany(input: CompanyInput) {
+  const domain = normalizeDomain(input.domain);
+  if (domain) {
+    const existing = await db().company.findUnique({ where: { domain }, select: { id: true } });
+    if (existing) return { created: false as const, id: existing.id };
+  }
+  const company = await db().company.create({
+    data: { ...input, domain },
+    select: { id: true },
+  });
+  return { created: true as const, id: company.id };
+}
+
+export async function createContact(input: ContactInput) {
+  const email = normalizeEmail(input.email);
+  if (email) {
+    const existing = await db().contact.findUnique({ where: { email }, select: { id: true } });
+    if (existing) return { created: false as const, id: existing.id };
+  }
+  const contact = await db().contact.create({
+    data: { ...input, email },
+    select: { id: true },
+  });
+  return { created: true as const, id: contact.id };
+}
+
+export async function addNote(input: NoteInput, authorEmail: string) {
+  const note = await db().note.create({ data: { ...input, authorEmail }, select: { id: true } });
+  await db().activity.create({
+    data: {
+      type: 'note_added',
+      summary: input.body.slice(0, 140),
+      actorEmail: authorEmail,
+      leadId: input.leadId,
+      contactId: input.contactId,
+      companyId: input.companyId,
+      opportunityId: input.opportunityId,
+    },
+  });
+  return note;
+}
+
+export async function createTask(input: TaskInput, createdByEmail: string) {
+  return db().task.create({
+    data: {
+      ...input,
+      dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      createdByEmail,
+    },
+    select: { id: true },
+  });
+}
+
+export async function completeTask(id: string, actorEmail: string) {
+  const task = await db().task.findUnique({
+    where: { id },
+    select: { status: true, title: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
+  });
+  if (!task) return null;
+  if (task.status === 'done') return { unchanged: true as const };
+
+  await db().task.update({
+    where: { id },
+    data: { status: 'done', completedAt: new Date() },
+  });
+  await db().activity.create({
+    data: {
+      type: 'task_completed',
+      summary: `Completed: ${task.title}`,
+      actorEmail,
+      leadId: task.leadId,
+      contactId: task.contactId,
+      companyId: task.companyId,
+      opportunityId: task.opportunityId,
+    },
+  });
+  return { unchanged: false as const };
+}

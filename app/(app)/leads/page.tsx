@@ -1,14 +1,131 @@
-import { ModulePending } from '@/components/patterns/module-pending';
+import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
+import { PageHeader } from '@/components/patterns/page-header';
+import { FilterBar } from '@/components/patterns/filter-bar';
+import { Pager } from '@/components/patterns/pager';
+import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
+import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { Card } from '@/components/ui/card';
+import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
+import { hasDb } from '@/lib/prisma';
+import { pageQuery, pick } from '@/lib/query';
+import { leadFilters, listLeads } from '@/lib/leads';
+import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
+import { ASSIGNABLE } from '@/lib/roles';
+import { fmtRelative } from '@/lib/format';
+import { NewLeadButton } from './NewLeadButton';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
-export default function Page() {
+const FILTERS = [
+  { name: 'status', label: 'Status', options: LEAD_STATUSES.map((s) => ({ value: s, label: s })) },
+  {
+    name: 'sourceType',
+    label: 'Source',
+    options: SOURCE_TYPES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
+  },
+  {
+    name: 'ownerEmail',
+    label: 'Owner',
+    options: [
+      { value: 'unassigned', label: 'Unassigned' },
+      ...ASSIGNABLE.map((a) => ({ value: a.email, label: a.name })),
+    ],
+  },
+];
+
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+
+  if (!hasDb()) {
+    return (
+      <>
+        <PageHeader title="Leads" subtitle="Every hand-raise, with the source that produced it." />
+        <Card>
+          <NoDatabaseState />
+        </Card>
+      </>
+    );
+  }
+
+  const q = pageQuery(params);
+  const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
+  const { rows, total } = await listLeads(filters, q);
+
   return (
-    <ModulePending
-      title="Leads"
-      subtitle="Every hand-raise, with the source that produced it."
-      phase="Phase 2"
-      planned={['Source, campaign, channel and UTM capture', 'Dedupe on email and domain', 'Qualification and owner assignment', 'Website form capture via the public API']}
-    />
+    <>
+      <PageHeader
+        title="Leads"
+        subtitle="Every hand-raise, with the source that produced it."
+        actions={<NewLeadButton />}
+      />
+
+      <FilterBar filters={FILTERS} searchPlaceholder="Name, email or company…" />
+
+      <Card className="overflow-hidden">
+        {rows.length === 0 ? (
+          <EmptyState
+            icon={<Sparkles className="size-6" />}
+            title="No leads match this view"
+            hint={
+              total === 0
+                ? 'Leads arrive from your website forms via the public API, from ad platforms once connected, or by hand.'
+                : 'Clear the filters to see the rest.'
+            }
+          />
+        ) : (
+          <>
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>Name</TH>
+                    <TH>Company</TH>
+                    <TH>Status</TH>
+                    <TH>Source</TH>
+                    <TH>Campaign</TH>
+                    <TH>Owner</TH>
+                    <TH className="text-right">Created</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {rows.map((lead) => (
+                    <TR key={lead.id}>
+                      <TD>
+                        <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
+                          {[lead.firstName, lead.lastName].filter(Boolean).join(' ')}
+                        </Link>
+                        {lead.email ? (
+                          <p className="text-xs text-muted-foreground">{lead.email}</p>
+                        ) : null}
+                      </TD>
+                      <TD className="text-muted-foreground">{lead.companyName ?? '—'}</TD>
+                      <TD>
+                        <LeadStatusBadge status={lead.status} />
+                      </TD>
+                      <TD>
+                        <SourceBadge source={lead.sourceType} />
+                      </TD>
+                      <TD className="text-muted-foreground">{lead.campaign?.name ?? '—'}</TD>
+                      <TD className="text-muted-foreground">
+                        {lead.ownerEmail ? lead.ownerEmail.split('@')[0] : 'Unassigned'}
+                      </TD>
+                      <TD className="text-right text-muted-foreground">
+                        {fmtRelative(lead.createdAt)}
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+            <Pager page={q.page} perPage={q.perPage} total={total} />
+          </>
+        )}
+      </Card>
+    </>
   );
 }
