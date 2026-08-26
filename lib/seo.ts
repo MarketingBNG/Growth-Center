@@ -5,6 +5,19 @@ import { num, rate } from './calc.ts';
 // an attribute of the keyword, and SeoKeywordRanking already stores that history. The
 // metrics layer holds site-wide series, not per-entity attributes with their own shape.
 
+/**
+ * Nothing writes SeoKeyword, SeoKeywordRanking or SeoPage except the seeder.
+ *
+ * The Semrush provider writes three domain-level numbers into MetricSnapshot
+ * (organic_keywords, organic_traffic, organic_traffic_value) and touches none of these
+ * tables. The page's "seeded" warning used to key off Semrush's connection state, so
+ * connecting it removed the warning without replacing a single figure — the page would
+ * have started presenting invented rankings as live.
+ *
+ * Flip this to true in the same change that makes an ingestion write these tables.
+ */
+export const SEO_HAS_LIVE_SOURCE = false;
+
 export async function seoOverview() {
   const website = await db().website.findFirst({ select: { id: true, domain: true, name: true } });
   if (!website) return null;

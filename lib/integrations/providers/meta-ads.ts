@@ -15,7 +15,14 @@ type Stored = { accessToken: string };
  * lapses. Meta accepts a long-lived token as input here, which is what makes rolling
  * renewal possible at all.
  */
-async function exchangeForLongLived(token: string): Promise<{ token: string; expiresIn?: number }> {
+// Meta documents long-lived user tokens as ~60 days. When it omits expires_in we assume
+// that rather than storing no expiry at all: a null expiry made renewIfNearExpiry() skip
+// renewal entirely and the card's expiry warning never render, so the connection could
+// simply stop working one morning with nothing on screen saying why. Under-estimating is
+// safe — an early renewal costs one extra request.
+const ASSUMED_LIFETIME_SECONDS = 60 * 24 * 60 * 60;
+
+async function exchangeForLongLived(token: string): Promise<{ token: string; expiresIn: number }> {
   const params = new URLSearchParams({
     grant_type: 'fb_exchange_token',
     client_id: process.env.META_APP_ID ?? '',
@@ -33,7 +40,7 @@ async function exchangeForLongLived(token: string): Promise<{ token: string; exp
 
   const json = (await res.json()) as { access_token?: string; expires_in?: number };
   if (!json.access_token) throw new IntegrationError('Meta returned no long-lived token.');
-  return { token: json.access_token, expiresIn: json.expires_in };
+  return { token: json.access_token, expiresIn: json.expires_in ?? ASSUMED_LIFETIME_SECONDS };
 }
 
 export const metaAds: IntegrationProvider = {
@@ -104,7 +111,7 @@ export const metaAds: IntegrationProvider = {
 
     return {
       secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: long.expiresIn ? new Date(Date.now() + long.expiresIn * 1000) : undefined,
+      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
     };
   },
 
@@ -113,7 +120,7 @@ export const metaAds: IntegrationProvider = {
     const long = await exchangeForLongLived(accessToken);
     return {
       secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: long.expiresIn ? new Date(Date.now() + long.expiresIn * 1000) : undefined,
+      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
     };
   },
 
@@ -136,25 +143,37 @@ export const metaAds: IntegrationProvider = {
       limit: '500',
     });
 
-    const res = await fetch(`${GRAPH}/${adAccountId}/insights?${params}`);
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-      throw new IntegrationError(body?.error?.message ?? `Meta insights failed (${res.status}).`);
-    }
-
-    const json = (await res.json()) as {
-      data?: {
-        campaign_id: string;
-        campaign_name: string;
-        date_start: string;
-        spend: string;
-        impressions: string;
-        clicks: string;
-      }[];
+    type Row = {
+      campaign_id: string;
+      campaign_name: string;
+      date_start: string;
+      spend: string;
+      impressions: string;
+      clicks: string;
     };
 
+    // Meta paginates. The first response carries at most `limit` rows and a cursor;
+    // reading only page one silently loses every campaign-day past it while the sync
+    // still reports success. Follow paging.next until it stops.
+    const rows: Row[] = [];
+    let url: string | null = `${GRAPH}/${adAccountId}/insights?${params}`;
+
+    // A guard rather than a while(true): a malformed cursor that returned itself would
+    // otherwise spin until the function is killed.
+    for (let page = 0; url && page < 50; page++) {
+      const res: Response = await fetch(url);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        throw new IntegrationError(body?.error?.message ?? `Meta insights failed (${res.status}).`);
+      }
+
+      const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };
+      rows.push(...(json.data ?? []));
+      url = json.paging?.next ?? null;
+    }
+
     const points: MetricPoint[] = [];
-    for (const row of json.data ?? []) {
+    for (const row of rows) {
       const date = new Date(`${row.date_start}T00:00:00Z`);
       if (Number.isNaN(date.getTime())) continue;
       const metrics: [string, string][] = [

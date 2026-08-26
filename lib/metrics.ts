@@ -32,9 +32,32 @@ export function rangeFor(days: number, now = new Date()): { current: Range; prev
   return { current: { from, to }, previous: { from: prevFrom, to: prevTo } };
 }
 
+
+/**
+ * Seeded rows carry source 'demo'. Real ones carry the integration id.
+ *
+ * Once a provider has written even one row for a metric, the demo rows for that metric
+ * must stop counting or the two are summed — connecting GA4 would have roughly doubled
+ * the visitor count overnight, real sessions piled on top of invented ones.
+ *
+ * Scoped per metric, not globally, so a live Meta connection does not blank out the
+ * seeded figures on pages nothing real writes to yet.
+ */
+export async function excludeDemo(metricKey: string): Promise<{ not: 'demo' } | undefined> {
+  const live = await db().metricSnapshot.findFirst({
+    where: { metricKey, source: { not: 'demo' } },
+    select: { id: true },
+  });
+  return live ? { not: 'demo' } : undefined;
+}
+
 async function sessions(range: Range): Promise<number> {
   const result = await db().metricSnapshot.aggregate({
-    where: { metricKey: 'sessions', date: { gte: range.from, lte: range.to } },
+    where: {
+      metricKey: 'sessions',
+      date: { gte: range.from, lte: range.to },
+      source: await excludeDemo('sessions'),
+    },
     _sum: { value: true },
   });
   return Math.round(num(result._sum.value));
@@ -148,7 +171,7 @@ export async function trend(range: Range, bucket: 'day' | 'month') {
 
   const [sessionRows, leadRows, revenueRows, spendRows] = await Promise.all([
     db().metricSnapshot.findMany({
-      where: { metricKey: 'sessions', date: window },
+      where: { metricKey: 'sessions', date: window, source: await excludeDemo('sessions') },
       select: { date: true, value: true },
     }),
     db().lead.findMany({ where: { createdAt: window }, select: { createdAt: true } }),

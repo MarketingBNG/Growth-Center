@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
-import { seoOverview } from '@/lib/seo';
+import { SEO_HAS_LIVE_SOURCE, seoOverview } from '@/lib/seo';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
 
@@ -53,12 +53,16 @@ export default async function SeoPage() {
         actions={semrush ? <StateBadge state={semrush.state} /> : null}
       />
 
-      {semrush?.state === 'demo_data' ? (
+      {/* Keyed on whether anything actually writes these tables, NOT on whether Semrush is
+          connected — Semrush writes elsewhere, so connecting it changes nothing here. */}
+      {!SEO_HAS_LIVE_SOURCE ? (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
           <p className="text-xs text-warning">
-            Rankings and page data are seeded, not crawled. Connect Semrush on the Integrations
-            page to replace them with live figures.
+            Rankings and page data are seeded, not crawled.{' '}
+            {semrush?.state === 'connected' || semrush?.state === 'syncing'
+              ? 'Semrush is connected, but it reports domain-level totals only — it does not yet populate per-keyword rankings, so these figures are still seeded.'
+              : 'No SEO source is connected.'}
           </p>
         </div>
       ) : null}

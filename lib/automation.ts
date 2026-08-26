@@ -127,6 +127,40 @@ export function registerAutomations() {
     });
   });
 
+  /**
+   * Undoes what opportunity.won did.
+   *
+   * opportunity.lost was dispatched from the start but nothing listened, so correcting a
+   * deal wrongly marked Won left its revenue entry and its customer row behind for good —
+   * one mis-click permanently inflated revenue, ROAS and the customer count.
+   *
+   * Only reverses what this deal created: a customer with revenue from other deals keeps
+   * its row, and only the entry tied to this opportunity is removed.
+   */
+  on('opportunity.lost', async ({ opportunityId }) => {
+    const entry = await db().revenueEntry.findFirst({
+      where: { opportunityId },
+      select: { id: true, customerId: true },
+    });
+    if (!entry) return;
+
+    await db().revenueEntry.delete({ where: { id: entry.id } });
+
+    const customer = await db().customer.findUnique({
+      where: { id: entry.customerId },
+      select: { id: true, opportunityId: true, _count: { select: { revenue: true } } },
+    });
+    if (!customer) return;
+
+    // Created by this very deal and now has no revenue at all — it never really existed.
+    if (customer.opportunityId === opportunityId && customer._count.revenue === 0) {
+      await db().customer.delete({ where: { id: customer.id } });
+      return;
+    }
+
+    // Otherwise it is a real customer whose other deals stand. Leave it be.
+  });
+
   on('integration.sync_failed', async ({ provider, message }) => {
     await db().notification.create({
       data: {

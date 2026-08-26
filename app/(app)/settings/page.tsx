@@ -13,6 +13,7 @@ import { aiStatus } from '@/lib/ai';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
 import { ApiKeys } from './ApiKeys';
+import { RevokeKey } from './RevokeKey';
 
 export const metadata = { title: 'Settings · Growth Center' };
 
@@ -168,6 +169,7 @@ export default async function SettingsPage() {
                     <TH className="text-right">Created</TH>
                     <TH className="text-right">Last used</TH>
                     <TH>Status</TH>
+                    <TH />
                   </TR>
                 </THead>
                 <TBody>
@@ -186,6 +188,9 @@ export default async function SettingsPage() {
                         ) : (
                           <Badge tone="success">active</Badge>
                         )}
+                      </TD>
+                      <TD className="text-right">
+                        {k.revokedAt ? null : <RevokeKey id={k.id} name={k.name} />}
                       </TD>
                     </TR>
                   ))}

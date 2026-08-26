@@ -149,6 +149,58 @@ export type CreateLeadResult =
   | { created: true; leadId: string }
   | { created: false; leadId: string; reason: 'duplicate' };
 
+
+/**
+ * Resolves the campaign a form submission came from.
+ *
+ * Inbound forms carry utm_campaign; campaigns carry the ad platform's own name. Nothing
+ * joined the two, so every lead from a real Meta campaign arrived unattributed and the
+ * only live channel showed real spend against an empty funnel — no CPL, no CAC, no ROAS.
+ *
+ * Matching is exact on name first, then case-insensitively, and never fuzzily: crediting
+ * revenue to the wrong campaign is worse than crediting it to none. utm_source narrows
+ * the search when two platforms use the same campaign name.
+ *
+ * An explicit campaignId always wins — it means a human chose.
+ */
+export async function resolveCampaign(input: {
+  campaignId?: string;
+  utmCampaign?: string;
+  utmSource?: string;
+}): Promise<{ campaignId?: string; channelId?: string }> {
+  if (input.campaignId) return { campaignId: input.campaignId };
+
+  const name = (input.utmCampaign ?? '').trim();
+  if (!name) return {};
+
+  // utm_source=facebook|meta means only look at Meta's campaigns, and so on.
+  const source = (input.utmSource ?? '').trim().toLowerCase();
+  const sourceFilter =
+    source.includes('facebook') || source.includes('meta') || source.includes('instagram')
+      ? 'meta_ads'
+      : source.includes('google')
+        ? 'google_ads'
+        : source.includes('linkedin')
+          ? 'linkedin_ads'
+          : null;
+
+  const scope = sourceFilter ? { source: sourceFilter } : {};
+
+  const exact = await db().campaign.findFirst({
+    where: { ...scope, name },
+    select: { id: true, channelId: true },
+  });
+  if (exact) return { campaignId: exact.id, channelId: exact.channelId };
+
+  const loose = await db().campaign.findFirst({
+    where: { ...scope, name: { equals: name, mode: 'insensitive' } },
+    select: { id: true, channelId: true },
+  });
+  if (loose) return { campaignId: loose.id, channelId: loose.channelId };
+
+  return {};
+}
+
 export async function createLead(
   input: LeadInput,
   actorEmail: string | null,
@@ -169,11 +221,17 @@ export async function createLead(
     return { created: false, leadId: duplicate.id, reason: 'duplicate' };
   }
 
+  // Attribution is resolved here rather than at each call site so a lead from the public
+  // form, the UI and an import are all credited the same way.
+  const attribution = await resolveCampaign(input);
+
   const lead = await db().lead.create({
     data: {
       ...input,
       email: normalizeEmail(input.email),
       ownerEmail: input.ownerEmail ?? null,
+      campaignId: attribution.campaignId ?? input.campaignId ?? null,
+      channelId: attribution.channelId ?? input.channelId ?? null,
     },
     select: { id: true },
   });
@@ -183,7 +241,12 @@ export async function createLead(
       type: 'created',
       summary: `Lead created from ${input.sourceType.replace('_', ' ')}`,
       actorEmail,
-      detail: { sourceType: input.sourceType, utmSource: input.utmSource ?? null },
+      detail: {
+        sourceType: input.sourceType,
+        utmSource: input.utmSource ?? null,
+        utmCampaign: input.utmCampaign ?? null,
+        attributed: !!attribution.campaignId,
+      },
       leadId: lead.id,
     },
   });
