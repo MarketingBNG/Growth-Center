@@ -16,6 +16,24 @@ export type AuthKind = 'oauth2' | 'apiKey';
 /** What a provider needs from the environment before it can be connected at all. */
 export type EnvRequirement = { name: string; description: string };
 
+/**
+ * A non-secret setting the person connecting has to supply — a GA4 property id, an ad
+ * account id. Declared rather than hand-built per provider so the Integration Center can
+ * render the form for any provider without knowing which one it is.
+ *
+ * Secrets never go here; they are sealed into IntegrationCredential.
+ */
+export type ConfigField = {
+  name: string;
+  label: string;
+  placeholder?: string;
+  /** Shown under the input. Say where the value is found. */
+  help?: string;
+  required?: boolean;
+  /** Normalises what was typed, e.g. adding Meta's `act_` prefix. Throw to reject. */
+  normalise?(value: string): string;
+};
+
 export type SyncResult = {
   rows: number;
   /** Human-readable summary shown on the integration card after a sync. */
@@ -46,6 +64,8 @@ export interface IntegrationProvider {
    *  visible before connecting. */
   readonly provides: string[];
   readonly requiredEnv: EnvRequirement[];
+  /** Non-secret settings this provider needs before it can sync. */
+  readonly configFields?: ConfigField[];
   /** Documentation the person connecting it will need. */
   readonly docsUrl?: string;
 

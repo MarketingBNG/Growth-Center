@@ -28,6 +28,7 @@ const SERVER_ONLY = [
   'lib/automation',
   'lib/crypto',
   'lib/auth',
+  'lib/users',
   'lib/api',
   'lib/integrations/service',
   'lib/integrations/registry',

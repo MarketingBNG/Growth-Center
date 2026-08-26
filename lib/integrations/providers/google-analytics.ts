@@ -40,6 +40,23 @@ export const googleAnalytics: IntegrationProvider = {
   ],
   docsUrl: 'https://developers.google.com/analytics/devguides/reporting/data/v1',
 
+  configFields: [
+    {
+      name: 'propertyId',
+      label: 'GA4 property ID',
+      placeholder: '493812345',
+      help: 'GA4 Admin → Property Settings. Digits only, not the "G-" measurement ID.',
+      required: true,
+      normalise: (v) => {
+        const trimmed = v.trim().replace(/^properties\//, '');
+        if (trimmed && !/^\d+$/.test(trimmed)) {
+          throw new Error('A GA4 property ID is digits only — the G- code is a different thing.');
+        }
+        return trimmed;
+      },
+    },
+  ],
+
   isConfigured() {
     return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
   },

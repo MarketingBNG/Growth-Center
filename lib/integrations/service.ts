@@ -3,7 +3,7 @@ import type { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { getProvider, providerList } from './registry.ts';
-import { IntegrationError, type ConnectInput, type MetricPoint } from './types.ts';
+import { IntegrationError, type ConfigField, type ConnectInput, type MetricPoint } from './types.ts';
 
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.
@@ -21,6 +21,10 @@ export type Card = {
   hasCredential: boolean;
   configured: boolean;
   missingEnv: { name: string; description: string }[];
+  /** Declared by the provider; rendered as the card's Settings form. */
+  configFields: Omit<ConfigField, 'normalise'>[];
+  /** Required settings with no value yet. A sync cannot succeed while this is non-empty. */
+  missingConfig: string[];
   lastSyncAt: Date | null;
   lastSyncRows: number | null;
   lastError: string | null;
@@ -55,6 +59,7 @@ export async function cards(): Promise<Card[]> {
   return providerList().map((p) => {
     const row = byProvider.get(p.id);
     const hasCredential = !!row?.credential;
+    const config = (row?.config as Record<string, unknown> | null) ?? {};
     const missingEnv = p.requiredEnv.filter((e) => !process.env[e.name]);
 
     let state = row?.state ?? 'disconnected';
@@ -72,6 +77,17 @@ export async function cards(): Promise<Card[]> {
       hasCredential,
       configured: p.isConfigured() && hasEncryptionKey(),
       missingEnv,
+      // normalise is a function; it cannot cross the server/client boundary.
+      configFields: (p.configFields ?? []).map((f) => ({
+        name: f.name,
+        label: f.label,
+        placeholder: f.placeholder,
+        help: f.help,
+        required: f.required,
+      })),
+      missingConfig: (p.configFields ?? [])
+        .filter((f) => f.required && !String(config[f.name] ?? '').trim())
+        .map((f) => f.label),
       lastSyncAt: row?.lastSyncAt ?? null,
       lastSyncRows: row?.lastSyncRows ?? null,
       lastError:
@@ -80,7 +96,7 @@ export async function cards(): Promise<Card[]> {
           : (row?.lastError ?? null),
       lastErrorAt: row?.lastErrorAt ?? null,
       connectedByEmail: row?.connectedByEmail ?? null,
-      config: (row?.config as Record<string, unknown> | null) ?? null,
+      config,
     };
   });
 }
@@ -256,4 +272,65 @@ export async function sync(id: string, days = 30) {
     await dispatch({ type: 'integration.sync_failed', provider: id, message });
     throw new IntegrationError(message);
   }
+}
+
+/**
+ * Saves the non-secret settings a provider needs to sync — the ad account id, the GA4
+ * property id. Separate from connect() because these are routinely corrected after the
+ * OAuth handshake, and re-authorising to change a property id would be absurd.
+ *
+ * Merges rather than replaces, so a form submitting one field cannot silently drop
+ * another provider's stored setting.
+ */
+export async function setConfig(
+  id: string,
+  input: Record<string, string>,
+  actorEmail: string,
+): Promise<Record<string, unknown>> {
+  const provider = requireProvider(id);
+  const fields = provider.configFields ?? [];
+  if (!fields.length) throw new IntegrationError(`${provider.name} has no settings.`);
+
+  const existing = await db().integration.findUnique({
+    where: { provider: id },
+    select: { config: true },
+  });
+  const config: Record<string, unknown> = {
+    ...((existing?.config as Record<string, unknown> | null) ?? {}),
+  };
+
+  for (const field of fields) {
+    const raw = input[field.name];
+    if (raw === undefined) continue;
+
+    let value = raw.trim();
+    if (field.normalise) {
+      try {
+        value = field.normalise(value);
+      } catch (e) {
+        throw new IntegrationError((e as Error).message);
+      }
+    }
+    if (field.required && !value) throw new IntegrationError(`${field.label} is required.`);
+
+    config[field.name] = value;
+  }
+
+  await db().integration.upsert({
+    where: { provider: id },
+    create: { provider: id, state: 'disconnected', config: config as Prisma.InputJsonValue },
+    update: { config: config as Prisma.InputJsonValue },
+  });
+
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'integration.configure',
+      entityType: 'integration',
+      entityId: id,
+      detail: config as Prisma.InputJsonValue,
+    },
+  });
+
+  return config;
 }

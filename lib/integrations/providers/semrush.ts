@@ -19,6 +19,17 @@ export const semrush: IntegrationProvider = {
   docsUrl: 'https://developer.semrush.com/api/v3/analytics/overview-reports/',
 
   // The key may be pasted at connect time, so no environment variable is required.
+  configFields: [
+    {
+      name: 'domain',
+      label: 'Domain',
+      placeholder: 'usaindiacfo.com',
+      help: 'The site to track. No protocol, no path.',
+      required: true,
+      normalise: (v) => v.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase(),
+    },
+  ],
+
   isConfigured() {
     return true;
   },

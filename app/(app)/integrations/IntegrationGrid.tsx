@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ExternalLink, Plug, RefreshCw, Unplug } from 'lucide-react';
+import { ExternalLink, Plug, RefreshCw, Settings2, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
@@ -48,9 +48,10 @@ export function IntegrationGrid({
 
 function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | 'connect' | 'sync' | 'disconnect'>(null);
+  const [busy, setBusy] = useState<null | 'connect' | 'sync' | 'disconnect' | 'settings'>(null);
   const [error, setError] = useState<string | null>(null);
   const [keyModal, setKeyModal] = useState(false);
+  const [settingsModal, setSettingsModal] = useState(false);
 
   const connected = card.state === 'connected' || card.state === 'syncing';
 
@@ -79,10 +80,35 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         method: 'POST',
         json: {
           apiKey: String(form.get('apiKey') ?? '').trim(),
-          config: { domain: String(form.get('domain') ?? '').trim() },
+          config: Object.fromEntries(
+            card.configFields.map((f) => [f.name, String(form.get(f.name) ?? '').trim()]),
+          ),
         },
       });
       setKeyModal(false);
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveSettings(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy('settings');
+    setError(null);
+    const form = new FormData(e.currentTarget);
+    try {
+      await api(`/api/integrations/${card.id}/config`, {
+        method: 'PATCH',
+        json: {
+          config: Object.fromEntries(
+            card.configFields.map((f) => [f.name, String(form.get(f.name) ?? '').trim()]),
+          ),
+        },
+      });
+      setSettingsModal(false);
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -160,6 +186,12 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         </p>
       ) : null}
 
+      {card.hasCredential && card.missingConfig.length > 0 ? (
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+          Connected, but syncing needs {card.missingConfig.join(' and ')}. Open Settings.
+        </p>
+      ) : null}
+
       {card.missingEnv.length > 0 ? (
         <div className="mt-3 rounded-md border border-border bg-secondary/40 px-2 py-1.5">
           <p className="text-[11px] font-medium">Requires API credentials</p>
@@ -186,6 +218,16 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
               <RefreshCw className={busy === 'sync' ? 'animate-spin' : undefined} />
               {busy === 'sync' ? 'Syncing…' : 'Sync now'}
             </Button>
+            {card.configFields.length > 0 ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy !== null}
+                onClick={() => setSettingsModal(true)}
+              >
+                <Settings2 /> Settings
+              </Button>
+            ) : null}
             <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => run('disconnect')}>
               <Unplug /> Disconnect
             </Button>
@@ -230,9 +272,11 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
           <Field label="API key" required>
             <Input name="apiKey" required autoFocus autoComplete="off" />
           </Field>
-          <Field label="Domain" required>
-            <Input name="domain" required placeholder="usaindiacfo.com" />
-          </Field>
+          {card.configFields.map((f) => (
+            <Field key={f.name} label={f.label} required={f.required} hint={f.help}>
+              <Input name={f.name} required={f.required} placeholder={f.placeholder} />
+            </Field>
+          ))}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setKeyModal(false)}>
@@ -240,6 +284,35 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
             </Button>
             <Button type="submit" disabled={busy !== null}>
               {busy === 'connect' ? 'Validating…' : 'Connect'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={settingsModal}
+        onClose={() => setSettingsModal(false)}
+        title={`${card.name} settings`}
+        description="Not secrets — these say which account to pull from. Stored in plain text alongside the connection."
+      >
+        <form onSubmit={saveSettings} className="space-y-3">
+          {card.configFields.map((f) => (
+            <Field key={f.name} label={f.label} required={f.required} hint={f.help}>
+              <Input
+                name={f.name}
+                required={f.required}
+                placeholder={f.placeholder}
+                defaultValue={String(card.config?.[f.name] ?? '')}
+              />
+            </Field>
+          ))}
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="ghost" onClick={() => setSettingsModal(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={busy !== null}>
+              {busy === 'settings' ? 'Saving…' : 'Save'}
             </Button>
           </div>
         </form>

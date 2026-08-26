@@ -19,6 +19,24 @@ export const metaAds: IntegrationProvider = {
     { name: 'META_APP_SECRET', description: 'Secret for that Meta app' },
   ],
   docsUrl: 'https://developers.facebook.com/docs/marketing-api/insights',
+  configFields: [
+    {
+      name: 'adAccountId',
+      label: 'Ad account ID',
+      placeholder: 'act_1200632807599932',
+      help: 'Ads Manager → account dropdown. The Graph API needs the act_ prefix; it is added for you.',
+      required: true,
+      // Meta shows the id bare in Business Settings but the Graph API 404s without the
+      // prefix, so accept either and store the form the API wants.
+      normalise: (v) => {
+        const trimmed = v.trim();
+        if (!trimmed) return trimmed;
+        const digits = trimmed.replace(/^act_/, '');
+        if (!/^\d+$/.test(digits)) throw new Error('An ad account ID is digits, optionally prefixed with act_.');
+        return `act_${digits}`;
+      },
+    },
+  ],
 
   isConfigured() {
     return !!process.env.META_APP_ID && !!process.env.META_APP_SECRET;
