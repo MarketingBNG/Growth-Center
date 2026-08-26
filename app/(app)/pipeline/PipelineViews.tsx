@@ -13,6 +13,17 @@ import { EmptyState } from '@/components/patterns/state';
 import { api } from '@/lib/fetcher';
 import { fmtDate, fmtMoney } from '@/lib/format';
 
+/** Assigned by column position rather than by stage name, so a renamed or added stage
+ *  still gets a colour instead of falling back to nothing. */
+const STAGE_COLOR = [
+  'bg-chart-1',
+  'bg-chart-4',
+  'bg-chart-6',
+  'bg-chart-3',
+  'bg-chart-2',
+  'bg-chart-5',
+] as const;
+
 export type Deal = {
   id: string;
   name: string;
@@ -105,8 +116,8 @@ function Board({ columns }: { columns: Column[] }) {
         </p>
       ) : null}
 
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {local.map((col) => {
+      <div className="grid items-start gap-3.5 pb-2 sm:grid-cols-2 lg:grid-cols-4">
+        {local.map((col, colIndex) => {
           const sum = col.cards.reduce((t, d) => t + d.value, 0);
           return (
             <div
@@ -117,20 +128,28 @@ function Board({ columns }: { columns: Column[] }) {
               }}
               onDragLeave={() => setOver((s) => (s === col.stage.id ? null : s))}
               onDrop={() => drop(col.stage.id)}
-              className={`flex w-64 shrink-0 flex-col rounded-xl border bg-card/60 transition-colors ${
+              className={`flex min-w-0 flex-col rounded-2xl border bg-card p-3.5 shadow-card transition-colors ${
                 over === col.stage.id ? 'border-primary bg-primary/5' : 'border-border'
               }`}
             >
-              <div className="flex items-baseline justify-between border-b border-border px-3 py-2.5">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-semibold">{col.stage.name}</p>
+              <div className="flex items-baseline justify-between gap-2 pb-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {/* The stage's colour lives on this dot, not on the deal cards —
+                      a whole column tinted by stage reads as a status, not a stage. */}
+                  <span
+                    aria-hidden
+                    className={`size-2 shrink-0 rounded-full ${STAGE_COLOR[colIndex % STAGE_COLOR.length]}`}
+                  />
+                  <p className="truncate text-[13px] font-bold">{col.stage.name}</p>
                   {col.stage.isWon ? <Badge tone="success">won</Badge> : null}
                   {col.stage.isLost ? <Badge tone="danger">lost</Badge> : null}
                 </div>
-                <p className="text-[11px] text-muted-foreground">{col.cards.length}</p>
+                <p className="shrink-0 text-[11.5px] text-muted-foreground tnum">
+                  {sum > 0 ? fmtMoney(sum) : col.cards.length}
+                </p>
               </div>
 
-              <div className="flex-1 space-y-2 p-2">
+              <div className="flex-1 space-y-2">
                 <AnimatePresence initial={false}>
                   {col.cards.map((deal) => (
                     <motion.div
@@ -143,21 +162,21 @@ function Board({ columns }: { columns: Column[] }) {
                       draggable
                       onDragStart={() => setDragging(deal.id)}
                       onDragEnd={() => setDragging(null)}
-                      className={`cursor-grab rounded-lg border border-border bg-card p-2.5 active:cursor-grabbing ${
+                      className={`cursor-grab rounded-xl border border-border bg-surface-sunken p-3 transition-colors hover:border-primary active:cursor-grabbing ${
                         dragging === deal.id ? 'opacity-40' : ''
                       }`}
                     >
                       <Link href={`/pipeline/${deal.id}`} className="block hover:text-primary">
-                        <p className="text-sm font-medium leading-snug">{deal.name}</p>
+                        <p className="text-[12.5px] font-bold leading-[1.35]">{deal.name}</p>
                       </Link>
                       {deal.companyName ? (
                         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           {deal.companyName}
                         </p>
                       ) : null}
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-xs font-semibold tnum">{fmtMoney(deal.value)}</span>
-                        <span className="text-[11px] text-muted-foreground tnum">
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-bold tnum">{fmtMoney(deal.value)}</span>
+                        <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground tnum">
                           {deal.probability}%
                         </span>
                       </div>
@@ -172,11 +191,6 @@ function Board({ columns }: { columns: Column[] }) {
                 ) : null}
               </div>
 
-              {sum > 0 ? (
-                <div className="border-t border-border px-3 py-2 text-[11px] text-muted-foreground tnum">
-                  {fmtMoney(sum)}
-                </div>
-              ) : null}
             </div>
           );
         })}

@@ -5,16 +5,25 @@ import { ChartFrame } from './chart-parts';
 
 export type Stage = { key: string; label: string; value: number; hint?: string };
 
+/** Stage order, never cycled — the fill identifies the step, not a category. */
+const STAGE_FILL = [
+  'var(--chart-1)',
+  'var(--chart-6)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-2)',
+] as const;
+
 /**
  * Hand-drawn rather than a chart library's funnel: the numbers that matter here are the
- * step-to-step conversion rates, and those want to sit between the bars as direct labels
- * rather than in a tooltip.
+ * step-to-step conversion rates, and those want to sit as direct labels rather than in a
+ * tooltip.
  *
  * Bar widths are proportional to the FIRST stage, so the shape shows real drop-off — a
  * funnel scaled per-stage looks healthy no matter how bad the conversion is.
  *
- * The label sits in its own fixed column to the LEFT of the bar, not inside it. Inside,
- * a stage worth 0.35% of the top of the funnel clipped "Qualified" down to "Q".
+ * The rate reads against the stage immediately above, not against the top of the funnel:
+ * "37.9% of leads" is actionable where "1.0% of visitors" is not.
  */
 export function FunnelChart({
   stages,
@@ -29,38 +38,38 @@ export function FunnelChart({
 
   return (
     <ChartFrame title={title} subtitle={subtitle}>
-      <ol className="space-y-0.5 px-3 py-2">
+      <ol className="flex flex-col gap-[11px] px-3 pb-2 pt-2">
         {stages.map((s, i) => {
-          const previous = i > 0 ? stages[i - 1].value : null;
-          const step = previous ? (previous === 0 ? null : (s.value / previous) * 100) : null;
+          const previous = i > 0 ? stages[i - 1] : null;
+          const step = previous && previous.value > 0 ? (s.value / previous.value) * 100 : null;
           // A floor keeps a tiny final stage visible as a sliver rather than nothing.
           const width = top > 0 ? Math.max((s.value / top) * 100, 2) : 0;
 
           return (
             <li key={s.key}>
-              {step !== null ? (
-                <p className="py-0.5 pl-[104px] text-[11px] text-muted-foreground tnum">
-                  ↓ {fmtPercent(step, step < 10 ? 2 : 1)}
-                </p>
-              ) : null}
-
-              <div className="flex items-center gap-2">
-                <span className="w-24 shrink-0 truncate text-xs font-medium" title={s.label}>
+              <div className="flex items-baseline gap-3 pb-1.5">
+                <span className="min-w-0 truncate text-[12.5px] font-semibold" title={s.label}>
                   {s.label}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div
-                    className="h-7 rounded-r-[4px] bg-chart-1/25 ring-1 ring-inset ring-chart-1/40"
-                    style={{ width: `${width}%` }}
-                  />
-                </div>
-                <span className="w-20 shrink-0 text-right text-sm font-semibold tnum">
+                <span className="ml-auto shrink-0 text-[13.5px] font-bold tnum">
                   {s.value >= 100000 ? fmtCompact(s.value) : fmtNumber(s.value)}
                 </span>
+                {step !== null ? (
+                  <span className="shrink-0 text-[11px] text-muted-foreground tnum">
+                    {fmtPercent(step, step < 10 ? 2 : 1)} of {previous!.label.toLowerCase()}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="h-2 w-full overflow-hidden rounded-full bg-track">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${width}%`, background: STAGE_FILL[i % STAGE_FILL.length] }}
+                />
               </div>
 
               {s.hint ? (
-                <p className="pl-[104px] pt-0.5 text-[11px] text-muted-foreground">{s.hint}</p>
+                <p className="pt-1 text-[11px] text-muted-foreground">{s.hint}</p>
               ) : null}
             </li>
           );

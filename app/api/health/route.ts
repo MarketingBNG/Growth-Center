@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
 import { hasDb, prisma } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
+import { currentUser } from '@/lib/auth';
 
+/**
+ * Liveness probe. Unauthenticated, because a probe that needs a session is useless to a
+ * load balancer.
+ *
+ * The anonymous response is deliberately just liveness and database reachability. It used
+ * to enumerate which of GOOGLE_CLIENT_*, APP_ENCRYPTION_KEY and ANTHROPIC_API_KEY were
+ * set — no secret values, but it told any anonymous caller how the deployment was
+ * configured, which is a free reconnaissance step. The detailed form now requires a
+ * session; the Settings page is where a signed-in user sees configuration state anyway.
+ */
 export async function GET() {
   let dbReachable: boolean | null = null;
   const client = prisma();
@@ -12,6 +23,11 @@ export async function GET() {
     } catch {
       dbReachable = false;
     }
+  }
+
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ ok: true, database: { reachable: dbReachable } });
   }
 
   return NextResponse.json({

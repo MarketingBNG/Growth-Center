@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { RangePicker } from '@/components/patterns/range-picker';
+import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -9,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
+import { crmBand } from '@/lib/band';
+import { rangeParam } from '@/lib/range';
 import { pageQuery } from '@/lib/query';
 import { listCompanies, listContacts } from '@/lib/crm';
 import { fmtDate } from '@/lib/format';
@@ -36,15 +40,26 @@ export default async function CrmPage({
   }
 
   const q = pageQuery(params);
-  const data = tab === 'companies' ? await listCompanies(q) : await listContacts(q);
+  const { value, days, bucket } = rangeParam(params);
+  const [data, band] = await Promise.all([
+    tab === 'companies' ? listCompanies(q) : listContacts(q),
+    crmBand(days, bucket),
+  ]);
 
   return (
     <>
       <PageHeader
         title="CRM"
         subtitle="Contacts and companies, populated automatically by inbound leads."
-        actions={<NewCrmRecordButton kind={tab === 'companies' ? 'company' : 'contact'} />}
+        actions={
+          <>
+            <RangePicker current={value} />
+            <NewCrmRecordButton kind={tab === 'companies' ? 'company' : 'contact'} />
+          </>
+        }
       />
+
+      <MetricsBand {...band} />
 
       <div className="flex items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">

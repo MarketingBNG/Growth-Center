@@ -1,7 +1,28 @@
 // Exercises the Phase 3 read paths against the real database — the queries the
 // dashboard, marketing, analytics and Integration Center pages run.
 
-import { channelPerformance, funnel, kpis, openPipeline, rangeFor, trend } from '../lib/metrics.ts';
+import {
+  accountMetrics,
+  analyticsKpis,
+  avgCycleDays,
+  budgetPacing,
+  channelPerformance,
+  crmKpis,
+  customerShare,
+  duplicatesMerged,
+  funnel,
+  kpis,
+  leadsByWeekday,
+  leadsKpis,
+  marketingKpis,
+  medianResponseHours,
+  openPipeline,
+  pipelineKpis,
+  rangeFor,
+  trend,
+  unassignedLeads,
+  winRate,
+} from '../lib/metrics.ts';
 import { campaignPerformance, campaignTotals } from '../lib/campaigns.ts';
 import { cards } from '../lib/integrations/service.ts';
 import { db } from '../lib/prisma.ts';
@@ -124,6 +145,74 @@ check(
   list.every((c) => !c.configured || c.missingEnv.length === 0),
   'a provider is only "configured" when nothing is missing',
 );
+
+// ─── Phase 4 redesign: the analytics band's new figures ───────────────────────
+
+console.log('\nOperational metrics');
+const [median, unassigned, dupes, wins, cycle, weekday, accounts, share, pacing] = await Promise.all([
+  medianResponseHours(current),
+  unassignedLeads(current),
+  duplicatesMerged(current),
+  winRate(current),
+  avgCycleDays(current),
+  leadsByWeekday(current),
+  accountMetrics(current),
+  customerShare(),
+  budgetPacing(current),
+]);
+
+console.log(`  median response: ${median === null ? 'null' : median.toFixed(2) + 'h'}`);
+check(median === null || median >= 0, 'median response is null or non-negative, never negative');
+
+console.log(`  unassigned leads: ${unassigned}`);
+check(unassigned >= 0 && unassigned <= f.leads, `unassigned (${unassigned}) never exceeds leads (${f.leads})`);
+
+console.log(`  duplicates merged: ${dupes}`);
+check(dupes >= 0, 'duplicates merged is non-negative');
+
+console.log(`  win rate: ${wins === null ? 'null (no decided deals)' : wins.toFixed(1) + '%'}`);
+check(wins === null || (wins >= 0 && wins <= 100), 'win rate is null or a real percentage');
+
+console.log(`  avg cycle: ${cycle === null ? 'null (nothing won)' : cycle.toFixed(1) + ' days'}`);
+check(cycle === null || cycle >= 0, 'avg cycle is null or non-negative');
+
+const weekdayTotal = weekday.reduce((a, b) => a + b.value, 0);
+console.log(`  weekday split: ${weekday.map((w) => `${w.label} ${w.value}`).join(' · ')}`);
+check(weekday.length === 7, 'the weekday chart gets exactly seven buckets');
+check(weekdayTotal === f.leads, `weekday buckets sum to the lead count (${weekdayTotal} vs ${f.leads})`);
+
+console.log(`  accounts: ${accounts.companies} companies, ${accounts.contacts} contacts, ${accounts.customers} won, avg ${accounts.avgAccountValue === null ? 'null' : money(accounts.avgAccountValue)} over ${accounts.payingAccounts} paying`);
+check(
+  accounts.avgAccountValue === null || accounts.payingAccounts > 0,
+  'an average account value is only reported when an account actually billed',
+);
+
+console.log(`  customer share: ${share === null ? 'null' : share.toFixed(1) + '%'}`);
+check(share === null || (share >= 0 && share <= 100), 'customer share is null or a real percentage');
+
+console.log(`  budget pacing: ${pacing === null ? 'null (no campaign budgets)' : pacing.toFixed(1) + '%'}`);
+check(pacing === null || pacing >= 0, 'budget pacing is null or non-negative');
+
+console.log('\nPer-screen KPI sets');
+const sets = {
+  leads: (await leadsKpis(365)).cards,
+  crm: (await crmKpis(365)).cards,
+  pipeline: (await pipelineKpis(365)).cards,
+  marketing: (await marketingKpis(365)).cards,
+  analytics: (await analyticsKpis(365)).cards,
+};
+for (const [name, set] of Object.entries(sets)) {
+  console.log(`  ${name.padEnd(10)} ${set.map((c) => c.label).join(' · ')}`);
+  check(set.length === 5, `${name} yields exactly five cards`);
+  check(
+    set.every((c) => c.value === null || Number.isFinite(c.value)),
+    `${name} produces no NaN or Infinity values`,
+  );
+  check(
+    new Set(set.map((c) => c.key)).size === set.length,
+    `${name} card keys are unique (React needs them stable)`,
+  );
+}
 
 await db().$disconnect();
 

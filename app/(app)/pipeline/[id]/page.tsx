@@ -42,12 +42,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{deal.name}</h1>
+            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{deal.name}</h1>
             <Badge tone={deal.stage.isWon ? 'success' : deal.stage.isLost ? 'danger' : 'info'}>
               {deal.stage.name}
             </Badge>
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
             {fmtMoney(Number(deal.value))} · {deal.probability}% ·{' '}
             {deal.company?.name ?? 'No company'}
           </p>

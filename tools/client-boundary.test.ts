@@ -19,6 +19,7 @@ const ROOT = join(import.meta.dirname, '..');
 const SERVER_ONLY = [
   'lib/prisma',
   'lib/metrics',
+  'lib/band',
   'lib/campaigns',
   'lib/leads',
   'lib/crm',
@@ -34,7 +35,7 @@ const SERVER_ONLY = [
 ];
 
 /** Modules with no imports at all, safe for either side. */
-const CLIENT_SAFE = ['lib/enums', 'lib/calc', 'lib/utils', 'lib/format', 'lib/nav', 'lib/fetcher'];
+const CLIENT_SAFE = ['lib/enums', 'lib/calc', 'lib/utils', 'lib/format', 'lib/nav', 'lib/fetcher', 'lib/kpi'];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -89,4 +90,66 @@ test('the client-safe modules really do have no imports', () => {
     const imports = source.match(/^\s*import\s/gm) ?? [];
     assert.equal(imports.length, 0, `${mod}.ts must import nothing, found ${imports.length}`);
   }
+});
+
+test('no client component reaches a server-only module through another component', () => {
+  // The direct check above misses the chain that actually shipped: MetricsBand is a
+  // client component, it renders KpiCard, and KpiCard imported kpiDelta from
+  // lib/metrics as a VALUE. KpiCard carries no 'use client' of its own, so nothing
+  // flagged it — but once a client component imports it, everything it imports lands
+  // in the browser graph too, driver and all.
+  const read = (f: string) => readFileSync(f, 'utf8');
+  const byPath = new Map(files.map((f) => [f, read(f)]));
+
+  /** Resolves a relative or @/-prefixed specifier to a file we walked. */
+  function resolve(fromFile: string, spec: string): string | null {
+    let base: string;
+    if (spec.startsWith('@/')) base = join(ROOT, spec.slice(2));
+    else if (spec.startsWith('.')) base = join(fromFile, '..', spec);
+    else return null;
+    base = base.replace(/\.tsx?$/, '');
+    for (const ext of ['.tsx', '.ts']) {
+      if (byPath.has(base + ext)) return base + ext;
+    }
+    return null;
+  }
+
+  function valueImports(source: string): string[] {
+    const stripped = source.replace(/import\s+type\s+[^;]*;/g, '');
+    return [...stripped.matchAll(/from ['"]([^'"]+)['"]/g)].map((m) => m[1]);
+  }
+
+  const offenders: string[] = [];
+
+  for (const entry of files) {
+    if (!isClient(byPath.get(entry)!)) continue;
+
+    const seen = new Set<string>([entry]);
+    const queue = [entry];
+    while (queue.length) {
+      const file = queue.shift()!;
+      const source = byPath.get(file)!;
+
+      for (const spec of valueImports(source)) {
+        for (const bad of SERVER_ONLY) {
+          if (spec === `@/${bad}` || spec === `@/${bad}.ts`) {
+            offenders.push(
+              `${entry.slice(ROOT.length + 1)} -> ${file.slice(ROOT.length + 1)} imports @/${bad}`,
+            );
+          }
+        }
+        const next = resolve(file, spec);
+        if (next && !seen.has(next)) {
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    [...new Set(offenders)],
+    [],
+    `a client component reaches the database through a component it renders; move the shared value into ${CLIENT_SAFE.join(', ')}`,
+  );
 });

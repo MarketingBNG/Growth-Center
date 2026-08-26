@@ -39,10 +39,10 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{name}</h1>
+            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{name}</h1>
             <LeadStatusBadge status={lead.status} />
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
             {[lead.title, lead.companyName].filter(Boolean).join(' · ') || 'No company recorded'}
           </p>
         </div>

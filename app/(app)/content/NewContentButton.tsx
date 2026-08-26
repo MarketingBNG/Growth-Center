@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select, Textarea } from '@/components/ui/input';
+import { Input, Select, Textarea } from '@/components/ui/input';
+import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
@@ -51,28 +52,24 @@ export function NewContentButton() {
       <Button size="sm" onClick={() => setOpen(true)}><Plus /> New piece</Button>
       <Modal open={open} onClose={() => setOpen(false)} title="New content piece">
         <form onSubmit={submit} className="space-y-3">
-          <div className="space-y-1">
-            <Label>Title <span className="text-destructive">*</span></Label>
+          <Field label="Title" required>
             <Input name="title" required autoFocus maxLength={200} />
-          </div>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Status</Label>
+            <Field label="Status">
               <Select name="status" defaultValue="idea">
                 {CONTENT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Format</Label>
+            </Field>
+            <Field label="Format">
               <Select name="format" defaultValue="blog">
                 {FORMATS.map((f) => <option key={f} value={f}>{f.replaceAll('_', ' ')}</option>)}
               </Select>
-            </div>
+            </Field>
           </div>
-          <div className="space-y-1">
-            <Label>Brief</Label>
+          <Field label="Brief">
             <Textarea name="brief" rows={3} maxLength={4000} />
-          </div>
+          </Field>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>

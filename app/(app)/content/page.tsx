@@ -60,16 +60,22 @@ export default async function ContentPage() {
             />
           </div>
 
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          {/* A grid rather than fixed-width flex columns: four 256px columns plus gaps
+              overflowed the content area, so the last status was clipped mid-word.
+              items-start keeps a near-empty column from stretching to the tallest one. */}
+          <div className="grid items-start gap-3.5 pb-2 sm:grid-cols-2 lg:grid-cols-4">
             {columns.map((col) => (
-              <div key={col.status} className="flex w-64 shrink-0 flex-col rounded-xl border border-border bg-card/60">
-                <div className="flex items-baseline justify-between border-b border-border px-3 py-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold capitalize">{col.status}</p>
+              <div
+                key={col.status}
+                className="flex min-w-0 flex-col rounded-2xl border border-border bg-card p-3.5 shadow-card"
+              >
+                <div className="flex items-baseline justify-between gap-2 pb-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <p className="truncate text-[13px] font-bold capitalize">{col.status}</p>
                     <Badge tone={STATUS_TONE[col.status]}>{col.pieces.length}</Badge>
                   </div>
                 </div>
-                <div className="flex-1 space-y-2 p-2">
+                <div className="flex-1 space-y-2">
                   {col.pieces.length === 0 ? (
                     <p className="px-1 py-4 text-center text-[11px] text-muted-foreground">Nothing here</p>
                   ) : col.pieces.map((p) => (

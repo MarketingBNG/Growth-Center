@@ -39,12 +39,12 @@ export function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 pb-4" data-pending={pending || undefined}>
-      <div className="relative min-w-52 flex-1 sm:max-w-72">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative min-w-52 flex-1 sm:max-w-[220px]">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           defaultValue={params.get('q') ?? ''}
           placeholder={searchPlaceholder}
-          className="pl-8"
+          className="pl-9"
           onKeyDown={(e) => {
             if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value.trim());
           }}

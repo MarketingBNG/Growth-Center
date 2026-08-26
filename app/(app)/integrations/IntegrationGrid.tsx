@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ExternalLink, Plug, RefreshCw, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { StateBadge } from '@/components/patterns/integration-state';
 import { api } from '@/lib/fetcher';
@@ -27,24 +28,19 @@ export function IntegrationGrid({
   cards: IntegrationCard[];
   canManage: boolean;
 }) {
-  const grouped = cards.reduce<Record<string, IntegrationCard[]>>((acc, c) => {
-    (acc[c.category] ??= []).push(c);
-    return acc;
-  }, {});
+  // One grid across every provider rather than a section per category. Grouped, most
+  // categories held a single provider, so each got a row to itself and the cards ran
+  // down the left third of the page. The category still travels with the card as a
+  // label, so nothing is lost by dropping the headings.
+  const ordered = [...cards].sort(
+    (a, b) =>
+      a.category.localeCompare(b.category) || a.name.localeCompare(b.name),
+  );
 
   return (
-    <div className="space-y-6">
-      {Object.entries(grouped).map(([category, list]) => (
-        <section key={category}>
-          <h2 className="pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {CATEGORY_LABEL[category] ?? category}
-          </h2>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {list.map((c) => (
-              <ProviderCard key={c.id} card={c} canManage={canManage} />
-            ))}
-          </div>
-        </section>
+    <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
+      {ordered.map((c) => (
+        <ProviderCard key={c.id} card={c} canManage={canManage} />
       ))}
     </div>
   );
@@ -109,10 +105,13 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   }
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-card p-4">
+    <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-[18px] shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold tracking-tight">{card.name}</h3>
+          <p className="pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
+            {CATEGORY_LABEL[card.category] ?? card.category}
+          </p>
+          <h3 className="text-[14.5px] font-bold tracking-tight">{card.name}</h3>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{card.summary}</p>
         </div>
         <StateBadge state={card.state} />
@@ -228,14 +227,12 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         description="The key is encrypted before it is stored and is never sent to the browser again."
       >
         <form onSubmit={connectApiKey} className="space-y-3">
-          <div className="space-y-1">
-            <Label>API key</Label>
+          <Field label="API key" required>
             <Input name="apiKey" required autoFocus autoComplete="off" />
-          </div>
-          <div className="space-y-1">
-            <Label>Domain</Label>
+          </Field>
+          <Field label="Domain" required>
             <Input name="domain" required placeholder="usaindiacfo.com" />
-          </div>
+          </Field>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setKeyModal(false)}>

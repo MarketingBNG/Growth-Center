@@ -1,16 +1,24 @@
 import { Kanban } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { RangePicker } from '@/components/patterns/range-picker';
+import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { hasDb } from '@/lib/prisma';
-import { board } from '@/lib/pipeline';
+import { pipelineBand } from '@/lib/band';
+import { rangeParam } from '@/lib/range';
+import { board, BOARD_LIMIT } from '@/lib/pipeline';
 import { pipelineValue } from '@/lib/calc';
-import { fmtMoney } from '@/lib/format';
+import { fmtMoney, fmtNumber } from '@/lib/format';
 import { PipelineViews } from './PipelineViews';
 
 export const metadata = { title: 'Pipeline · Growth Center' };
 
-export default async function PipelinePage() {
+export default async function PipelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!hasDb()) {
     return (
       <>
@@ -22,7 +30,9 @@ export default async function PipelinePage() {
     );
   }
 
-  const data = await board();
+  const params = await searchParams;
+  const { value, days, bucket } = rangeParam(params);
+  const [data, band] = await Promise.all([board(), pipelineBand(days, bucket)]);
 
   if (!data) {
     return (
@@ -69,7 +79,17 @@ export default async function PipelinePage() {
       <PageHeader
         title="Pipeline"
         subtitle={`${open.length} open · ${fmtMoney(total)} total · ${fmtMoney(weighted)} weighted`}
+        actions={<RangePicker current={value} />}
       />
+      <MetricsBand {...band} />
+
+      {data.truncated ? (
+        <p className="mb-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[12.5px] text-muted-foreground">
+          Showing the {BOARD_LIMIT} most recently updated of {fmtNumber(data.openTotal)} open
+          deals. The totals above cover all of them.
+        </p>
+      ) : null}
+
       <PipelineViews columns={columns} />
     </>
   );

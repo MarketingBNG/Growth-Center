@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Select } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
+import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { LEAD_STATUSES } from '@/lib/enums';
@@ -107,10 +108,9 @@ export function LeadActions({
         description="Carries the company, contact and campaign across so attribution survives."
       >
         <form onSubmit={convert} className="space-y-3">
-          <div className="space-y-1">
-            <Label>Deal value (USD)</Label>
+          <Field label="Deal value (USD)">
             <Input name="value" type="number" min="0" step="100" defaultValue="0" autoFocus />
-          </div>
+          </Field>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setConverting(false)}>
               Cancel

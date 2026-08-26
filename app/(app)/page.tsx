@@ -1,18 +1,23 @@
 import Link from 'next/link';
-import { ArrowRight, TriangleAlert } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { KpiCard } from '@/components/patterns/kpi-card';
-import { LeadStatusBadge } from '@/components/patterns/badges';
+import { MetricsBand } from '@/components/patterns/metrics-band';
+import { AddWidgetDrawer } from '@/components/patterns/add-widget-drawer';
+import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
+import { LeadStatusBadge, PriorityBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
+import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { kpis, openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { dashboardBand } from '@/lib/band';
+import { aiStatus } from '@/lib/ai';
 import { campaignPerformance } from '@/lib/campaigns';
 import { rangeParam } from '@/lib/range';
 import { fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
@@ -42,9 +47,9 @@ export default async function DashboardPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [kpiResult, pipeline, series, channels, campaigns, recentLeads, tasks, insights, demoIntegrations] =
+  const [dash, pipeline, series, channels, campaigns, recentLeads, tasks, insights] =
     await Promise.all([
-      kpis(days),
+      dashboardBand(days, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
@@ -69,10 +74,10 @@ export default async function DashboardPage({
         take: 3,
         select: { id: true, kind: true, title: true, body: true, provider: true },
       }),
-      db().integration.count({ where: { state: 'demo_data' } }),
     ]);
 
-  const { cards, current: f } = kpiResult;
+  const { band, funnel: f } = dash;
+  const ai = aiStatus();
   const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
 
   return (
@@ -80,44 +85,24 @@ export default async function DashboardPage({
       <PageHeader
         title={`Good to see you, ${first}`}
         subtitle="What is happening with growth, why, and what to do next."
-        actions={<RangePicker current={value} />}
+        actions={
+          <>
+            <RangePicker current={value} />
+            <AddWidgetDrawer />
+          </>
+        }
       />
 
-      {demoIntegrations > 0 ? (
-        <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-          <p className="text-xs text-warning">
-            These figures come from seeded demo data — no integration is connected.{' '}
-            <Link href="/integrations" className="underline">
-              Connect a source
-            </Link>{' '}
-            to replace it with live numbers.
-          </p>
-        </div>
-      ) : null}
+      <MetricsBand {...band} />
 
-      <div className="grid grid-cols-2 gap-3 pb-4 md:grid-cols-3 xl:grid-cols-5">
-        {cards.map((k) => (
-          <KpiCard key={k.key} kpi={k} />
-        ))}
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          {/* Revenue and spend share a unit, so they belong on one chart. Visitors and
-              leads do not, so they get their own — never a second y-axis. */}
-          <TrendChart
-            title="Revenue and spend"
-            subtitle={bucket === 'month' ? 'By month' : 'By day'}
-            data={series}
-            series={[
-              { key: 'revenue', label: 'Revenue', kind: 'money' },
-              { key: 'spend', label: 'Marketing spend', kind: 'money' },
-            ]}
-            height={220}
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
+      {/* 1.75fr / 1fr: the tables need the width, the summary cards do not.
+          align-items:start so a short right column does not stretch its cards. */}
+      <div className="grid items-start gap-3.5 lg:[grid-template-columns:minmax(0,1.75fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3.5">
+          {/* Revenue and spend live in the band above; these two do not share a unit
+              with it, or with each other, so they keep their own charts — never a
+              second y-axis. */}
+          <div className="grid gap-3.5 sm:grid-cols-2">
             <TrendChart
               title="Visitors"
               data={series}
@@ -132,7 +117,7 @@ export default async function DashboardPage({
             />
           </div>
 
-          <Card className="overflow-hidden">
+          <TableCard>
             <CardHeader>
               <CardTitle>Channel performance</CardTitle>
             </CardHeader>
@@ -177,9 +162,9 @@ export default async function DashboardPage({
                 </TBody>
               </Table>
             </TableWrap>
-          </Card>
+          </TableCard>
 
-          <Card className="overflow-hidden">
+          <TableCard>
             <CardHeader>
               <CardTitle>Top campaigns</CardTitle>
             </CardHeader>
@@ -228,10 +213,10 @@ export default async function DashboardPage({
                 </Table>
               </TableWrap>
             )}
-          </Card>
+          </TableCard>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex min-w-0 flex-col gap-3.5">
           <FunnelChart
             subtitle="Each step against the one above it"
             stages={[
@@ -337,11 +322,14 @@ export default async function DashboardPage({
                         {t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
                       </p>
                     </div>
+                    <PriorityBadge priority={t.priority} />
                   </div>
                 ))
               )}
             </CardContent>
           </Card>
+
+          <AiAssistantCard configured={ai.configured} />
         </div>
       </div>
 

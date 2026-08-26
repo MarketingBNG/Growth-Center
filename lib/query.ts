@@ -1,4 +1,4 @@
-import { listQuery, type ListQuery } from './api.ts';
+import { listQuery, type ListQuery } from './list-query.ts';
 
 /**
  * Server components receive searchParams as a plain record. This validates it with the

@@ -3,40 +3,108 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Dark-only, matching bng-command-center's palette so the two apps look like one
-   product. There is no light theme; <html> carries `dark` so shadcn's dark: utilities
-   resolve. */
+/* Two themes, both **neutral greys** — no blue cast in any surface — with the brand blue
+   kept as the accent only. That is what lets the six chart hues read cleanly: a coloured
+   pixel in the content area always means something.
+
+   The accent is used for exactly four things: active nav item, primary button, focus ring
+   and --chart-1. Nothing else is blue.
+
+   `next-themes` puts `light`/`dark` on <html>; light is the default and lives on :root. */
 :root {
-  --background: #0f1117;
-  --foreground: #e8eaf0;
-  --card: #161b27;
-  --card-foreground: #e8eaf0;
-  --popover: #1e2435;
-  --popover-foreground: #e8eaf0;
+  --background: #f2f2f3;
+  --foreground: #121212;
+  --card: #ffffff;
+  --card-foreground: #121212;
+  --popover: #ffffff;
+  --popover-foreground: #121212;
+  --primary: #2f6bf6;
+  --primary-foreground: #ffffff;
+  --secondary: #f6f6f7;
+  --secondary-foreground: #121212;
+  --muted: #f6f6f7;
+  --muted-foreground: #5c5c5f;
+  --accent: #f6f6f7;
+  --accent-foreground: #121212;
+  --destructive: #e11d48;
+  --destructive-foreground: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --border: #e5e5e7;
+  --input: #e5e5e7;
+  --ring: #2f6bf6;
+
+  /* Categorical series slots. Assign these IN ORDER and never cycle them — a 9th series
+     folds into "Other" or becomes small multiples. --success/--warning/--destructive
+     above are STATUS colours and are never reused as a series. Slot 1 follows the accent;
+     slots 2-6 are shared by both themes. */
+  --chart-1: #2f6bf6;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
+  --chart-6: #7c5cf0;
+
+  /* Recessive chart furniture. */
+  --grid: #eaeaec;
+
+  /* --track must NOT equal --background, or every inactive bar sitting on a sunken
+     surface disappears. */
+  --track: #dcdcdf;
+  --primary-soft: #eaf1ff;
+  --surface-sunken: #f2f2f3;
+  --on-primary: #ffffff;
+  --line-soft: #efeff1;
+
+  /* Soft badge grounds, and the text that sits on them.
+     The *-strong pair exists because 11px bold is NOT "large text" (that needs
+     >=18.66px bold), so badge text owes 4.5:1 against its own ground — and the plain
+     status colours only reached 2.9-4.1:1 there. These are used by badges ONLY; ROAS
+     figures, icons and chart marks keep --success/--warning/--destructive, which are
+     larger or non-textual and already pass. Measured, not eyeballed. */
+  --success-soft: #e9f7ee;
+  --success-strong: #117f3a; /* 4.61:1 on --success-soft */
+  --danger-soft: #fdecf0;
+  --danger-strong: #d41b44; /* 4.56:1 */
+  --warning-soft: #fdf3e7;
+  --warning-strong: #a95d05; /* 4.50:1 */
+  --purple: #7c5cf0;
+  --purple-soft: #f0edfd;
+  --purple-strong: #7154da; /* 4.58:1 */
+  --info-strong: #2c64e5; /* 4.56:1 on --primary-soft */
+
+  --sidebar: #ffffff;
+  --radius: 0.625rem;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.05);
+  --shadow-drawer: 0 24px 60px rgba(0, 0, 0, 0.16);
+  /* Exposed as a token so a future accent change touches one place. */
+  --primary-shadow: 0 6px 16px rgba(47, 107, 246, 0.28);
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #161616;
+  --card-foreground: #ededed;
+  --popover: #1d1d1d;
+  --popover-foreground: #ededed;
   --primary: #4f8ef7;
   --primary-foreground: #ffffff;
-  --secondary: #252b3b;
-  --secondary-foreground: #e8eaf0;
-  --muted: #1e2435;
-  --muted-foreground: #9ba3c0;
-  --accent: #252b3b;
-  --accent-foreground: #e8eaf0;
+  --secondary: #1d1d1d;
+  --secondary-foreground: #ededed;
+  --muted: #1d1d1d;
+  --muted-foreground: #a1a1a4;
+  --accent: #1d1d1d;
+  --accent-foreground: #ededed;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
   --success: #22c55e;
   --warning: #f59e0b;
-  --border: #2a3047;
-  --input: #3a4060;
+  --border: #262626;
+  --input: #2b2b2b;
   --ring: #4f8ef7;
 
-  /* Categorical series slots, stepped for this dark surface (#161b27) and validated:
-     lightness band, chroma floor, adjacent-pair CVD separation (worst ΔE 8.4 protan),
-     normal-vision floor (worst ΔE 19.3) and 3:1 contrast all pass. Slot 1 is the brand
-     blue; slots 2-6 come from a validated dark ramp.
-
-     Assign these IN ORDER and never cycle them — a 9th series folds into "Other" or
-     becomes small multiples. --success/--warning/--destructive above are STATUS colours
-     and are never reused as a series. */
   --chart-1: #4f8ef7;
   --chart-2: #d95926;
   --chart-3: #199e70;
@@ -44,14 +112,37 @@
   --chart-5: #d55181;
   --chart-6: #9085e9;
 
-  /* Recessive chart furniture. */
-  --grid: #232a3d;
+  --grid: #212121;
 
-  --sidebar: #161b27;
-  --radius: 0.625rem;
+  --track: #2b2b2b;
+  --primary-soft: #17233d;
+  --surface-sunken: #0e0e0e;
+  --on-primary: #ffffff;
+  --line-soft: #1f1f1f;
+
+  /* Already 4.58-7.46:1 on these grounds, so strong == the status colour here. */
+  --success-soft: #13251a;
+  --success-strong: #22c55e;
+  --danger-soft: #2a1517;
+  --danger-strong: #ef4444;
+  --warning-soft: #2a200e;
+  --warning-strong: #f59e0b;
+  --purple: #9085e9;
+  --purple-soft: #201d33;
+  --purple-strong: #9085e9;
+  --info-strong: #4f8ef7;
+
+  --sidebar: #121212;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-drawer: 0 24px 60px rgba(0, 0, 0, 0.65);
+  --primary-shadow: 0 6px 16px rgba(79, 142, 247, 0.3);
 }
 
 @theme inline {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -82,10 +173,31 @@
   --color-grid: var(--grid);
   --color-sidebar: var(--sidebar);
 
+  --color-track: var(--track);
+  --color-primary-soft: var(--primary-soft);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-on-primary: var(--on-primary);
+  --color-line-soft: var(--line-soft);
+  --color-success-soft: var(--success-soft);
+  --color-success-strong: var(--success-strong);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-strong: var(--danger-strong);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-strong: var(--warning-strong);
+  --color-purple: var(--purple);
+  --color-purple-soft: var(--purple-soft);
+  --color-purple-strong: var(--purple-strong);
+  --color-info-strong: var(--info-strong);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* Cards step up to 16px. */
+  --radius-2xl: calc(var(--radius) + 6px);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-drawer: var(--shadow-drawer);
 }
 
 @layer base {
@@ -105,7 +217,7 @@
   }
 }
 
-/* Scrollbars: the default Windows ones are opaque light grey on this palette. */
+/* Scrollbars: the default Windows ones are opaque light grey on the dark palette. */
 @layer base {
   ::-webkit-scrollbar {
     width: 10px;
@@ -115,11 +227,23 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--secondary);
+    background: var(--border);
     border-radius: 6px;
-    border: 2px solid var(--background);
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--input);
+  }
+}
+
+/* The AI Assistant orb's idle drift. Gated behind motion-safe: at the call site. */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
   }
 }

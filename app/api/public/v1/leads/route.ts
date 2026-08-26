@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyApiKey } from '@/lib/apikeys';
 import { createLead } from '@/lib/leads';
+import { rateLimit } from '@/lib/rate-limit';
 import { SOURCE_TYPES } from '@/lib/enums';
 import { hasDb } from '@/lib/prisma';
 
@@ -37,6 +38,16 @@ export async function POST(req: Request) {
   const key = await verifyApiKey(req.headers.get('x-api-key'));
   if (!key) {
     return NextResponse.json({ error: 'Invalid or missing X-API-Key' }, { status: 401 });
+  }
+
+  // A leaked key should not be able to flood the leads table. Generous enough for a busy
+  // form, keyed on the key itself so one site cannot spend another's allowance.
+  const limit = rateLimit(`lead:${key.id}`, { perMinute: 60, burst: 120 });
+  if (!limit.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
   }
 
   let raw: unknown;

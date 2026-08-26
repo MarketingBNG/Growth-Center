@@ -10,17 +10,29 @@ const LEAD_TONE = {
 } as const;
 
 export function LeadStatusBadge({ status }: { status: keyof typeof LEAD_TONE }) {
-  return <Badge tone={LEAD_TONE[status] ?? 'neutral'}>{status.replace('_', ' ')}</Badge>;
+  return (
+    <Badge tone={LEAD_TONE[status] ?? 'neutral'} className="capitalize">
+      {status.replace('_', ' ')}
+    </Badge>
+  );
 }
 
 export function SourceBadge({ source }: { source: string }) {
-  return <Badge tone="neutral">{source.replaceAll('_', ' ')}</Badge>;
+  return (
+    <Badge tone="neutral" className="capitalize">
+      {source.replaceAll('_', ' ')}
+    </Badge>
+  );
 }
 
 const PRIORITY_TONE = { low: 'neutral', normal: 'info', high: 'warning', urgent: 'danger' } as const;
 
 export function PriorityBadge({ priority }: { priority: keyof typeof PRIORITY_TONE }) {
-  return <Badge tone={PRIORITY_TONE[priority] ?? 'neutral'}>{priority}</Badge>;
+  return (
+    <Badge tone={PRIORITY_TONE[priority] ?? 'neutral'} className="capitalize">
+      {priority}
+    </Badge>
+  );
 }
 
 /** Shows where a number came from. Used wherever seeded demo rows sit next to real

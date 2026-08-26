@@ -29,8 +29,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       </Link>
 
       <div className="pb-5">
-        <h1 className="text-xl font-semibold tracking-tight">{name}</h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">
+        <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{name}</h1>
+        <p className="mt-1 text-[13.5px] text-muted-foreground">
           {[contact.title, contact.company?.name].filter(Boolean).join(' · ') || 'No company'}
         </p>
       </div>

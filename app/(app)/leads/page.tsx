@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { RangePicker } from '@/components/patterns/range-picker';
+import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
@@ -8,6 +10,8 @@ import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
+import { leadsBand } from '@/lib/band';
+import { rangeParam } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { leadFilters, listLeads } from '@/lib/leads';
 import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
@@ -53,16 +57,27 @@ export default async function LeadsPage({
   }
 
   const q = pageQuery(params);
+  const { value, days, bucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
-  const { rows, total } = await listLeads(filters, q);
+  const [{ rows, total }, band] = await Promise.all([
+    listLeads(filters, q),
+    leadsBand(days, bucket),
+  ]);
 
   return (
     <>
       <PageHeader
         title="Leads"
         subtitle="Every hand-raise, with the source that produced it."
-        actions={<NewLeadButton />}
+        actions={
+          <>
+            <RangePicker current={value} />
+            <NewLeadButton />
+          </>
+        }
       />
+
+      <MetricsBand {...band} />
 
       <FilterBar filters={FILTERS} searchPlaceholder="Name, email or company…" />
 

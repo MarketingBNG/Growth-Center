@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 
@@ -123,25 +124,3 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
   );
 }
 
-function Field({
-  label,
-  hint,
-  required,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label>
-        {label}
-        {required ? <span className="text-destructive"> *</span> : null}
-      </Label>
-      {children}
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}

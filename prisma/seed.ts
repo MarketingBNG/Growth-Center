@@ -14,6 +14,7 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../lib/generated/prisma/client.ts';
+import { normalizeEmail } from '../lib/dedupe.ts';
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -283,7 +284,7 @@ async function main() {
     for (let i = 0; i < int(1, 3); i++) {
       const first = pick(FIRST);
       const last = pick(LAST);
-      const email = `${first.toLowerCase()}.${last.toLowerCase()}@${company.domain}`;
+      const email = normalizeEmail(`${first.toLowerCase()}.${last.toLowerCase()}@${company.domain}`)!;
       if (contacts.some((c) => c.email === email)) continue;
       const row = await db.contact.create({
         data: {
@@ -324,9 +325,13 @@ async function main() {
 
       const first = contact ? contact.name.split(' ')[0] : pick(FIRST);
       const last = contact ? contact.name.split(' ')[1] : pick(LAST);
-      const email = contact
-        ? contact.email
-        : `${first.toLowerCase()}.${last.toLowerCase()}${int(1, 99)}@${pick(['gmail.com', 'outlook.com', 'proton.me'])}`;
+      // normalizeEmail, same as createLead applies. Seeding raw addresses left 60 of 487
+      // gmail leads stored with dots, which findDuplicateLead then could not match.
+      const email = normalizeEmail(
+        contact
+          ? contact.email
+          : `${first.toLowerCase()}.${last.toLowerCase()}${int(1, 99)}@${pick(['gmail.com', 'outlook.com', 'proton.me'])}`,
+      );
 
       // Older leads have had time to progress; recent ones are mostly still new.
       //

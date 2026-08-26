@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ChartLine, Plug } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
+import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { BarChart } from '@/components/charts/BarChart';
@@ -10,10 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { StateBadge } from '@/components/patterns/integration-state';
 import { db, hasDb } from '@/lib/prisma';
-import { channelPerformance, funnel, rangeFor, trend } from '@/lib/metrics';
+import { channelPerformance, rangeFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
 import { rangeParam } from '@/lib/range';
-import { fmtCompact, fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
+import { analyticsBand } from '@/lib/band';
+import { fmtNumber, fmtRelative } from '@/lib/format';
 
 export const metadata = { title: 'Analytics · Growth Center' };
 
@@ -37,9 +39,9 @@ export default async function AnalyticsPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [series, f, channels, providers, sources] = await Promise.all([
+  const [series, band, channels, providers, sources] = await Promise.all([
     trend(current, bucket),
-    funnel(current),
+    analyticsBand(days, bucket),
     channelPerformance(current),
     cards(),
     // What is actually in the metrics layer, grouped by who wrote it. This is the
@@ -61,20 +63,9 @@ export default async function AnalyticsPage({
         actions={<RangePicker current={value} />}
       />
 
-      <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Sessions" value={fmtCompact(f.visitors)} />
-        <Stat label="Leads" value={fmtNumber(f.leads)} />
-        <Stat
-          label="Visitor → lead"
-          value={f.visitorToLead === null ? '—' : fmtPercent(f.visitorToLead, 2)}
-        />
-        <Stat
-          label="Lead → qualified"
-          value={f.leadToQualified === null ? '—' : fmtPercent(f.leadToQualified)}
-        />
-      </div>
+      <MetricsBand {...band} />
 
-      <div className="grid gap-4 pb-4 lg:grid-cols-2">
+      <div className="grid gap-3.5 pb-[18px] lg:grid-cols-2">
         <TrendChart
           title="Sessions"
           subtitle={bucket === 'month' ? 'By month' : 'By day'}
@@ -163,14 +154,5 @@ export default async function AnalyticsPage({
         </Card>
       </div>
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
-    </div>
   );
 }

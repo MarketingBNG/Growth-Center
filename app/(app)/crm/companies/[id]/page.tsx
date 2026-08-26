@@ -31,10 +31,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{company.name}</h1>
+            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
             {company.customer ? <Badge tone="success">customer</Badge> : null}
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
             {[company.domain, company.industry, company.country].filter(Boolean).join(' · ') ||
               'No details recorded'}
           </p>

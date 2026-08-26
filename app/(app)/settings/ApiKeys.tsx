@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Copy, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input, Label } from '@/components/ui/input';
+import { Input } from '@/components/ui/input';
+import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 
@@ -86,10 +87,9 @@ export function ApiKeys() {
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-3">
-            <div className="space-y-1">
-              <Label>Name <span className="text-destructive">*</span></Label>
+            <Field label="Name" required>
               <Input name="name" required autoFocus maxLength={80} placeholder="usaindiacfo.com contact form" />
-            </div>
+            </Field>
             {error ? <p className="text-xs text-destructive">{error}</p> : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={close}>Cancel</Button>

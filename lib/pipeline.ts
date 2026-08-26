@@ -26,6 +26,9 @@ export async function defaultPipeline() {
   });
 }
 
+/** How many open deals the board will render at once. */
+export const BOARD_LIMIT = 300;
+
 export async function board(pipelineId?: string) {
   const pipeline = pipelineId
     ? await db().pipeline.findUnique({
@@ -35,17 +38,28 @@ export async function board(pipelineId?: string) {
     : await defaultPipeline();
   if (!pipeline) return null;
 
-  const opportunities = await db().opportunity.findMany({
-    where: { pipelineId: pipeline.id, closedAt: null },
-    orderBy: { updatedAt: 'desc' },
-    include: {
-      company: { select: { id: true, name: true } },
-      contact: { select: { id: true, firstName: true, lastName: true } },
-    },
-  });
+  // Capped, and the cap is reported rather than silently applied — the board renders a
+  // draggable card per deal, so an uncapped query is an uncapped page. Most-recently
+  // touched first, because that is the working set. `openPipeline()` in lib/metrics.ts
+  // still counts and values EVERY open deal, so the KPI totals stay complete even when
+  // the board is showing a slice.
+  const [opportunities, openTotal] = await Promise.all([
+    db().opportunity.findMany({
+      where: { pipelineId: pipeline.id, closedAt: null },
+      orderBy: { updatedAt: 'desc' },
+      take: BOARD_LIMIT,
+      include: {
+        company: { select: { id: true, name: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
+      },
+    }),
+    db().opportunity.count({ where: { pipelineId: pipeline.id, closedAt: null } }),
+  ]);
 
   return {
     pipeline,
+    openTotal,
+    truncated: openTotal > opportunities.length,
     columns: pipeline.stages.map((stage) => ({
       stage,
       cards: opportunities.filter((o) => o.stageId === stage.id),

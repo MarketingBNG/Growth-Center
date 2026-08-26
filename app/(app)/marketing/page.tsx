@@ -1,16 +1,17 @@
 import { Megaphone } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
+import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { BarChart } from '@/components/charts/BarChart';
-import { TrendChart } from '@/components/charts/TrendChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { channelPerformance, rangeFor, trend } from '@/lib/metrics';
+import { channelPerformance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
+import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { ChannelFilter } from './ChannelFilter';
 
@@ -37,11 +38,11 @@ export default async function MarketingPage({
   const { current } = rangeFor(days);
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
 
-  const [channels, allChannels, rows, series] = await Promise.all([
+  const [channels, allChannels, rows, band] = await Promise.all([
     channelPerformance(current),
     db().channel.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     campaignPerformance(current, channelId),
-    trend(current, bucket),
+    marketingBand(days, bucket),
   ]);
 
   const totals = campaignTotals(rows);
@@ -57,28 +58,9 @@ export default async function MarketingPage({
 
       <ChannelFilter channels={allChannels} current={channelId ?? ''} />
 
-      <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Spend" value={fmtMoney(totals.spend)} />
-        <Stat label="Leads" value={fmtNumber(totals.leads)} sub={totals.costPerLead === null ? undefined : `${fmtMoney(totals.costPerLead)} per lead`} />
-        <Stat label="New revenue" value={fmtMoney(totals.revenue)} sub={`${fmtNumber(totals.customers)} customers won`} />
-        <Stat
-          label="ROAS"
-          value={totals.roas === null ? '—' : fmtRatio(totals.roas)}
-          sub={totals.cac === null ? 'No customers in period' : `${fmtMoney(totals.cac)} CAC`}
-        />
-      </div>
+      <MetricsBand {...band} />
 
-      <div className="grid gap-4 pb-4 lg:grid-cols-2">
-        <TrendChart
-          title="Spend and revenue"
-          subtitle={bucket === 'month' ? 'By month' : 'By day'}
-          data={series}
-          series={[
-            { key: 'spend', label: 'Spend', kind: 'money' },
-            { key: 'revenue', label: 'Revenue', kind: 'money' },
-          ]}
-          height={200}
-        />
+      <div className="pb-[18px]">
         <BarChart
           title="Revenue by channel"
           data={channels.filter((c) => c.revenue > 0).map((c) => ({ label: c.name, value: c.revenue }))}
@@ -98,7 +80,7 @@ export default async function MarketingPage({
           />
         ) : (
           <TableWrap>
-            <Table>
+            <Table className="min-w-[1180px]">
               <THead>
                 <TR>
                   <TH>Campaign</TH>
@@ -180,15 +162,5 @@ export default async function MarketingPage({
         )}
       </Card>
     </>
-  );
-}
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
-      {sub ? <p className="text-[11px] text-muted-foreground">{sub}</p> : null}
-    </div>
   );
 }

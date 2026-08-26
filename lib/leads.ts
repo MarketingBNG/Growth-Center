@@ -116,18 +116,33 @@ export async function getLead(id: string) {
  * Converted and lost leads are excluded: someone returning a year later is a new
  * opportunity, not an update to a closed record.
  */
+/** The activity summary a merged duplicate writes. Exported because `lib/metrics.ts`
+ *  counts these rows for the "Duplicates merged" KPI — a literal in two files would
+ *  silently zero that number the day this wording changes. */
+export const DUPLICATE_MERGED_SUMMARY = 'Duplicate submission merged into this lead';
+
 export async function findDuplicateLead(email: string | null | undefined) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
 
-  const candidates = await db().lead.findMany({
-    where: { status: { notIn: ['converted', 'lost'] }, email: { not: null } },
+  // An indexed lookup on the normalized address, not a scan.
+  //
+  // This used to fetch the 500 most recent open leads and compare them in memory, which
+  // meant dedupe silently stopped working once the table passed 500 rows: a returning
+  // enquirer became a brand new lead, with no error and a quietly under-reported
+  // "Duplicates merged" figure. `createLead` stores `normalizeEmail(...)`, so stored
+  // addresses are already normalized, and Lead has @@index([email]) — so the correct
+  // query is also the cheap one, at any table size.
+  // Both forms, because rows written before normalization existed (and by an older seed)
+  // are stored raw — an identical raw resubmission must still match those. Both are
+  // equality checks against the same index.
+  const forms = [...new Set([normalized, (email ?? '').trim().toLowerCase()])].filter(Boolean);
+
+  return db().lead.findFirst({
+    where: { email: { in: forms }, status: { notIn: ['converted', 'lost'] } },
     select: { id: true, email: true, firstName: true, lastName: true, status: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
-    take: 500,
   });
-
-  return candidates.find((c) => normalizeEmail(c.email) === normalized) ?? null;
 }
 
 export type CreateLeadResult =
@@ -145,7 +160,7 @@ export async function createLead(
     await db().activity.create({
       data: {
         type: 'created',
-        summary: 'Duplicate submission merged into this lead',
+        summary: DUPLICATE_MERGED_SUMMARY,
         actorEmail,
         detail: { sourceType: input.sourceType, message: input.message ?? null },
         leadId: duplicate.id,

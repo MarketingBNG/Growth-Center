@@ -10,12 +10,17 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p> : null}
+    <div className="flex flex-wrap items-start gap-3 pb-5">
+      <div className="min-w-0">
+        <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{title}</h1>
+        {subtitle ? (
+          <p className="mt-1 text-[13.5px] text-muted-foreground">{subtitle}</p>
+        ) : null}
       </div>
-      {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+      {/* whitespace-nowrap on the action row, or the button labels wrap at narrow widths. */}
+      {actions ? (
+        <div className="ml-auto flex items-center gap-2 [&_button]:whitespace-nowrap">{actions}</div>
+      ) : null}
     </div>
   );
 }

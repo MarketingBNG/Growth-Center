@@ -72,3 +72,35 @@ export function delta(current: number, previous: number): number | null {
   if (!previous) return null;
   return ((current - previous) / previous) * 100;
 }
+
+/** A span of hours as "3h 12m" — the shape an operations number wants. Sub-hour spans
+ *  drop to minutes so a 12-minute median does not render as "0h 12m". */
+export function fmtDuration(hours: number | null | undefined): string {
+  if (hours === null || hours === undefined || Number.isNaN(hours)) return '—';
+  const mins = Math.round(hours * 60);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h >= 48) return `${Math.round(h / 24)}d`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** A span of days, for sales-cycle length. */
+export function fmtDays(days: number | null | undefined): string {
+  if (days === null || days === undefined || Number.isNaN(days)) return '—';
+  return `${Math.round(days)} ${Math.round(days) === 1 ? 'day' : 'days'}`;
+}
+
+/** Money for an axis tick: "$450K", not "$450,000". The long form overflowed a 46px
+ *  axis gutter and was clipped mid-number, which read as a wrong value rather than a
+ *  truncated one. */
+export function fmtMoneyCompact(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return '—';
+  if (n === 0) return '$0';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    notation: 'compact',
+    maximumFractionDigits: Math.abs(n) < 10_000 ? 1 : 0,
+  }).format(n);
+}
