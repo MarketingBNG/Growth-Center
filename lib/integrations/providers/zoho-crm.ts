@@ -4,8 +4,17 @@ import { IntegrationError, type Entity, type IntegrationProvider, type MetricPoi
 // reference for this token lifecycle — a long-lived refresh token minting short-lived
 // access tokens per request.
 
-const ACCOUNTS = 'https://accounts.zoho.com';
-const API = 'https://www.zohoapis.com/crm/v6';
+/**
+ * Zoho is region-partitioned: an account created in India lives on accounts.zoho.IN and
+ * is invisible to accounts.zoho.COM. This was hardcoded to .com, which could never have
+ * authenticated — bng-command-center, which does work, points at accounts.zoho.in.
+ *
+ * Defaulted to India for that reason, overridable for anyone on another region.
+ */
+const DC = (process.env.ZOHO_DC ?? 'in').replace(/[^a-z.]/gi, '').toLowerCase() || 'in';
+
+const ACCOUNTS = `https://accounts.zoho.${DC}`;
+const API = `https://www.zohoapis.${DC}/crm/v6`;
 const SCOPE = 'ZohoCRM.modules.READ,ZohoCRM.settings.READ';
 
 type Stored = { refreshToken: string };
@@ -49,6 +58,11 @@ export const zohoCrm: IntegrationProvider = {
       client_id: process.env.ZOHO_CLIENT_ID ?? '',
       response_type: 'code',
       access_type: 'offline',
+      // Zoho returns a refresh_token only on a client's FIRST authorisation unless
+      // consent is re-prompted. Without this, disconnecting and reconnecting failed
+      // with "Zoho returned no refresh token" and the integration could not be
+      // recovered from the UI at all.
+      prompt: 'consent',
       redirect_uri: redirectUri,
       state,
     });

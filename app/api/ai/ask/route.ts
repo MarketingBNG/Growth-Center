@@ -25,5 +25,5 @@ export const POST = route('ai:run', async (user, req) => {
 
   const result = await ask(question, await growthContext(days));
   if (!result.ok) throw new HttpError(422, result.error);
-  return { answer: result.answer, model: result.model };
+  return { answer: result.answer, model: result.model, truncated: !!result.truncated };
 });

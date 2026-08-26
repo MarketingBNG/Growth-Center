@@ -15,7 +15,14 @@ export type AiStatus =
   | { configured: false; reason: string }
   | { configured: true; provider: string; model: string };
 
-const MODEL = 'claude-sonnet-4-5';
+// Sonnet tier, current id. claude-sonnet-4-5 was a dated snapshot; claude-sonnet-5 is
+// the current Sonnet and is cheaper per token than the 4-6 generation.
+const MODEL = 'claude-sonnet-5';
+
+// 900 truncated real answers mid-sentence and the truncation was invisible — the cut-off
+// text was returned as if complete. Room to finish, and the cut is reported if it still
+// happens. Non-streaming, so kept below the SDK's HTTP timeout rather than maxed out.
+const MAX_TOKENS = 16000;
 
 export function aiStatus(): AiStatus {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -107,7 +114,7 @@ Rules:
 - Do not recommend anything the data does not support.`;
 
 export type AnswerResult =
-  | { ok: true; answer: string; model: string }
+  | { ok: true; answer: string; model: string; truncated?: boolean }
   | { ok: false; error: string };
 
 export async function ask(question: string, context: GrowthContext): Promise<AnswerResult> {
@@ -119,7 +126,7 @@ export async function ask(question: string, context: GrowthContext): Promise<Ans
   try {
     const message = await client.messages.create({
       model: MODEL,
-      max_tokens: 900,
+      max_tokens: MAX_TOKENS,
       system: SYSTEM,
       messages: [
         {
@@ -136,6 +143,17 @@ export async function ask(question: string, context: GrowthContext): Promise<Ans
       .trim();
 
     if (!answer) return { ok: false, error: 'The model returned no text.' };
+
+    // A truncated answer must never be presented as a finished one.
+    if (message.stop_reason === 'max_tokens') {
+      return {
+        ok: true,
+        answer,
+        model: MODEL,
+        truncated: true as const,
+      };
+    }
+
     return { ok: true, answer, model: MODEL };
   } catch (e) {
     // Surfaced to the user as-is rather than swallowed — a failed call must not look

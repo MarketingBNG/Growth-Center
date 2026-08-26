@@ -11,6 +11,7 @@ import { SUGGESTED_QUESTIONS } from '@/lib/enums';
 export function AskBox({ configured }: { configured: boolean }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +22,12 @@ export function AskBox({ configured }: { configured: boolean }) {
     setError(null);
     setAnswer(null);
     try {
-      const result = await api<{ answer: string; model: string }>('/api/ai/ask', {
+      const result = await api<{ answer: string; model: string; truncated?: boolean }>('/api/ai/ask', {
         method: 'POST',
         json: { question: q.trim() },
       });
       setAnswer(result.answer);
+      setTruncated(!!result.truncated);
       setModel(result.model);
     } catch (e) {
       setError((e as Error).message);
@@ -86,6 +88,13 @@ export function AskBox({ configured }: { configured: boolean }) {
         {answer ? (
           <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5">
             <p className="whitespace-pre-wrap text-sm leading-relaxed">{answer}</p>
+            {/* A cut-off answer used to be shown as if it were complete. */}
+            {truncated ? (
+              <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning">
+                This answer hit the length limit and stops mid-thought. Ask something
+                narrower for a complete one.
+              </p>
+            ) : null}
             {model ? (
               <p className="mt-2 text-[11px] text-muted-foreground">
                 Answered by {model} from the growth snapshot only.

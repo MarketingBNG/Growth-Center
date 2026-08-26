@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bell, Menu, Search, TriangleAlert, TrendingUp, X } from 'lucide-react';
+import { Menu, Search, TriangleAlert, TrendingUp, X } from 'lucide-react';
 import { Sidebar, SidebarNav, UserCard } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
+import { Notifications } from './Notifications';
 import { Button } from './ui/button';
 import type { CurrentUser } from '@/lib/auth';
 
@@ -81,15 +82,7 @@ export function AppShell({
 
             <ThemeToggle />
 
-            <button
-              type="button"
-              title="Notifications"
-              aria-label="Notifications"
-              className="relative grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-card text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <Bell className="size-4" />
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-destructive" />
-            </button>
+            <Notifications />
 
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[linear-gradient(140deg,var(--chart-1),var(--chart-6))] text-[12px] font-bold text-white">
               {user.initials}
