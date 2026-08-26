@@ -252,6 +252,98 @@ async function writePoints(source: string, points: MetricPoint[]): Promise<numbe
   return written;
 }
 
+
+/**
+ * Turns `ad_campaign` metric points into real Campaign and MarketingSpend rows.
+ *
+ * metric_snapshot is the honest archive of what a provider reported, but nothing on the
+ * Marketing page reads it: campaign tables, ROAS and CAC all read MarketingSpend joined
+ * to Campaign. Without this step a provider can sync perfectly and every chart still
+ * shows nothing — which is exactly what Meta did.
+ *
+ * Campaigns are matched on (source, externalId), so a re-sync updates in place and a
+ * renamed campaign follows rather than duplicating.
+ */
+async function writeCampaignSpend(
+  provider: ReturnType<typeof requireProvider>,
+  points: MetricPoint[],
+): Promise<number> {
+  const channel = provider.channel;
+  if (!channel) return 0;
+
+  const relevant = points.filter((p) => p.entityType === 'ad_campaign' && p.entityId);
+  if (!relevant.length) return 0;
+
+  const channelRow = await db().channel.upsert({
+    where: { slug: channel.slug },
+    create: { slug: channel.slug, name: channel.name, kind: channel.kind },
+    update: {},
+    select: { id: true },
+  });
+
+  // Last label wins; they are identical across a campaign's rows.
+  const names = new Map<string, string>();
+  for (const p of relevant) {
+    if (p.entityLabel) names.set(p.entityId as string, p.entityLabel);
+  }
+
+  const campaignIdByExternal = new Map<string, string>();
+  for (const [externalId, name] of names) {
+    const row = await db().campaign.upsert({
+      where: { source_externalId: { source: provider.id, externalId } },
+      create: { name, channelId: channelRow.id, source: provider.id, externalId },
+      update: { name },
+      select: { id: true },
+    });
+    campaignIdByExternal.set(externalId, row.id);
+  }
+
+  // One row per campaign-day, carrying whichever of the three metrics arrived.
+  type Day = { campaignId: string; date: Date; amount: number; impressions: number; clicks: number };
+  const days = new Map<string, Day>();
+
+  for (const p of relevant) {
+    const campaignId = campaignIdByExternal.get(p.entityId as string);
+    if (!campaignId) continue;
+
+    const iso = p.date.toISOString().slice(0, 10);
+    const key = `${campaignId}|${iso}`;
+    let day = days.get(key);
+    if (!day) {
+      day = { campaignId, date: p.date, amount: 0, impressions: 0, clicks: 0 };
+      days.set(key, day);
+    }
+
+    if (p.metricKey === 'spend') day.amount = p.value;
+    else if (p.metricKey === 'impressions') day.impressions = Math.round(p.value);
+    else if (p.metricKey === 'clicks') day.clicks = Math.round(p.value);
+  }
+
+  const rows = [...days.values()];
+  for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
+    const chunk = rows.slice(i, i + WRITE_CHUNK);
+    const values = chunk.map((d) => [d.campaignId, d.date, d.amount, d.impressions, d.clicks]);
+    const placeholders = values
+      .map(
+        (_, r) =>
+          `(gen_random_uuid()::text, $${r * 5 + 1}, $${r * 5 + 2}::date, $${r * 5 + 3}::numeric, $${r * 5 + 4}::int, $${r * 5 + 5}::int)`,
+      )
+      .join(', ');
+
+    await db().$executeRawUnsafe(
+      `INSERT INTO marketing_spend (id, "campaignId", date, amount, impressions, clicks)
+       VALUES ${placeholders}
+       ON CONFLICT ("campaignId", date)
+       DO UPDATE SET amount = EXCLUDED.amount,
+                     impressions = EXCLUDED.impressions,
+                     clicks = EXCLUDED.clicks`,
+      ...values.flat(),
+    );
+  }
+
+  return rows.length;
+}
+
 /** How long before expiry a credential is renewed. Comfortably longer than any
  *  plausible gap between syncs, so a token is never used on its last day. */
 const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -317,6 +409,7 @@ export async function sync(id: string, days = 30) {
       { from, to },
     );
     const rows = await writePoints(id, points);
+    const campaignDays = await writeCampaignSpend(provider, points);
 
     await db().integration.update({
       where: { id: integration.id },
@@ -329,7 +422,12 @@ export async function sync(id: string, days = 30) {
       },
     });
 
-    return { rows, detail: `Wrote ${rows} metric rows.` };
+    return {
+      rows,
+      detail: campaignDays
+        ? `Wrote ${rows} metric rows and ${campaignDays} campaign-days.`
+        : `Wrote ${rows} metric rows.`,
+    };
   } catch (e) {
     const message = e instanceof IntegrationError ? e.message : ((e as Error).message ?? 'Sync failed.');
     await db().integration.update({

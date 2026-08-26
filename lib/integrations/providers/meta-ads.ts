@@ -48,6 +48,7 @@ export const metaAds: IntegrationProvider = {
     { name: 'META_APP_SECRET', description: 'Secret for that Meta app' },
   ],
   docsUrl: 'https://developers.facebook.com/docs/marketing-api/insights',
+  channel: { slug: 'meta-ads', name: 'Meta Ads', kind: 'paid' },
   configFields: [
     {
       name: 'adAccountId',
@@ -142,7 +143,14 @@ export const metaAds: IntegrationProvider = {
     }
 
     const json = (await res.json()) as {
-      data?: { campaign_id: string; date_start: string; spend: string; impressions: string; clicks: string }[];
+      data?: {
+        campaign_id: string;
+        campaign_name: string;
+        date_start: string;
+        spend: string;
+        impressions: string;
+        clicks: string;
+      }[];
     };
 
     const points: MetricPoint[] = [];
@@ -158,6 +166,7 @@ export const metaAds: IntegrationProvider = {
         points.push({
           entityType: 'ad_campaign',
           entityId: row.campaign_id,
+          entityLabel: row.campaign_name,
           metricKey,
           date,
           value: Number(value) || 0,

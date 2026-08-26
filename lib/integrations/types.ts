@@ -48,6 +48,9 @@ export type MetricPoint = {
   metricKey: string;
   date: Date;
   value: number;
+  /** Human name for the entity, e.g. the ad campaign's title. Carried so a sync can
+   *  materialise a real Campaign row rather than leaving a bare provider id. */
+  entityLabel?: string;
 };
 
 /** A record the provider can hand over, e.g. a Zoho lead or a Meta campaign. */
@@ -64,6 +67,12 @@ export interface IntegrationProvider {
    *  visible before connecting. */
   readonly provides: string[];
   readonly requiredEnv: EnvRequirement[];
+  /**
+   * Where this provider's ad campaigns belong in the Channel table. Present only on
+   * providers that emit `ad_campaign` points; without it the sync stores metrics but
+   * materialises no campaigns, and the marketing tables stay empty.
+   */
+  readonly channel?: { slug: string; name: string; kind: string };
   /** Non-secret settings this provider needs before it can sync. */
   readonly configFields?: ConfigField[];
   /** Documentation the person connecting it will need. */
