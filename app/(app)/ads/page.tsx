@@ -7,10 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { rangeFor } from '@/lib/metrics';
+import { provenance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { cards } from '@/lib/integrations/service';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/format';
+import { SourceBadge, SourceLine } from '@/components/patterns/source-badge';
 
 export const metadata = { title: 'Paid Ads · Growth Center' };
 
@@ -37,7 +38,11 @@ export default async function AdsPage({
   const { value, days } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [all, providers] = await Promise.all([campaignPerformance(current), cards()]);
+  const [all, providers, sources] = await Promise.all([
+    campaignPerformance(current),
+    cards(),
+    provenance(current),
+  ]);
 
   const rows = all.filter((r) => r.channelKind === 'paid' || r.channelKind === 'social');
   const active = rows.filter((r) => r.spend > 0);
@@ -55,6 +60,8 @@ export default async function AdsPage({
         subtitle="Spend and return across ad platforms."
         actions={<RangePicker current={value} />}
       />
+
+      <SourceLine items={[{ label: 'Spend', sources: sources.spend }]} />
 
       <div className="mb-4 flex flex-wrap gap-2">
         {adProviders.map((p) => (
@@ -151,11 +158,7 @@ export default async function AdsPage({
                   <TR key={r.id}>
                     <TD className="font-medium">
                       {r.name}
-                      {!r.source ? (
-                        <span className="ml-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                          seeded
-                        </span>
-                      ) : null}
+                      <SourceBadge source={r.source} className="ml-1.5" />
                     </TD>
                     <TD className="text-muted-foreground">{r.channelName}</TD>
                     <TD className="text-right tnum">{fmtMoney(r.spend)}</TD>

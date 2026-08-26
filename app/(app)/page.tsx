@@ -7,6 +7,7 @@ import { AddWidgetDrawer } from '@/components/patterns/add-widget-drawer';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge, PriorityBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
+import { SourceLine } from '@/components/patterns/source-badge';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
@@ -15,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { openPipeline, provenance, rangeFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
 import { campaignPerformance } from '@/lib/campaigns';
@@ -47,13 +48,14 @@ export default async function DashboardPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [dash, pipeline, series, channels, campaigns, recentLeads, tasks, insights] =
+  const [dash, pipeline, series, channels, campaigns, sources, recentLeads, tasks, insights] =
     await Promise.all([
       dashboardBand(days, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
       campaignPerformance(current),
+      provenance(current),
       db().lead.findMany({
         orderBy: { createdAt: 'desc' },
         take: 6,
@@ -91,6 +93,17 @@ export default async function DashboardPage({
             <AddWidgetDrawer />
           </>
         }
+      />
+
+      {/* Stated before the numbers, not after: the band mixes reported spend with
+          seeded visitors and looked entirely uniform without this. */}
+      <SourceLine
+        items={[
+          { label: 'Visitors', sources: sources.visitors },
+          { label: 'Spend', sources: sources.spend },
+          { label: 'Leads', sources: sources.leads },
+          { label: 'Revenue', sources: sources.revenue },
+        ]}
       />
 
       <MetricsBand {...band} />

@@ -4,34 +4,62 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useTransition } from 'react';
 import { cn } from '@/lib/utils';
 
+/**
+ * Two filters, deliberately side by side: channel answers "which part of the business",
+ * source answers "who reported this". They are different questions and were being
+ * conflated — a Meta Ads channel could hold a seeded campaign.
+ */
 export function ChannelFilter({
   channels,
   current,
+  sources,
+  currentSource,
 }: {
   channels: { id: string; name: string }[];
   current: string;
+  sources: { id: string; name: string }[];
+  currentSource: string;
 }) {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  function set(id: string) {
+  function set(key: 'channelId' | 'source', id: string) {
     const next = new URLSearchParams(params.toString());
-    if (id) next.set('channelId', id);
-    else next.delete('channelId');
+    if (id) next.set(key, id);
+    else next.delete(key);
     startTransition(() => router.replace(`?${next.toString()}`));
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pb-4" data-pending={pending || undefined}>
-      <Chip active={!current} onClick={() => set('')}>
-        All channels
-      </Chip>
-      {channels.map((c) => (
-        <Chip key={c.id} active={current === c.id} onClick={() => set(c.id)}>
-          {c.name}
+    <div className="space-y-1.5 pb-4" data-pending={pending || undefined}>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Chip active={!current} onClick={() => set('channelId', '')}>
+          All channels
         </Chip>
-      ))}
+        {channels.map((c) => (
+          <Chip key={c.id} active={current === c.id} onClick={() => set('channelId', c.id)}>
+            {c.name}
+          </Chip>
+        ))}
+      </div>
+
+      {sources.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Chip active={!currentSource} onClick={() => set('source', '')}>
+            All sources
+          </Chip>
+          {sources.map((s) => (
+            <Chip
+              key={s.id}
+              active={currentSource === s.id}
+              onClick={() => set('source', s.id)}
+            >
+              {s.name}
+            </Chip>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

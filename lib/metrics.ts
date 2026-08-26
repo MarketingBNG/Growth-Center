@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
 import type { Kpi } from './kpi.ts';
+import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
@@ -695,4 +696,45 @@ export async function repeatCustomerRate(): Promise<number | null> {
   if (!rows.length) return null;
   const repeat = rows.filter((r) => r._count._all > 1).length;
   return rate(repeat, rows.length);
+}
+
+/**
+ * What actually produced each headline figure in a period.
+ *
+ * Provenance existed in the data — metric_snapshot.source, campaign.source — but only
+ * the Analytics page ever read it, so a page mixing reported spend with seeded visitors
+ * looked completely uniform. This is what the SourceLine under each page header renders.
+ *
+ * Returns a list per figure rather than one label: real spend alongside a seeded
+ * campaign is honestly two sources, and collapsing that to one would be the same lie
+ * the badges exist to prevent.
+ */
+export async function provenance(range: Range): Promise<Record<string, string[]>> {
+  const window = { gte: range.from, lte: range.to };
+
+  const [sessionSources, spendCampaigns, revenueCount, leadCount] = await Promise.all([
+    db().metricSnapshot.findMany({
+      where: { metricKey: 'sessions', date: window },
+      select: { source: true },
+      distinct: ['source'],
+    }),
+    db().campaign.findMany({
+      where: { spend: { some: { date: window, amount: { gt: 0 } } } },
+      select: { source: true },
+      distinct: ['source'],
+    }),
+    db().revenueEntry.count({ where: { date: window } }),
+    db().lead.count({ where: { createdAt: window } }),
+  ]);
+
+  // A campaign with no source was written by the seeder, whatever its channel says.
+  const spend = spendCampaigns.map((c) => c.source ?? DEMO_SOURCE);
+
+  return {
+    visitors: sessionSources.map((r) => r.source),
+    spend,
+    // Leads and revenue are Growth Center's own records — no platform reports them.
+    leads: leadCount ? [INTERNAL_SOURCE] : [],
+    revenue: revenueCount ? [INTERNAL_SOURCE] : [],
+  };
 }

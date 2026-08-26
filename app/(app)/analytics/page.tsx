@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ChartLine, Plug } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -140,7 +141,7 @@ export default async function AnalyticsPage({
                     .map((s) => (
                       <TR key={`${s.source}-${s.metricKey}`}>
                         <TD>
-                          <span className={s.source === 'demo' ? 'text-warning' : ''}>{s.source}</span>
+                          <SourceBadge source={s.source} full />
                         </TD>
                         <TD className="text-muted-foreground">{s.metricKey.replaceAll('_', ' ')}</TD>
                         <TD className="text-right tnum">{fmtNumber(s._count._all)}</TD>

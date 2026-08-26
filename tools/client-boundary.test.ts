@@ -36,7 +36,7 @@ const SERVER_ONLY = [
 ];
 
 /** Modules with no imports at all, safe for either side. */
-const CLIENT_SAFE = ['lib/enums', 'lib/calc', 'lib/utils', 'lib/format', 'lib/nav', 'lib/fetcher', 'lib/kpi'];
+const CLIENT_SAFE = ['lib/enums', 'lib/calc', 'lib/utils', 'lib/format', 'lib/nav', 'lib/fetcher', 'lib/kpi', 'lib/sources'];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {

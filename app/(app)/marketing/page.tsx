@@ -5,14 +5,15 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { BarChart } from '@/components/charts/BarChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { channelPerformance, rangeFor } from '@/lib/metrics';
+import { channelPerformance, provenance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
+import { SourceBadge, SourceLine } from '@/components/patterns/source-badge';
+import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { ChannelFilter } from './ChannelFilter';
 
 export const metadata = { title: 'Marketing · Growth Center' };
@@ -37,16 +38,27 @@ export default async function MarketingPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
+  const source = typeof params.source === 'string' ? params.source : '';
 
-  const [channels, allChannels, rows, band] = await Promise.all([
+  const [channels, allChannels, rows, band, sources] = await Promise.all([
     channelPerformance(current),
     db().channel.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     campaignPerformance(current, channelId),
     marketingBand(days, bucket),
+    provenance(current),
   ]);
 
-  const totals = campaignTotals(rows);
-  const active = rows.filter((r) => r.spend > 0 || r.leads > 0 || r.revenue > 0);
+  // Which sources actually appear in this period, so the filter never offers an option
+  // that would return nothing.
+  const presentSources = [...new Set(rows.map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
+    id,
+    name: sourceMeta(id).name,
+  }));
+
+  const filtered = source ? rows.filter((r) => (r.source ?? DEMO_SOURCE) === source) : rows;
+
+  const totals = campaignTotals(filtered);
+  const active = filtered.filter((r) => r.spend > 0 || r.leads > 0 || r.revenue > 0);
 
   return (
     <>
@@ -56,7 +68,20 @@ export default async function MarketingPage({
         actions={<RangePicker current={value} />}
       />
 
-      <ChannelFilter channels={allChannels} current={channelId ?? ''} />
+      <SourceLine
+        items={[
+          { label: 'Spend', sources: sources.spend },
+          { label: 'Leads', sources: sources.leads },
+          { label: 'Revenue', sources: sources.revenue },
+        ]}
+      />
+
+      <ChannelFilter
+        channels={allChannels}
+        current={channelId ?? ''}
+        sources={presentSources}
+        currentSource={source}
+      />
 
       <MetricsBand {...band} />
 
@@ -103,11 +128,9 @@ export default async function MarketingPage({
                   <TR key={c.id}>
                     <TD>
                       <span className="font-medium">{c.name}</span>
-                      {c.source ? (
-                        <Badge tone="neutral" className="ml-1.5">
-                          {c.source.replaceAll('_', ' ')}
-                        </Badge>
-                      ) : null}
+                      {/* A campaign with no source came from the seeder, whatever its
+                          channel says — that distinction is the whole point here. */}
+                      <SourceBadge source={c.source} className="ml-1.5" />
                     </TD>
                     <TD className="text-muted-foreground">{c.channelName}</TD>
                     <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
