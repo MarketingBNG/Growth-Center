@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Download } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { NoDatabaseState } from '@/components/patterns/state';
@@ -38,7 +38,17 @@ export default async function ReportsPage({
       <PageHeader
         title="Reports"
         subtitle="Composed from the same functions the pages use, so a report cannot disagree with the dashboard it came from."
-        actions={<RangePicker current={value} />}
+        actions={
+          <span className="flex items-center gap-2">
+            <RangePicker current={value} />
+            <a
+              href={`/api/reports/export?report=${id}&days=${days}`}
+              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-secondary"
+            >
+              <Download className="size-4" /> Export CSV
+            </a>
+          </span>
+        }
       />
 
       <div className="flex flex-wrap gap-1.5 pb-4">

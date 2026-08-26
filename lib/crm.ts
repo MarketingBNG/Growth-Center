@@ -48,6 +48,10 @@ export const taskInput = z.object({
   opportunityId: z.string().cuid().optional(),
 });
 
+/** Every field optional: a PATCH that renames a company must not have to resend it all. */
+export const companyPatch = companyInput.partial();
+export const contactPatch = contactInput.partial();
+
 export type CompanyInput = z.infer<typeof companyInput>;
 export type ContactInput = z.infer<typeof contactInput>;
 export type NoteInput = z.infer<typeof noteInput>;
@@ -235,4 +239,50 @@ export async function completeTask(id: string, actorEmail: string) {
     },
   });
   return { unchanged: false as const };
+}
+
+/**
+ * Reopens a completed task.
+ *
+ * completeTask() existed from the start with no inverse, so a task ticked off by mistake
+ * stayed done for good. Clears completedAt as well as the status — a reopened task that
+ * kept its completion date sorts and reports as though it were still finished.
+ */
+export async function reopenTask(id: string, actorEmail: string) {
+  const task = await db().task.findUnique({
+    where: { id },
+    select: { status: true, title: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
+  });
+  if (!task) return null;
+  if (task.status !== 'done' && task.status !== 'cancelled') return { unchanged: true as const };
+
+  await db().task.update({
+    where: { id },
+    data: { status: 'open', completedAt: null },
+  });
+  await db().activity.create({
+    data: {
+      type: 'status_changed',
+      summary: `Reopened: ${task.title}`,
+      actorEmail,
+      leadId: task.leadId,
+      contactId: task.contactId,
+      companyId: task.companyId,
+      opportunityId: task.opportunityId,
+    },
+  });
+
+  return { reopened: true as const };
+}
+
+export async function updateCompany(id: string, input: z.infer<typeof companyPatch>) {
+  const existing = await db().company.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) return null;
+  return db().company.update({ where: { id }, data: input, select: { id: true } });
+}
+
+export async function updateContact(id: string, input: z.infer<typeof contactPatch>) {
+  const existing = await db().contact.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) return null;
+  return db().contact.update({ where: { id }, data: input, select: { id: true } });
 }

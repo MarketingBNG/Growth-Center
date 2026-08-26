@@ -147,7 +147,10 @@ export default async function TasksPage({
                         </TD>
                         <TD className="text-right">
                           {t.status === 'done' ? (
-                            <Badge tone="success">done</Badge>
+                            <span className="inline-flex items-center gap-2">
+                              <Badge tone="success">done</Badge>
+                              <CompleteButton taskId={t.id} done />
+                            </span>
                           ) : (
                             <CompleteButton taskId={t.id} />
                           )}

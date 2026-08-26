@@ -2,6 +2,21 @@ import { z } from 'zod';
 import { db } from './prisma.ts';
 import { dispatch } from './events.ts';
 
+/**
+ * Editable fields on an existing deal. Deliberately excludes pipelineId and stageId:
+ * a stage move has its own path (moveOpportunity) because it emits the won/lost events
+ * that create and reverse revenue. Letting a plain edit change the stage would move a
+ * deal without any of that firing.
+ */
+export const opportunityPatch = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  value: z.number().nonnegative().max(1_000_000_000).optional(),
+  currency: z.string().trim().length(3).optional(),
+  probability: z.number().int().min(0).max(100).nullable().optional(),
+  expectedCloseDate: z.string().date().nullable().optional(),
+  ownerEmail: z.string().trim().email().nullable().optional(),
+});
+
 export const opportunityInput = z.object({
   name: z.string().trim().min(1).max(160),
   pipelineId: z.string().cuid(),
@@ -209,4 +224,56 @@ export async function convertLead(leadId: string, actorEmail: string, value = 0)
 
   await dispatch({ type: 'lead.converted', leadId: lead.id, opportunityId: opp.id, actorEmail });
   return { ok: true as const, opportunityId: opp.id };
+}
+
+/**
+ * Edits a deal's own attributes. Value, owner, name and close date were all fixed at
+ * creation with no way to correct any of them.
+ *
+ * A changed value rewrites the revenue entry of an already-won deal too — otherwise
+ * correcting the amount would leave reported revenue on the old figure.
+ */
+export async function updateOpportunity(
+  id: string,
+  input: z.infer<typeof opportunityPatch>,
+  actorEmail: string,
+) {
+  const existing = await db().opportunity.findUnique({
+    where: { id },
+    select: { id: true, name: true, value: true, ownerEmail: true },
+  });
+  if (!existing) return null;
+
+  const data: Record<string, unknown> = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.value !== undefined) data.value = input.value;
+  if (input.currency !== undefined) data.currency = input.currency;
+  if (input.probability !== undefined) data.probability = input.probability;
+  if (input.ownerEmail !== undefined) data.ownerEmail = input.ownerEmail;
+  if (input.expectedCloseDate !== undefined) {
+    data.expectedCloseDate = input.expectedCloseDate ? new Date(input.expectedCloseDate) : null;
+  }
+
+  if (Object.keys(data).length === 0) return { id, unchanged: true as const };
+
+  await db().opportunity.update({ where: { id }, data });
+
+  if (input.value !== undefined && Number(existing.value) !== input.value) {
+    await db().revenueEntry.updateMany({
+      where: { opportunityId: id },
+      data: { amount: input.value },
+    });
+  }
+
+  const changed = Object.keys(data).join(', ');
+  await db().activity.create({
+    data: {
+      type: input.ownerEmail !== undefined ? 'owner_changed' : 'status_changed',
+      summary: `Updated ${changed}`,
+      actorEmail,
+      opportunityId: id,
+    },
+  });
+
+  return { id, unchanged: false as const };
 }
