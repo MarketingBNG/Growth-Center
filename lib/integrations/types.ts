@@ -84,6 +84,19 @@ export interface IntegrationProvider {
    *  the error against the integration and emits integration.sync_failed. */
   sync(credential: string, config: Record<string, unknown>, range: DateRange): Promise<MetricPoint[]>;
 
+  /**
+   * Renews a credential that is approaching expiry, called by sync() before the pull.
+   *
+   * Only for providers holding a token that itself expires. Google and Zoho do not
+   * implement this: they store a refresh token and mint a short-lived access token on
+   * every sync, so there is nothing to renew. Meta does — its long-lived user token
+   * lasts about 60 days and simply stops working after that.
+   *
+   * Return null to say "nothing to do". Throwing is for a renewal that genuinely
+   * failed; the caller records it against the integration.
+   */
+  refresh?(credential: string): Promise<ConnectResult | null>;
+
   getEntities?(credential: string, config: Record<string, unknown>, type: string): Promise<Entity[]>;
 }
 

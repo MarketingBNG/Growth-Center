@@ -30,6 +30,8 @@ export type Card = {
   lastError: string | null;
   lastErrorAt: Date | null;
   connectedByEmail: string | null;
+  /** When the stored credential lapses, so the card can warn before it does. */
+  credentialExpiresAt: Date | null;
   config: Record<string, unknown> | null;
 };
 
@@ -51,7 +53,7 @@ export async function cards(): Promise<Card[]> {
       lastErrorAt: true,
       connectedByEmail: true,
       config: true,
-      credential: { select: { id: true } },
+      credential: { select: { id: true, expiresAt: true } },
     },
   });
   const byProvider = new Map(rows.map((r) => [r.provider, r]));
@@ -96,6 +98,7 @@ export async function cards(): Promise<Card[]> {
           : (row?.lastError ?? null),
       lastErrorAt: row?.lastErrorAt ?? null,
       connectedByEmail: row?.connectedByEmail ?? null,
+      credentialExpiresAt: row?.credential?.expiresAt ?? null,
       config,
     };
   });
@@ -202,26 +205,83 @@ export async function disconnect(id: string, actorEmail: string) {
 }
 
 /** Writes a provider's points into MetricSnapshot. Upserts on the natural key so a
- *  re-sync of the same day corrects the value instead of duplicating it. */
+ *  re-sync of the same day corrects the value instead of duplicating it.
+ *
+ *  Written as a multi-row INSERT ... ON CONFLICT rather than a loop of Prisma upserts.
+ *  The loop was one network round trip per row: a month of Meta campaign data is around
+ *  700 rows, which took over a hundred seconds against Neon and blew the serverless
+ *  function limit long before it finished. One statement per chunk instead. */
+const WRITE_CHUNK = 500;
+
 async function writePoints(source: string, points: MetricPoint[]): Promise<number> {
+  if (!points.length) return 0;
+
   let written = 0;
-  for (const p of points) {
-    await db().metricSnapshot.upsert({
-      where: {
-        source_entityType_entityId_metricKey_date: {
-          source,
-          entityType: p.entityType,
-          entityId: p.entityId ?? '',
-          metricKey: p.metricKey,
-          date: p.date,
-        },
-      },
-      create: { source, ...p, entityId: p.entityId ?? '' },
-      update: { value: p.value },
-    });
-    written++;
+
+  for (let i = 0; i < points.length; i += WRITE_CHUNK) {
+    const chunk = points.slice(i, i + WRITE_CHUNK);
+
+    // @default(cuid()) is applied by Prisma, not by Postgres, so a raw insert has to
+    // supply the id itself. gen_random_uuid() is built in from PG13 — a uuid rather than
+    // a cuid, which only these provider-written rows will carry.
+    const values = chunk.map((p) => [
+      source,
+      p.entityType,
+      p.entityId ?? '',
+      p.metricKey,
+      p.date,
+      p.value,
+    ]);
+
+    const placeholders = values
+      .map(
+        (_, r) =>
+          `(gen_random_uuid()::text, $${r * 6 + 1}, $${r * 6 + 2}, $${r * 6 + 3}, $${r * 6 + 4}, $${r * 6 + 5}::date, $${r * 6 + 6}::numeric)`,
+      )
+      .join(', ');
+
+    written += await db().$executeRawUnsafe(
+      `INSERT INTO metric_snapshot (id, source, "entityType", "entityId", "metricKey", date, value)
+       VALUES ${placeholders}
+       ON CONFLICT (source, "entityType", "entityId", "metricKey", date)
+       DO UPDATE SET value = EXCLUDED.value`,
+      ...values.flat(),
+    );
   }
+
   return written;
+}
+
+/** How long before expiry a credential is renewed. Comfortably longer than any
+ *  plausible gap between syncs, so a token is never used on its last day. */
+const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Renews an expiring credential in place and returns the one to use for this sync.
+ *
+ * Providers that mint a short-lived access token per sync (Google, Zoho) implement no
+ * refresh() and fall straight through. Meta holds a ~60-day token that simply stops
+ * working, so without this a connection silently dies two months after it was made.
+ */
+async function renewIfNearExpiry(
+  provider: ReturnType<typeof requireProvider>,
+  integrationId: string,
+  credential: string,
+  expiresAt: Date | null,
+): Promise<string> {
+  if (!provider.refresh || !expiresAt) return credential;
+  if (expiresAt.getTime() - Date.now() > RENEW_WITHIN_MS) return credential;
+
+  const renewed = await provider.refresh(credential);
+  if (!renewed) return credential;
+
+  const sealed = seal(renewed.secret);
+  await db().integrationCredential.update({
+    where: { integrationId },
+    data: { ...sealed, expiresAt: renewed.expiresAt ?? null },
+  });
+
+  return renewed.secret;
 }
 
 export async function sync(id: string, days = 30) {
@@ -229,7 +289,12 @@ export async function sync(id: string, days = 30) {
 
   const integration = await db().integration.findUnique({
     where: { provider: id },
-    select: { id: true, state: true, config: true, credential: { select: { ciphertext: true, iv: true, authTag: true } } },
+    select: {
+      id: true,
+      state: true,
+      config: true,
+      credential: { select: { ciphertext: true, iv: true, authTag: true, expiresAt: true } },
+    },
   });
 
   if (!integration?.credential) {
@@ -243,7 +308,9 @@ export async function sync(id: string, days = 30) {
   from.setUTCDate(from.getUTCDate() - days);
 
   try {
-    const credential = open(integration.credential);
+    let credential = open(integration.credential);
+    credential = await renewIfNearExpiry(provider, integration.id, credential, integration.credential.expiresAt);
+
     const points = await provider.sync(
       credential,
       (integration.config as Record<string, unknown>) ?? {},

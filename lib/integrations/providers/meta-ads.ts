@@ -7,6 +7,35 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
 
 type Stored = { accessToken: string };
 
+/**
+ * Trades a token for a fresh long-lived one (~60 days).
+ *
+ * Used at connect, because the code exchange returns a short-lived token that would
+ * die in about an hour, and again from refresh() to push the expiry out before it
+ * lapses. Meta accepts a long-lived token as input here, which is what makes rolling
+ * renewal possible at all.
+ */
+async function exchangeForLongLived(token: string): Promise<{ token: string; expiresIn?: number }> {
+  const params = new URLSearchParams({
+    grant_type: 'fb_exchange_token',
+    client_id: process.env.META_APP_ID ?? '',
+    client_secret: process.env.META_APP_SECRET ?? '',
+    fb_exchange_token: token,
+  });
+
+  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new IntegrationError(
+      body?.error?.message ?? `Meta refused to extend the token (${res.status}). Reconnect.`,
+    );
+  }
+
+  const json = (await res.json()) as { access_token?: string; expires_in?: number };
+  if (!json.access_token) throw new IntegrationError('Meta returned no long-lived token.');
+  return { token: json.access_token, expiresIn: json.expires_in };
+}
+
 export const metaAds: IntegrationProvider = {
   id: 'meta_ads',
   name: 'Meta Ads',
@@ -65,12 +94,25 @@ export const metaAds: IntegrationProvider = {
     const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
-    const json = (await res.json()) as { access_token?: string; expires_in?: number };
+    const json = (await res.json()) as { access_token?: string };
     if (!json.access_token) throw new IntegrationError('Meta returned no access token.');
 
+    // The code exchange yields a short-lived token — roughly an hour. Trade it up
+    // immediately, or the connection would break before the first scheduled sync.
+    const long = await exchangeForLongLived(json.access_token);
+
     return {
-      secret: JSON.stringify({ accessToken: json.access_token } satisfies Stored),
-      expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000) : undefined,
+      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
+      expiresAt: long.expiresIn ? new Date(Date.now() + long.expiresIn * 1000) : undefined,
+    };
+  },
+
+  async refresh(credential) {
+    const { accessToken } = JSON.parse(credential) as Stored;
+    const long = await exchangeForLongLived(accessToken);
+    return {
+      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
+      expiresAt: long.expiresIn ? new Date(Date.now() + long.expiresIn * 1000) : undefined,
     };
   },
 

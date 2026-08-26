@@ -186,6 +186,22 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         </p>
       ) : null}
 
+      {card.hasCredential && card.credentialExpiresAt
+        ? (() => {
+            const days = Math.ceil(
+              (new Date(card.credentialExpiresAt).getTime() - Date.now()) / 86_400_000,
+            );
+            if (days > 14) return null;
+            return (
+              <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+                {days <= 0
+                  ? 'The stored authorisation has expired. Reconnect.'
+                  : `Authorisation expires in ${days} ${days === 1 ? 'day' : 'days'}. A sync renews it automatically.`}
+              </p>
+            );
+          })()
+        : null}
+
       {card.hasCredential && card.missingConfig.length > 0 ? (
         <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
           Connected, but syncing needs {card.missingConfig.join(' and ')}. Open Settings.
