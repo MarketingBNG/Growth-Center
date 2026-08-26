@@ -16,18 +16,32 @@ export const ALLOWED_DOMAINS = ['usaindiacfo.com', 'bngadvisors.com'];
 export const PRIMARY_DOMAIN = ALLOWED_DOMAINS[0];
 
 /**
- * The admin account. Not a permission tier — while ROLES_ENFORCED is false everybody
- * already has every permission. What it marks is the account that must always exist and
- * must never be revoked, so there is one identity guaranteed to be able to get back in.
+ * The admin accounts. Not a permission tier — while ROLES_ENFORCED is false everybody
+ * already has every permission. What this marks is the accounts that must always exist
+ * and can never be revoked, so there is always an identity able to get back in.
  *
- * It is a shared mailbox rather than a person, so its display name is fixed here instead
- * of being taken from whatever Google returns for it.
+ * `name` pins the display name against whatever Google returns. Set it only for a shared
+ * mailbox; a real person keeps the name they signed in with and can be renamed on the
+ * Team page like anyone else.
  */
-export const ADMIN_EMAIL = 'marketing@usaindiacfo.com';
-export const ADMIN_NAME = 'Marketing';
+export const ADMINS: { email: string; name?: string }[] = [
+  { email: 'marketing@usaindiacfo.com', name: 'Marketing' },
+  { email: 'shweta@usaindiacfo.com' },
+];
+
+export const ADMIN_EMAILS = ADMINS.map((a) => a.email);
 
 export function isAdmin(email: string | null | undefined): boolean {
-  return !!email && canonicalEmail(email) === ADMIN_EMAIL;
+  if (!email) return false;
+  const canonical = canonicalEmail(email);
+  return !!canonical && ADMIN_EMAILS.includes(canonical);
+}
+
+/** The pinned display name for an admin mailbox, or null if it takes Google's. */
+export function pinnedName(email: string | null | undefined): string | null {
+  const canonical = email ? canonicalEmail(email) : null;
+  if (!canonical) return null;
+  return ADMINS.find((a) => a.email === canonical)?.name ?? null;
 }
 
 export type Permission =

@@ -12,12 +12,14 @@ export function TeamActions({
   active,
   isSelf,
   isAdmin,
+  namePinned,
 }: {
   email: string;
   name: string;
   active: boolean;
   isSelf: boolean;
   isAdmin: boolean;
+  namePinned: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -80,15 +82,15 @@ export function TeamActions({
     <span className="inline-flex items-center justify-end gap-2">
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
 
-      {/* The admin's name is fixed in lib/roles.ts — it is a shared mailbox, not a person. */}
-      {isAdmin ? null : (
+      {/* A shared mailbox has its name pinned in lib/roles.ts. A person does not. */}
+      {namePinned ? null : (
         <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(true)}>
           Rename
         </Button>
       )}
 
       {isAdmin ? (
-        <span className="text-xs text-muted-foreground">Cannot be revoked</span>
+        <span className="text-xs text-muted-foreground">Admin — cannot be revoked</span>
       ) : isSelf ? (
         <span className="text-xs text-muted-foreground">That&apos;s you</span>
       ) : (

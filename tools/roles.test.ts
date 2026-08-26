@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ADMIN_EMAIL,
-  ADMIN_NAME,
+  ADMIN_EMAILS,
+  ADMINS,
   ALLOWED_DOMAINS,
   PRIMARY_DOMAIN,
   ROLES_ENFORCED,
@@ -11,6 +11,7 @@ import {
   initialsOf,
   isAdmin,
   isAllowedEmail,
+  pinnedName,
   isFullAccess,
   nameFromEmail,
   wouldAllow,
@@ -93,23 +94,39 @@ test('isFullAccess is true for anyone signed in while tiers are off', () => {
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
-test('isAdmin matches the admin account, however it is typed', () => {
+test('both admin accounts are recognised', () => {
   assert.equal(isAdmin('marketing@usaindiacfo.com'), true);
+  assert.equal(isAdmin('shweta@usaindiacfo.com'), true);
+  assert.equal(ADMIN_EMAILS.length, 2);
+});
+
+test('isAdmin matches however the address is typed', () => {
   assert.equal(isAdmin('  Marketing@UsaIndiaCFO.com  '), true);
   // The same mailbox on the second domain is the same account.
-  assert.equal(isAdmin('marketing@bngadvisors.com'), true);
+  assert.equal(isAdmin('shweta@bngadvisors.com'), true);
 });
 
 test('isAdmin does not match a lookalike address', () => {
   assert.equal(isAdmin('marketing2@usaindiacfo.com'), false);
+  assert.equal(isAdmin('shweta.extra@usaindiacfo.com'), false);
   assert.equal(isAdmin('marketing@gmail.com'), false);
   assert.equal(isAdmin(''), false);
   assert.equal(isAdmin(null), false);
 });
 
-test('the admin address is itself a valid company address', () => {
-  assert.equal(canonicalEmail(ADMIN_EMAIL), ADMIN_EMAIL);
-  assert.equal(ADMIN_NAME, 'Marketing');
+test('every admin address is a valid, already-canonical company address', () => {
+  for (const email of ADMIN_EMAILS) {
+    assert.equal(canonicalEmail(email), email, `${email} is not in canonical form`);
+  }
+});
+
+test('only the shared mailbox has its name pinned', () => {
+  // A pinned name is re-asserted on every sign-in, so pinning a real person's would
+  // make the Team page's Rename button silently useless for them.
+  assert.equal(pinnedName('marketing@usaindiacfo.com'), 'Marketing');
+  assert.equal(pinnedName('shweta@usaindiacfo.com'), null);
+  assert.equal(pinnedName('anyone@usaindiacfo.com'), null);
+  assert.equal(ADMINS.filter((a) => a.name).length, 1);
 });
 
 // ── Display helpers ───────────────────────────────────────────────────────────
