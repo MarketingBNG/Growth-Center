@@ -1,50 +1,61 @@
 import { PageHeader } from '@/components/patterns/page-header';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { NoDatabaseState } from '@/components/patterns/state';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { can, ROSTER, ALLOWED_DOMAINS, type Permission, type Role } from '@/lib/roles';
+import { currentUser } from '@/lib/auth';
+import { hasDb } from '@/lib/prisma';
+import { ALLOWED_DOMAINS, ROLES_ENFORCED } from '@/lib/roles';
+import { fmtRelative } from '@/lib/format';
+import { listUsers } from '@/lib/users';
+import { TeamActions } from './TeamActions';
 
 export const metadata = { title: 'Team · Growth Center' };
 
-const ROLES: Role[] = ['partner', 'controller', 'manager', 'member', 'viewer'];
+// Access is not an allow-list any more. Anyone with a Google account on an allowed
+// domain can sign in, and their row appears here on first arrival. This page exists to
+// show who has actually been in, and to switch an account off.
+export default async function TeamPage() {
+  if (!hasDb()) {
+    return (
+      <>
+        <PageHeader title="Team" subtitle="Everyone who has signed in." />
+        <Card><NoDatabaseState /></Card>
+      </>
+    );
+  }
 
-const PERMISSIONS: { key: Permission; label: string }[] = [
-  { key: 'growth:read', label: 'View everything' },
-  { key: 'crm:write', label: 'Edit CRM and leads' },
-  { key: 'pipeline:write', label: 'Edit pipeline' },
-  { key: 'content:write', label: 'Edit content' },
-  { key: 'campaigns:write', label: 'Edit campaigns' },
-  { key: 'outreach:send', label: 'Send outreach' },
-  { key: 'ai:run', label: 'Run AI insights' },
-  { key: 'integrations:manage', label: 'Manage integrations' },
-  { key: 'apikeys:manage', label: 'Manage API keys' },
-  { key: 'settings:manage', label: 'Change settings' },
-];
+  const [people, me] = await Promise.all([listUsers(), currentUser()]);
+  const active = people.filter((p) => p.active).length;
 
-const ROLE_TONE = {
-  partner: 'purple',
-  controller: 'purple',
-  manager: 'info',
-  member: 'neutral',
-  viewer: 'neutral',
-} as const;
-
-// No database: the roster IS lib/roles.ts. That is deliberate — it makes access a code
-// change with a reviewable diff rather than a row someone can quietly edit.
-export default function TeamPage() {
   return (
     <>
       <PageHeader
         title="Team"
-        subtitle={`${ROSTER.length} people can sign in. Access is granted by editing lib/roles.ts, not from this page.`}
+        subtitle={`${active} active ${active === 1 ? 'account' : 'accounts'}. Anyone with a company Google account can sign in — accounts are created on first use.`}
       />
 
-      <Card className="mb-4 overflow-hidden">
+      {!ROLES_ENFORCED ? (
+        <Card className="mb-4 border-warning/40 bg-warning/5">
+          <CardHeader>
+            <CardTitle>Everyone has full access</CardTitle>
+            <p className="text-[11px] text-muted-foreground">
+              Role tiers are switched off: every signed-in person can manage integrations, mint
+              API keys and edit any record. The <code className="font-mono">role</code> column is
+              still recorded, so tiers can be turned back on in{' '}
+              <code className="font-mono">lib/roles.ts</code> without losing data. Until then,
+              revoking access is the only control on this page.
+            </p>
+          </CardHeader>
+        </Card>
+      ) : null}
+
+      <Card className="overflow-hidden">
         <CardHeader>
-          <CardTitle>Who has access</CardTitle>
+          <CardTitle>Who has signed in</CardTitle>
           <p className="text-[11px] text-muted-foreground">
-            Sign-in requires a Google account on {ALLOWED_DOMAINS.join(' or ')} that also appears
-            below. Removing a line revokes access on that person&apos;s next request.
+            Sign-in requires a Google account on {ALLOWED_DOMAINS.join(' or ')}. Revoking takes
+            effect on that person&apos;s next request; their existing records stay intact.
           </p>
         </CardHeader>
         <TableWrap>
@@ -53,67 +64,50 @@ export default function TeamPage() {
               <TR>
                 <TH>Name</TH>
                 <TH>Email</TH>
-                <TH>Role</TH>
-                <TH>Title</TH>
-                <TH>Team</TH>
+                <TH>Status</TH>
+                <TH>Last seen</TH>
+                <TH>First signed in</TH>
+                <TH />
               </TR>
             </THead>
             <TBody>
-              {ROSTER.map((p) => (
-                <TR key={p.email}>
-                  <TD>
-                    <span className="inline-flex items-center gap-2">
-                      <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold">
-                        {p.initials}
+              {people.length === 0 ? (
+                <TR>
+                  <TD colSpan={6} className="py-8 text-center text-muted-foreground">
+                    Nobody has signed in yet.
+                  </TD>
+                </TR>
+              ) : (
+                people.map((p) => (
+                  <TR key={p.email} className={p.active ? undefined : 'opacity-60'}>
+                    <TD>
+                      <span className="inline-flex items-center gap-2">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold">
+                          {p.initials}
+                        </span>
+                        <span className="font-medium">{p.name}</span>
                       </span>
-                      <span className="font-medium">{p.name}</span>
-                    </span>
-                  </TD>
-                  <TD className="font-mono text-xs text-muted-foreground">{p.email}</TD>
-                  <TD><Badge tone={ROLE_TONE[p.role]}>{p.role}</Badge></TD>
-                  <TD className="text-muted-foreground">{p.displayRole ?? '—'}</TD>
-                  <TD className="text-muted-foreground">{p.team ?? '—'}</TD>
-                </TR>
-              ))}
-            </TBody>
-          </Table>
-        </TableWrap>
-      </Card>
-
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>What each role can do</CardTitle>
-          <p className="text-[11px] text-muted-foreground">
-            Rendered from the same POLICY table the server enforces, so this cannot drift from
-            the real permissions.
-          </p>
-        </CardHeader>
-        <TableWrap>
-          <Table>
-            <THead>
-              <TR>
-                <TH>Capability</TH>
-                {ROLES.map((r) => <TH key={r} className="text-center">{r}</TH>)}
-              </TR>
-            </THead>
-            <TBody>
-              {PERMISSIONS.map((p) => (
-                <TR key={p.key}>
-                  <TD>
-                    <span className="font-medium">{p.label}</span>
-                    <p className="font-mono text-[10px] text-muted-foreground">{p.key}</p>
-                  </TD>
-                  {ROLES.map((r) => (
-                    <TD key={r} className="text-center">
-                      {can(r, p.key) ? (
-                        <span className="text-success">✓</span>
-                      ) : (
-                        <span className="text-muted-foreground/40">—</span>
-                      )}
                     </TD>
-                  ))}
-                </TR>
-              ))}
+                    <TD className="font-mono text-xs text-muted-foreground">{p.email}</TD>
+                    <TD>
+                      <Badge tone={p.active ? 'success' : 'neutral'}>
+                        {p.active ? 'active' : 'revoked'}
+                      </Badge>
+                    </TD>
+                    <TD className="text-muted-foreground">
+                      {p.lastSeenAt ? fmtRelative(p.lastSeenAt) : '—'}
+                    </TD>
+                    <TD className="text-muted-foreground">{fmtRelative(p.createdAt)}</TD>
+                    <TD className="text-right">
+                      <TeamActions
+                        email={p.email}
+                        active={p.active}
+                        isSelf={p.email === me?.email}
+                      />
+                    </TD>
+                  </TR>
+                ))
+              )}
             </TBody>
           </Table>
         </TableWrap>

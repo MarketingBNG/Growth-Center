@@ -628,6 +628,37 @@ model IntegrationCredential {
   @@map("integration_credential")
 }
 
+/// Everyone who has signed in. Rows are created automatically on first sign-in — the
+/// only gate is the Google account's domain (see ALLOWED_DOMAINS in lib/roles.ts), so
+/// there is no allow-list to maintain and no way to lock the whole team out.
+///
+/// `role` is retained but not currently enforced: can() grants every permission to any
+/// signed-in user. The column is here so tiered access can be switched back on without
+/// a migration — see the note in lib/roles.ts.
+model AppUser {
+  id    String @id @default(cuid())
+
+  /// Canonical address: the local part on the primary domain. Someone signing in as
+  /// name@bngadvisors.com resolves to the same row as name@usaindiacfo.com, which is
+  /// what keeps ownerEmail values across the schema pointing at one person.
+  email String @unique
+
+  name        String
+  initials    String
+  displayRole String?
+  team        String?
+
+  role   Role    @default(partner)
+  active Boolean @default(true)
+
+  lastSeenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("app_user")
+}
+
 /// Lets a website form POST leads to /api/public/v1/leads. Only the hash is stored, so
 /// a leaked database does not leak usable keys; the plaintext is shown once on creation.
 model ApiKey {

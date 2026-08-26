@@ -1,32 +1,19 @@
-// The roster is the sign-in allow-list AND the permission source. Removing a line
-// here revokes that person's access on their next request — same contract as
-// bng-command-center's lib/roles.ts, which this deliberately mirrors.
+// Access rules. Framework-free — no Prisma, no DOM — so tools/*.test.ts can import it
+// directly and so it is safe to pull into a client component.
 //
-// Framework-free so tools/*.test.ts can import it directly.
+// There is no roster here any more. Who may sign in is decided by the email domain
+// alone (ALLOWED_DOMAINS below), and the person's row in `app_user` is created on
+// first sign-in. See lib/users.ts.
 
 export type Role = 'partner' | 'controller' | 'manager' | 'member' | 'viewer';
 
-export type RosterEntry = {
-  name: string;
-  email: string;
-  role: Role;
-  initials: string;
-  displayRole?: string;
-  team?: string;
-};
-
+/**
+ * Both domains resolve to the same person: staff hold an address on each. The primary
+ * is first — it is the one addresses are canonicalised to before they are stored, so
+ * every ownerEmail in the database uses it.
+ */
 export const ALLOWED_DOMAINS = ['usaindiacfo.com', 'bngadvisors.com'];
-
-/** Growth Center's users: the Digital Marketing team, plus firm-wide full access. */
-export const ROSTER: RosterEntry[] = [
-  { name: 'Akshay Nahar', email: 'akshay@usaindiacfo.com', role: 'partner', initials: 'AN', displayRole: 'Partner' },
-  { name: 'Nidhi Jain', email: 'nidhi.jain@usaindiacfo.com', role: 'controller', initials: 'NJ', displayRole: 'Strategic Associate & Controller' },
-  { name: 'Shweta Ramani', email: 'shweta@usaindiacfo.com', role: 'manager', initials: 'SR', displayRole: 'Head — Digital Marketing', team: 'Digital Marketing' },
-  { name: 'Karan', email: 'marketing@usaindiacfo.com', role: 'partner', initials: 'KR', displayRole: 'Developer', team: 'Automation' },
-  { name: 'Dakshita Tanwar', email: 'dakshita@usaindiacfo.com', role: 'member', initials: 'DT', team: 'Digital Marketing' },
-  { name: 'Tanisha Murkya', email: 'tanisha.murkya@usaindiacfo.com', role: 'member', initials: 'TM', team: 'Digital Marketing' },
-  { name: 'Lakshya Dadhich', email: 'lakshya@usaindiacfo.com', role: 'member', initials: 'LD', team: 'Automation' },
-];
+export const PRIMARY_DOMAIN = ALLOWED_DOMAINS[0];
 
 export type Permission =
   | 'growth:read'
@@ -41,9 +28,14 @@ export type Permission =
   | 'settings:manage';
 
 /**
- * One table, consulted by requirePermission(). Adding a role or a permission is an
- * edit here rather than a hunt for `role === 'manager'` across the route handlers.
+ * Tiered access is currently OFF: every signed-in user has every permission.
+ *
+ * POLICY is kept, and kept accurate, because turning tiers back on should be a one-line
+ * change to can() rather than a rewrite. Do not delete it, and do not let it drift —
+ * the Team page renders it as "what each role would be able to do".
  */
+export const ROLES_ENFORCED = false;
+
 const POLICY: Record<Permission, Role[]> = {
   'growth:read': ['partner', 'controller', 'manager', 'member', 'viewer'],
   'crm:write': ['partner', 'controller', 'manager', 'member'],
@@ -57,28 +49,48 @@ const POLICY: Record<Permission, Role[]> = {
   'settings:manage': ['partner', 'controller'],
 };
 
-export function can(role: Role | null | undefined, permission: Permission): boolean {
-  if (!role) return false;
+/** What POLICY says, ignoring whether it is currently enforced. Used by the Team page. */
+export function wouldAllow(role: Role, permission: Permission): boolean {
   return POLICY[permission].includes(role);
 }
 
+/**
+ * The live check, called by requirePermission() on every guarded route.
+ *
+ * While ROLES_ENFORCED is false this is a signed-in check and nothing more. The `role`
+ * argument is still required so the call sites do not have to change when tiers return.
+ */
+export function can(role: Role | null | undefined, permission: Permission): boolean {
+  if (!role) return false;
+  if (!ROLES_ENFORCED) return true;
+  return wouldAllow(role, permission);
+}
+
 export const isFullAccess = (role: Role | null | undefined) =>
-  role === 'partner' || role === 'controller';
+  !!role && (!ROLES_ENFORCED || role === 'partner' || role === 'controller');
+
+/** Is this address allowed to sign in at all? The only gate there is. */
+export function isAllowedEmail(inputEmail: string): boolean {
+  return canonicalEmail(inputEmail) !== null;
+}
 
 /**
- * Roster lookup. Treats bngadvisors.com and usaindiacfo.com as the same address
- * because staff have both, but does NOT guess beyond that — no local-part prefix
- * matching, which in Command Center once signed four non-roster accounts in as
- * roster members.
+ * Reduces an address to the single form stored in `app_user.email`.
+ *
+ * Matches on the whole local part and nothing less. An earlier prefix-matching version
+ * of this in Command Center once signed four non-roster accounts in as roster members,
+ * so `shweta.extra@` must not resolve to `shweta@`.
  */
-export function findUserByEmail(inputEmail: string): RosterEntry | null {
+export function canonicalEmail(inputEmail: string): string | null {
   const email = (inputEmail || '').trim().toLowerCase();
-  if (!email.includes('@')) return null;
+  const at = email.indexOf('@');
+  if (at <= 0 || email.indexOf('@', at + 1) !== -1) return null;
 
-  const [local, domain] = email.split('@');
-  if (!ALLOWED_DOMAINS.includes(domain)) return null;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!local || !ALLOWED_DOMAINS.includes(domain)) return null;
 
-  return ROSTER.find((e) => e.email.split('@')[0] === local) ?? null;
+  return `${local}@${PRIMARY_DOMAIN}`;
 }
 
 export function initialsOf(name: string): string {
@@ -88,5 +100,9 @@ export function initialsOf(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Everyone who can own a lead, deal or task. Viewers are excluded. */
-export const ASSIGNABLE = ROSTER.filter((e) => e.role !== 'viewer');
+/** Falls back to the local part when Google gives us no display name. */
+export function nameFromEmail(email: string): string {
+  const local = (email.split('@')[0] || '').replace(/[._-]+/g, ' ').trim();
+  if (!local) return 'Unknown';
+  return local.replace(/\b\w/g, (c) => c.toUpperCase());
+}

@@ -6,14 +6,16 @@
 
 import { on } from './events.ts';
 import { db } from './prisma.ts';
-import { ASSIGNABLE } from './roles.ts';
+import { listAssignable } from './users.ts';
 
 /**
  * Round-robins unassigned leads across the marketing team so nothing sits ownerless.
  * Deliberately simple — least-loaded rather than any scoring model.
  */
 export async function pickOwner(): Promise<string | null> {
-  const eligible = ASSIGNABLE.filter((e) => e.team === 'Digital Marketing');
+  // Everyone active, not a named team: teams are no longer hard-coded, they are a
+  // free-text column someone may or may not have filled in.
+  const eligible = await listAssignable();
   if (!eligible.length) return null;
 
   const counts = await db().lead.groupBy({

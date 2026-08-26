@@ -1,24 +1,19 @@
 import type { NextAuthOptions, Session } from 'next-auth';
 import { getServerSession } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import { ALLOWED_DOMAINS, can, findUserByEmail, type Permission, type Role } from './roles.ts';
+import { can, isAllowedEmail, type Permission } from './roles.ts';
+import { findUserByEmail, recordSignIn, type AppUser } from './users.ts';
 
-export type CurrentUser = {
-  name: string;
-  email: string;
-  role: Role;
-  initials: string;
-  displayRole?: string;
-  team?: string;
-};
+export type CurrentUser = AppUser;
 
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      // `hd` only hints Google's account chooser. The signIn callback is the boundary.
-      authorization: { params: { hd: 'usaindiacfo.com', prompt: 'select_account' } },
+      // No `hd` hint: it pins the chooser to a single domain, and bngadvisors.com
+      // addresses are equally valid. The signIn callback is the boundary anyway.
+      authorization: { params: { prompt: 'select_account' } },
     }),
   ],
   session: { strategy: 'jwt', maxAge: 8 * 60 * 60 },
@@ -53,59 +48,33 @@ export const authOptions: NextAuthOptions = {
   },
   pages: { signIn: '/signin', error: '/signin' },
   callbacks: {
+    // The domain is the whole gate. Anyone with a company Google account gets in, and
+    // recordSignIn creates their app_user row the first time. It returns null only for
+    // an account that has been deactivated on the Team page.
     async signIn({ user }) {
-      const email = (user.email || '').toLowerCase();
-      if (!ALLOWED_DOMAINS.includes(email.split('@')[1] || '')) return false;
-      return !!findUserByEmail(email);
+      const email = user.email || '';
+      if (!isAllowedEmail(email)) return false;
+      return !!(await recordSignIn(email, user.name));
     },
-    // Re-read the roster on every refresh rather than freezing the role at sign-in, so
-    // a role change or a removal takes effect inside the session.
+    // Only identity is frozen into the token. Name, role and status are read from the
+    // database per request by currentUser(), so a change on the Team page takes effect
+    // inside a live session rather than at the next sign-in.
     async jwt({ token }) {
-      const entry = findUserByEmail((token.email || '') as string);
-      if (entry) {
-        token.name = entry.name;
-        token.role = entry.role;
-        token.initials = entry.initials;
-        token.displayRole = entry.displayRole ?? '';
-        token.team = entry.team ?? '';
-      } else {
-        token.role = undefined;
-      }
       return token;
     },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.name = (token.name as string) ?? '';
-        Object.assign(session.user, {
-          role: token.role,
-          initials: token.initials,
-          displayRole: token.displayRole,
-          team: token.team,
-        });
-      }
+    async session({ session }) {
       return session;
     },
   },
 };
 
-function toUser(session: Session | null): CurrentUser | null {
+export async function currentUser(): Promise<CurrentUser | null> {
+  const session: Session | null = await getServerSession(authOptions);
   const email = session?.user?.email;
   if (!email) return null;
-  // Trust the roster, not the session payload — the session is only proof of identity.
-  const entry = findUserByEmail(email);
-  if (!entry) return null;
-  return {
-    name: entry.name,
-    email: entry.email,
-    role: entry.role,
-    initials: entry.initials,
-    displayRole: entry.displayRole,
-    team: entry.team,
-  };
-}
-
-export async function currentUser(): Promise<CurrentUser | null> {
-  return toUser(await getServerSession(authOptions));
+  // Trust the database, not the session payload — the session is only proof of
+  // identity. A deactivated account resolves to null here and is signed out everywhere.
+  return findUserByEmail(email);
 }
 
 export class HttpError extends Error {

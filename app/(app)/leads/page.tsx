@@ -15,13 +15,13 @@ import { rangeParam } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { leadFilters, listLeads } from '@/lib/leads';
 import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
-import { ASSIGNABLE } from '@/lib/roles';
+import { listAssignable, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
 import { NewLeadButton } from './NewLeadButton';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
-const FILTERS = [
+const filtersFor = (people: AppUser[]) => [
   { name: 'status', label: 'Status', options: LEAD_STATUSES.map((s) => ({ value: s, label: s })) },
   {
     name: 'sourceType',
@@ -33,7 +33,7 @@ const FILTERS = [
     label: 'Owner',
     options: [
       { value: 'unassigned', label: 'Unassigned' },
-      ...ASSIGNABLE.map((a) => ({ value: a.email, label: a.name })),
+      ...people.map((a) => ({ value: a.email, label: a.name })),
     ],
   },
 ];
@@ -56,6 +56,7 @@ export default async function LeadsPage({
     );
   }
 
+  const people = await listAssignable();
   const q = pageQuery(params);
   const { value, days, bucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
@@ -79,7 +80,7 @@ export default async function LeadsPage({
 
       <MetricsBand {...band} />
 
-      <FilterBar filters={FILTERS} searchPlaceholder="Name, email or company…" />
+      <FilterBar filters={filtersFor(people)} searchPlaceholder="Name, email or company…" />
 
       <Card className="overflow-hidden">
         {rows.length === 0 ? (

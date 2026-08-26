@@ -8,18 +8,20 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { LEAD_STATUSES } from '@/lib/enums';
-import { ASSIGNABLE } from '@/lib/roles';
+import type { AppUser } from '@/lib/users';
 
 export function LeadActions({
   leadId,
   status,
   ownerEmail,
   convertedOpportunityId,
+  people,
 }: {
   leadId: string;
   status: string;
   ownerEmail: string | null;
   convertedOpportunityId: string | null;
+  people: AppUser[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -70,7 +72,7 @@ export function LeadActions({
         onChange={(e) => patch({ ownerEmail: e.target.value || null })}
       >
         <option value="">Unassigned</option>
-        {ASSIGNABLE.map((a) => (
+        {people.map((a) => (
           <option key={a.email} value={a.email}>
             {a.name}
           </option>

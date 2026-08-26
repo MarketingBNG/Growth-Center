@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { pageQuery } from '@/lib/query';
-import { ASSIGNABLE } from '@/lib/roles';
+import { listAssignable } from '@/lib/users';
 import { TASK_STATUSES } from '@/lib/enums';
 import { fmtDate } from '@/lib/format';
 import { CompleteButton } from './CompleteButton';
@@ -32,6 +32,7 @@ export default async function TasksPage({
   }
 
   const params = await searchParams;
+  const people = await listAssignable();
   const q = pageQuery(params);
   const status = typeof params.status === 'string' ? params.status : '';
   const assignee = typeof params.assigneeEmail === 'string' ? params.assigneeEmail : '';
@@ -76,7 +77,7 @@ export default async function TasksPage({
             label: 'Assignee',
             options: [
               { value: 'unassigned', label: 'Unassigned' },
-              ...ASSIGNABLE.map((a) => ({ value: a.email, label: a.name })),
+              ...people.map((a) => ({ value: a.email, label: a.name })),
             ],
           },
         ]}
