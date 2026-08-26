@@ -1,12 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ADMIN_EMAIL,
+  ADMIN_NAME,
   ALLOWED_DOMAINS,
   PRIMARY_DOMAIN,
   ROLES_ENFORCED,
   can,
   canonicalEmail,
   initialsOf,
+  isAdmin,
   isAllowedEmail,
   isFullAccess,
   nameFromEmail,
@@ -86,6 +89,27 @@ test('POLICY is intact underneath, ready to re-enable', () => {
 test('isFullAccess is true for anyone signed in while tiers are off', () => {
   assert.equal(isFullAccess('viewer'), true);
   assert.equal(isFullAccess(null), false);
+});
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+
+test('isAdmin matches the admin account, however it is typed', () => {
+  assert.equal(isAdmin('marketing@usaindiacfo.com'), true);
+  assert.equal(isAdmin('  Marketing@UsaIndiaCFO.com  '), true);
+  // The same mailbox on the second domain is the same account.
+  assert.equal(isAdmin('marketing@bngadvisors.com'), true);
+});
+
+test('isAdmin does not match a lookalike address', () => {
+  assert.equal(isAdmin('marketing2@usaindiacfo.com'), false);
+  assert.equal(isAdmin('marketing@gmail.com'), false);
+  assert.equal(isAdmin(''), false);
+  assert.equal(isAdmin(null), false);
+});
+
+test('the admin address is itself a valid company address', () => {
+  assert.equal(canonicalEmail(ADMIN_EMAIL), ADMIN_EMAIL);
+  assert.equal(ADMIN_NAME, 'Marketing');
 });
 
 // ── Display helpers ───────────────────────────────────────────────────────────

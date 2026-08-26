@@ -15,6 +15,21 @@ export type Role = 'partner' | 'controller' | 'manager' | 'member' | 'viewer';
 export const ALLOWED_DOMAINS = ['usaindiacfo.com', 'bngadvisors.com'];
 export const PRIMARY_DOMAIN = ALLOWED_DOMAINS[0];
 
+/**
+ * The admin account. Not a permission tier — while ROLES_ENFORCED is false everybody
+ * already has every permission. What it marks is the account that must always exist and
+ * must never be revoked, so there is one identity guaranteed to be able to get back in.
+ *
+ * It is a shared mailbox rather than a person, so its display name is fixed here instead
+ * of being taken from whatever Google returns for it.
+ */
+export const ADMIN_EMAIL = 'marketing@usaindiacfo.com';
+export const ADMIN_NAME = 'Marketing';
+
+export function isAdmin(email: string | null | undefined): boolean {
+  return !!email && canonicalEmail(email) === ADMIN_EMAIL;
+}
+
 export type Permission =
   | 'growth:read'
   | 'crm:write'

@@ -5,9 +5,9 @@ import { NoDatabaseState } from '@/components/patterns/state';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { hasDb } from '@/lib/prisma';
-import { ALLOWED_DOMAINS, ROLES_ENFORCED } from '@/lib/roles';
+import { ADMIN_EMAIL, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin } from '@/lib/roles';
 import { fmtRelative } from '@/lib/format';
-import { listUsers } from '@/lib/users';
+import { ensureAdmin, listUsers } from '@/lib/users';
 import { TeamActions } from './TeamActions';
 
 export const metadata = { title: 'Team · Growth Center' };
@@ -25,6 +25,8 @@ export default async function TeamPage() {
     );
   }
 
+  // So the admin account is on the page from the start, signed in or not.
+  await ensureAdmin();
   const [people, me] = await Promise.all([listUsers(), currentUser()]);
   const active = people.filter((p) => p.active).length;
 
@@ -55,7 +57,9 @@ export default async function TeamPage() {
           <CardTitle>Who has signed in</CardTitle>
           <p className="text-[11px] text-muted-foreground">
             Sign-in requires a Google account on {ALLOWED_DOMAINS.join(' or ')}. Revoking takes
-            effect on that person&apos;s next request; their existing records stay intact.
+            effect on that person&apos;s next request; their existing records stay intact.{' '}
+            <code className="font-mono">{ADMIN_EMAIL}</code> is the admin and cannot be revoked.
+            Google returns some mangled display names, so any name here can be corrected.
           </p>
         </CardHeader>
         <TableWrap>
@@ -86,6 +90,7 @@ export default async function TeamPage() {
                           {p.initials}
                         </span>
                         <span className="font-medium">{p.name}</span>
+                        {isAdmin(p.email) ? <Badge tone="purple">admin</Badge> : null}
                       </span>
                     </TD>
                     <TD className="font-mono text-xs text-muted-foreground">{p.email}</TD>
@@ -101,8 +106,10 @@ export default async function TeamPage() {
                     <TD className="text-right">
                       <TeamActions
                         email={p.email}
+                        name={p.name}
                         active={p.active}
                         isSelf={p.email === me?.email}
+                        isAdmin={isAdmin(p.email)}
                       />
                     </TD>
                   </TR>

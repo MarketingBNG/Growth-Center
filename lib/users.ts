@@ -5,7 +5,15 @@
 // Server-only — imports Prisma. Client components take users as props.
 
 import { db, prisma } from './prisma.ts';
-import { canonicalEmail, initialsOf, nameFromEmail, type Role } from './roles.ts';
+import {
+  ADMIN_EMAIL,
+  ADMIN_NAME,
+  canonicalEmail,
+  initialsOf,
+  isAdmin,
+  nameFromEmail,
+  type Role,
+} from './roles.ts';
 
 export type AppUser = {
   name: string;
@@ -55,11 +63,16 @@ export async function findUserByEmail(inputEmail: string): Promise<AppUser | nul
 }
 
 /**
- * Called from the signIn callback. Creates the row on a first sign-in and refreshes the
- * display name on later ones, so a name changed in Google Workspace follows through.
+ * Called from the signIn callback. Creates the row on a first sign-in; later sign-ins
+ * only stamp lastSeenAt.
  *
- * Deliberately does NOT reactivate a deactivated account: someone who has been switched
- * off must not switch themselves back on by signing in again.
+ * The name is deliberately NOT refreshed from Google on every visit. Workspace display
+ * names here are not clean — one real account comes back as
+ * "Shweta Ramani_Digital Marketing" — so re-reading it each time would keep undoing any
+ * correction. First value wins, and the admin account is fixed outright.
+ *
+ * Also deliberately does not reactivate a deactivated account: someone switched off must
+ * not switch themselves back on by signing in again.
  */
 export async function recordSignIn(inputEmail: string, googleName?: string | null): Promise<AppUser | null> {
   const email = canonicalEmail(inputEmail);
@@ -68,17 +81,60 @@ export async function recordSignIn(inputEmail: string, googleName?: string | nul
   const client = prisma();
   if (!client) return null;
 
-  const name = (googleName || '').trim() || nameFromEmail(email);
+  const admin = isAdmin(email);
+  const name = admin ? ADMIN_NAME : (googleName || '').trim() || nameFromEmail(email);
 
   const row = await client.appUser.upsert({
     where: { email },
-    create: { email, name, initials: initialsOf(name), lastSeenAt: new Date() },
-    update: { name, initials: initialsOf(name), lastSeenAt: new Date() },
+    create: {
+      email,
+      name,
+      initials: initialsOf(name),
+      displayRole: admin ? 'Admin' : null,
+      lastSeenAt: new Date(),
+    },
+    // The admin's name is re-asserted; everyone else keeps whatever they already have.
+    update: admin
+      ? { name, initials: initialsOf(name), displayRole: 'Admin', active: true, lastSeenAt: new Date() }
+      : { lastSeenAt: new Date() },
     select: { ...shape, active: true },
   });
 
   if (!row.active) return null;
   return toUser(row);
+}
+
+/**
+ * Makes sure the admin row exists even if nobody has signed in with it yet, so the
+ * account is present on the Team page from the start. Idempotent; safe to re-run.
+ */
+export async function ensureAdmin() {
+  const client = prisma();
+  if (!client) return null;
+
+  return client.appUser.upsert({
+    where: { email: ADMIN_EMAIL },
+    create: {
+      email: ADMIN_EMAIL,
+      name: ADMIN_NAME,
+      initials: initialsOf(ADMIN_NAME),
+      displayRole: 'Admin',
+      role: 'partner',
+    },
+    update: { name: ADMIN_NAME, initials: initialsOf(ADMIN_NAME), displayRole: 'Admin', active: true },
+  });
+}
+
+/** Renames someone. The Team page uses this to fix the mangled names Google returns. */
+export async function renameUser(inputEmail: string, newName: string) {
+  const email = canonicalEmail(inputEmail);
+  if (!email) throw new Error(`Not a valid company address: ${inputEmail}`);
+  if (isAdmin(email)) throw new Error('The admin account name is fixed.');
+
+  const name = newName.trim();
+  if (!name) throw new Error('A name is required.');
+
+  return db().appUser.update({ where: { email }, data: { name, initials: initialsOf(name) } });
 }
 
 /** Everyone who can own a lead, deal or task. */
@@ -110,5 +166,8 @@ export async function listUsers() {
 export async function setActive(inputEmail: string, active: boolean) {
   const email = canonicalEmail(inputEmail);
   if (!email) throw new Error(`Not a valid company address: ${inputEmail}`);
+  // The admin is the guaranteed way back in. Revoking it could leave nobody able to
+  // restore anyone, since there is no tier above it.
+  if (isAdmin(email) && !active) throw new Error('The admin account cannot be revoked.');
   return db().appUser.update({ where: { email }, data: { active } });
 }
