@@ -401,3 +401,49 @@ export async function setConfig(
 
   return config;
 }
+
+export type SyncAllResult = {
+  provider: string;
+  status: 'synced' | 'skipped' | 'failed';
+  rows?: number;
+  reason?: string;
+};
+
+/**
+ * Syncs every connected provider, for the scheduler.
+ *
+ * Sequential on purpose: these run unattended against third-party rate limits, and a
+ * handful of providers finishing a few seconds apart costs nothing. One provider
+ * failing must not stop the others, so each is caught and reported rather than thrown —
+ * sync() has already recorded the error against its own integration row.
+ */
+export async function syncAll(days = 30): Promise<SyncAllResult[]> {
+  const rows = await db().integration.findMany({
+    where: { credential: { isNot: null } },
+    select: { provider: true, state: true },
+  });
+
+  const results: SyncAllResult[] = [];
+
+  for (const row of rows) {
+    const provider = getProvider(row.provider);
+    if (!provider) {
+      // A row left behind by a provider that has since been removed from the registry.
+      results.push({ provider: row.provider, status: 'skipped', reason: 'Not a registered provider.' });
+      continue;
+    }
+    if (!provider.isConfigured() || !hasEncryptionKey()) {
+      results.push({ provider: row.provider, status: 'skipped', reason: 'Missing environment variables.' });
+      continue;
+    }
+
+    try {
+      const { rows: written } = await sync(row.provider, days);
+      results.push({ provider: row.provider, status: 'synced', rows: written });
+    } catch (e) {
+      results.push({ provider: row.provider, status: 'failed', reason: (e as Error).message });
+    }
+  }
+
+  return results;
+}
