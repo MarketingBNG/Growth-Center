@@ -153,7 +153,11 @@ function Board({ columns }: { columns: Column[] }) {
                 </p>
               </div>
 
-              <div className="flex-1 space-y-2">
+              {/* Scrolls inside the column. With a real CRM behind it one stage can hold
+                  hundreds of deals, and an unbounded column stretched the page so far
+                  that the other three stages were off-screen. The drop target is this
+                  box, so dragging into a scrolled column still works. */}
+              <div className="-mr-1.5 max-h-[min(60vh,520px)] flex-1 space-y-2 overflow-y-auto pr-1.5">
                 <AnimatePresence initial={false}>
                   {col.cards.map((deal) => (
                     <motion.div
@@ -171,7 +175,9 @@ function Board({ columns }: { columns: Column[] }) {
                       }`}
                     >
                       <Link href={`/pipeline/${deal.id}`} className="block hover:text-primary">
-                        <p className="text-[12.5px] font-bold leading-[1.35]">{deal.name}</p>
+                        <p className="break-words text-[12.5px] font-bold leading-[1.35]">
+                          {deal.name}
+                        </p>
                       </Link>
                       {deal.companyName ? (
                         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">

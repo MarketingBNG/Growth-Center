@@ -204,6 +204,12 @@ export async function disconnect(id: string, actorEmail: string) {
       connectedByEmail: null,
       connectedAt: null,
       config: undefined,
+      // Reconnecting means starting clean. Without this the watermark survives, so the
+      // next sync would ask only for records modified since the old connection and quietly
+      // skip everything already imported — which is also the only way to re-pull records
+      // whose stored copy is wrong.
+      syncCursor: Prisma.DbNull,
+      syncedThrough: null,
     },
   });
   await db().auditEvent.create({

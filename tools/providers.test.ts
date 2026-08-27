@@ -8,7 +8,7 @@ import {
   walkedPast,
 } from '../lib/integrations/providers/meta-social.ts';
 import { searchConsole } from '../lib/integrations/providers/search-console.ts';
-import { readCursor } from '../lib/integrations/providers/zoho-crm.ts';
+import { readCursor, repairEncoding } from '../lib/integrations/providers/zoho-crm.ts';
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { leadSourceType, leadStatus, matchStage } from '../lib/integrations/crm-mapping.ts';
@@ -248,4 +248,39 @@ test('every registered provider implements sync or syncPaged', () => {
   for (const [id, provider] of Object.entries(PROVIDERS)) {
     assert.ok(provider.sync ?? provider.syncPaged, `${id} implements neither`);
   }
+});
+
+// ── mojibake ───────────────────────────────────────────────────────────────────
+// Names arrived on the Pipeline board as "ÃÂ¤ÃÂ°ÃÂ¾…". The records went into Zoho
+// already broken, so the repair has to happen on the way in.
+
+test('repairEncoding recovers a doubly-encoded name', () => {
+  const original = 'श्री राम';
+  const once = Buffer.from(original, 'utf8').toString('latin1');
+  const twice = Buffer.from(once, 'utf8').toString('latin1');
+  assert.equal(repairEncoding(twice), original);
+});
+
+test('repairEncoding recovers a singly-encoded name', () => {
+  const original = 'Ronak Śhah';
+  const once = Buffer.from(original, 'utf8').toString('latin1');
+  assert.equal(repairEncoding(once), original);
+});
+
+test('repairEncoding leaves ordinary accented text alone', () => {
+  // The failure that would matter more than the bug: mangling names that are fine.
+  for (const name of ['Renée Dubois', 'José Muñoz', 'Ronak Shah', 'Åsa Lindqvist', '']) {
+    assert.equal(repairEncoding(name), name);
+  }
+});
+
+test('repairEncoding leaves text that is already correct in its own script', () => {
+  for (const name of ['श्री राम', '株式会社テスト', 'Ελένη']) {
+    assert.equal(repairEncoding(name), name);
+  }
+});
+
+test('repairEncoding is idempotent', () => {
+  const broken = Buffer.from('श्री', 'utf8').toString('latin1');
+  assert.equal(repairEncoding(repairEncoding(broken)), repairEncoding(broken));
 });
