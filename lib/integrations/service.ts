@@ -4,7 +4,15 @@ import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { leadSourceType, leadStatus, matchStage } from './crm-mapping.ts';
 import { getProvider, providerList } from './registry.ts';
-import { IntegrationError, type ConfigField, type ConnectInput, type MetricPoint } from './types.ts';
+import {
+  IntegrationError,
+  type ConfigField,
+  type ConnectInput,
+  type DateRange,
+  type MetricPoint,
+  type SyncCursor,
+  type SyncResult,
+} from './types.ts';
 
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.
@@ -873,6 +881,15 @@ async function renewIfNearExpiry(
   return renewed.secret;
 }
 
+/**
+ * How long one sync request may spend fetching before it saves its place and returns.
+ *
+ * Under Vercel's 300s function ceiling with room for the final write and the response.
+ * A pull that needs longer is not an error — it comes back with a cursor and the caller
+ * calls again, so no amount of data can turn into a timeout.
+ */
+const SYNC_BUDGET_MS = 230_000;
+
 export async function sync(id: string, days = 30) {
   const provider = requireProvider(id);
 
@@ -882,6 +899,8 @@ export async function sync(id: string, days = 30) {
       id: true,
       state: true,
       config: true,
+      syncCursor: true,
+      syncedThrough: true,
       credential: { select: { ciphertext: true, iv: true, authTag: true, expiresAt: true } },
     },
   });
@@ -901,43 +920,23 @@ export async function sync(id: string, days = 30) {
     credential = await renewIfNearExpiry(provider, integration.id, credential, integration.credential.expiresAt);
 
     const config = (integration.config as Record<string, unknown>) ?? {};
-    const points = await provider.sync(credential, config, { from, to });
 
-    // metric_snapshot first — it is the honest archive of what the provider reported.
-    // The materialisers after it populate the tables the pages actually read.
-    const rows = await writePoints(id, points);
-    const campaignDays = await writeCampaignSpend(provider, points);
-    const socialRows = await writeSocialActivity(integration.id, points);
-    const seoRows = await writeSeoRows(provider, config, points);
-    const crmRows = await writeCrmRecords(id, points);
+    const outcome = provider.syncPaged
+      ? await runPaged(provider, integration, credential, config, { from, to })
+      : await runWhole(provider, integration, credential, config, { from, to });
 
     await db().integration.update({
       where: { id: integration.id },
       data: {
         state: 'connected',
         lastSyncAt: new Date(),
-        lastSyncRows: rows,
+        lastSyncRows: outcome.rows,
         lastError: null,
         lastErrorAt: null,
       },
     });
 
-    // Each materialiser is named separately so a card cannot report a healthy metric row
-    // count while the tables the pages actually read stayed empty — which is the failure
-    // Meta Ads shipped with once.
-    const materialised = [
-      campaignDays ? `${campaignDays} campaign-days` : null,
-      socialRows ? `${socialRows} social rows` : null,
-      seoRows ? `${seoRows} SEO rows` : null,
-      crmRows ? `${crmRows} CRM records` : null,
-    ].filter(Boolean);
-
-    return {
-      rows,
-      detail: materialised.length
-        ? `Wrote ${rows} metric rows, ${materialised.join(', ')}.`
-        : `Wrote ${rows} metric rows.`,
-    };
+    return outcome;
   } catch (e) {
     const message = e instanceof IntegrationError ? e.message : ((e as Error).message ?? 'Sync failed.');
     await db().integration.update({
@@ -947,6 +946,119 @@ export async function sync(id: string, days = 30) {
     await dispatch({ type: 'integration.sync_failed', provider: id, message });
     throw new IntegrationError(message);
   }
+}
+
+/** A provider that returns everything in one call. */
+async function runWhole(
+  provider: ReturnType<typeof requireProvider>,
+  integration: { id: string },
+  credential: string,
+  config: Record<string, unknown>,
+  range: DateRange,
+): Promise<SyncResult> {
+  if (!provider.sync) {
+    throw new IntegrationError(`${provider.name} implements neither sync nor syncPaged.`);
+  }
+  const points = await provider.sync(credential, config, range);
+  const counts = await persist(provider, integration.id, config, points);
+  return { rows: counts.rows, detail: describe(counts), done: true };
+}
+
+/**
+ * A provider pulled in slices.
+ *
+ * Each slice is written and materialised before the next is fetched, so a run that stops
+ * at the deadline leaves real, visible rows behind rather than nothing. The cursor is
+ * saved after every slice for the same reason: a crash costs one slice, not the backfill.
+ */
+async function runPaged(
+  provider: ReturnType<typeof requireProvider>,
+  integration: { id: string; syncCursor: unknown; syncedThrough: Date | null },
+  credential: string,
+  config: Record<string, unknown>,
+  range: DateRange,
+): Promise<SyncResult> {
+  const startedAt = new Date();
+  const deadline = Date.now() + SYNC_BUDGET_MS;
+
+  let cursor = (integration.syncCursor as SyncCursor | null) ?? null;
+
+  // Mid-backfill, keep pulling everything: a watermark applied now would skip the records
+  // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
+  const since = cursor ? null : integration.syncedThrough;
+
+  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0 };
+
+  do {
+    const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
+    const counts = await persist(provider, integration.id, config, slice.points);
+
+    total.rows += counts.rows;
+    total.campaignDays += counts.campaignDays;
+    total.socialRows += counts.socialRows;
+    total.seoRows += counts.seoRows;
+    total.crmRows += counts.crmRows;
+
+    cursor = slice.cursor;
+    await db().integration.update({
+      where: { id: integration.id },
+      data: { syncCursor: (cursor ?? Prisma.DbNull) as Prisma.InputJsonValue },
+    });
+  } while (cursor && Date.now() < deadline);
+
+  const done = cursor === null;
+
+  if (done) {
+    // Stamped with when the pass STARTED, not when it ended. Anything modified while it
+    // was running falls inside the next window instead of into the gap between them.
+    await db().integration.update({
+      where: { id: integration.id },
+      data: { syncedThrough: startedAt },
+    });
+  }
+
+  const detail = done
+    ? `${describe(total)}${since ? ' (changes only).' : '.'}`
+    : `${describe(total)} so far — more to fetch, continuing.`;
+
+  return { rows: total.rows, detail, done };
+}
+
+type Counts = { rows: number; campaignDays: number; socialRows: number; seoRows: number; crmRows: number };
+
+/** metric_snapshot first — the honest archive of what the provider reported — then the
+ *  materialisers that populate the tables the pages actually read. */
+async function persist(
+  provider: ReturnType<typeof requireProvider>,
+  integrationId: string,
+  config: Record<string, unknown>,
+  points: MetricPoint[],
+): Promise<Counts> {
+  return {
+    rows: await writePoints(provider.id, points),
+    campaignDays: await writeCampaignSpend(provider, points),
+    socialRows: await writeSocialActivity(integrationId, points),
+    seoRows: await writeSeoRows(provider, config, points),
+    crmRows: await writeCrmRecords(provider.id, points),
+  };
+}
+
+/**
+ * Each materialiser is named separately so a card cannot report a healthy metric row
+ * count while the tables the pages actually read stayed empty — which is the failure Meta
+ * Ads shipped with once, and Zoho CRM after it.
+ */
+function describe(c: Counts): string {
+  const materialised = [
+    c.campaignDays ? `${c.campaignDays} campaign-days` : null,
+    c.socialRows ? `${c.socialRows} social rows` : null,
+    c.seoRows ? `${c.seoRows} SEO rows` : null,
+    c.crmRows ? `${c.crmRows} CRM records` : null,
+  ].filter(Boolean);
+
+  return materialised.length
+    ? `Wrote ${c.rows} metric rows, ${materialised.join(', ')}`
+    : `Wrote ${c.rows} metric rows`;
 }
 
 /**
@@ -1015,6 +1127,8 @@ export type SyncAllResult = {
   status: 'synced' | 'skipped' | 'failed';
   rows?: number;
   reason?: string;
+  /** False when a backfill still has more to fetch; the next scheduled run resumes it. */
+  done?: boolean;
 };
 
 /**
@@ -1046,8 +1160,10 @@ export async function syncAll(days = 30): Promise<SyncAllResult[]> {
     }
 
     try {
-      const { rows: written } = await sync(row.provider, days);
-      results.push({ provider: row.provider, status: 'synced', rows: written });
+      // One slice per provider per run. A backfill that needs longer keeps its cursor
+      // and resumes on the next run, rather than one large provider starving the rest.
+      const { rows: written, done } = await sync(row.provider, days);
+      results.push({ provider: row.provider, status: 'synced', rows: written, done });
     } catch (e) {
       results.push({ provider: row.provider, status: 'failed', reason: (e as Error).message });
     }

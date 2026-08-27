@@ -615,6 +615,15 @@ model Integration {
 
   lastSyncAt      DateTime?
   lastSyncRows    Int?
+
+  /// Where a paged pull stopped when it ran out of time. Non-null means a backfill is in
+  /// progress; the next run resumes from here instead of starting again.
+  syncCursor Json?
+
+  /// High-water mark. Once a full pass completes, later syncs ask the provider only for
+  /// records modified since this instant, which is what keeps a nightly sync in seconds
+  /// rather than re-importing the whole CRM.
+  syncedThrough DateTime?
   lastError       String?
   lastErrorAt     DateTime?
   connectedByEmail String?

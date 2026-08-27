@@ -17,9 +17,12 @@ const ACCOUNTS = `https://accounts.zoho.${DC}`;
 const API = `https://www.zohoapis.${DC}/crm/v6`;
 const SCOPE = 'ZohoCRM.modules.READ,ZohoCRM.settings.READ';
 
-/** Zoho caps per_page at 200. Bounded so a large CRM cannot make one sync run forever;
- *  what was skipped is reported rather than silently dropped. 400 pages is 80,000 records
- *  per module, comfortably above this org's largest (26,000 leads). */
+/** Zoho caps per_page at 200.
+ *
+ *  MAX_PAGES is not the time budget — the caller's deadline is, and the cursor means a
+ *  pull can span as many runs as it needs. This is only a backstop against a module that
+ *  never stops claiming more_records. 400 pages is 80,000 records, comfortably above this
+ *  org's largest (26,000 leads). */
 const PER_PAGE = 200;
 const MAX_PAGES = 400;
 
@@ -55,45 +58,52 @@ type Module = 'Leads' | 'Contacts' | 'Deals';
 type Row = Record<string, unknown>;
 
 /**
- * Every record in a module, following Zoho's `more_records` flag.
+ * One page of one module.
  *
- * Returns `truncated` rather than throwing when MAX_PAGES is hit: a partial import is
- * more useful than none, but the caller has to be able to say so on the card instead of
- * presenting a truncated set as complete.
+ * Deliberately a single page rather than a whole module: with 26,000 leads here, "fetch
+ * everything then write it" is a request that cannot reliably finish, and a partial run
+ * would leave nothing behind. The caller writes each page before asking for the next.
+ *
+ * `since` becomes an If-Modified-Since header, which is what makes a routine sync a
+ * handful of changed records instead of the whole CRM again.
  */
-async function readAll(token: string, moduleName: Module): Promise<{ rows: Row[]; truncated: boolean }> {
-  const rows: Row[] = [];
+async function readPage(
+  token: string,
+  moduleName: Module,
+  cursor: { page: number; pageToken: string | null },
+  since: Date | null,
+): Promise<{ rows: Row[]; nextPageToken: string | null; more: boolean }> {
+  const params = new URLSearchParams({
+    fields: FIELDS[moduleName],
+    per_page: String(PER_PAGE),
+  });
 
-  let pageToken: string | null = null;
+  // `page` alone stops working past 2,000 records — beyond that Zoho requires the token
+  // it hands back in info.next_page_token. Paging by number would have silently returned
+  // the first 2,000 leads and presented them as the whole CRM.
+  if (cursor.pageToken) params.set('page_token', cursor.pageToken);
+  else params.set('page', String(cursor.page));
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    // `page` alone stops working past 2,000 records — Zoho requires the token it hands
-    // back in `info.next_page_token` beyond that. With 26,000 leads here, paging by
-    // number would have silently returned the first 2,000 and called it the whole CRM.
-    const params = new URLSearchParams({
-      fields: FIELDS[moduleName],
-      per_page: String(PER_PAGE),
-    });
-    if (pageToken) params.set('page_token', pageToken);
-    else params.set('page', String(page));
-    const res = await fetch(`${API}/${moduleName}?${params}`, {
-      headers: { authorization: `Zoho-oauthtoken ${token}` },
-    });
+  const headers: Record<string, string> = { authorization: `Zoho-oauthtoken ${token}` };
+  if (since) headers['If-Modified-Since'] = since.toISOString();
 
-    // An empty module answers 204 with no body, which is a success, not a failure.
-    if (res.status === 204) return { rows, truncated: false };
-    if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
+  const res = await fetch(`${API}/${moduleName}?${params}`, { headers });
 
-    const json = (await res.json()) as {
-      data?: Row[];
-      info?: { more_records?: boolean; next_page_token?: string | null };
-    };
-    rows.push(...(json.data ?? []));
-    if (!json.info?.more_records) return { rows, truncated: false };
-    pageToken = json.info.next_page_token ?? null;
-  }
+  // 204 is "nothing here" — an empty module, or nothing modified since. Both are a
+  // successful, complete answer, not a failure.
+  if (res.status === 204) return { rows: [], nextPageToken: null, more: false };
+  if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
 
-  return { rows, truncated: true };
+  const json = (await res.json()) as {
+    data?: Row[];
+    info?: { more_records?: boolean; next_page_token?: string | null };
+  };
+
+  return {
+    rows: json.data ?? [],
+    nextPageToken: json.info?.next_page_token ?? null,
+    more: !!json.info?.more_records,
+  };
 }
 
 /** Zoho lookup fields arrive as `{ id, name }`; plain values arrive bare. */
@@ -117,6 +127,112 @@ function createdDate(row: Row): Date {
   if (Number.isNaN(d.getTime())) return new Date(0);
   d.setUTCHours(0, 0, 0, 0);
   return d;
+}
+
+/** The modules pulled, in the order they are pulled. Accounts are not fetched directly —
+ *  they arrive as the lookup on a contact or a deal, which is every account that matters
+ *  to this app and none of the ones that matter to nobody. */
+const MODULES: Module[] = ['Leads', 'Contacts', 'Deals'];
+
+export type Cursor = { module: Module; page: number; pageToken: string | null };
+
+/** Reads back a cursor the service stored. Anything unrecognised — a cursor written by an
+ *  older version, a module since removed — restarts the pull rather than throwing, which
+ *  costs one full pass and cannot wedge the integration. */
+export function readCursor(raw: unknown): Cursor {
+  const fresh: Cursor = { module: 'Leads', page: 1, pageToken: null };
+  if (!raw || typeof raw !== 'object') return fresh;
+
+  const c = raw as Record<string, unknown>;
+  const moduleName = MODULES.find((m) => m === c.module);
+  if (!moduleName) return fresh;
+
+  const page = Number(c.page);
+  return {
+    module: moduleName,
+    page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+    pageToken: typeof c.pageToken === 'string' && c.pageToken !== '' ? c.pageToken : null,
+  };
+}
+
+/** One Zoho record as the point that carries it. Returns null for a record with no id,
+ *  which cannot be matched on a re-sync and would insert a duplicate every night. */
+function toPoint(moduleName: Module, row: Row): MetricPoint | null {
+  const id = text(row.id);
+  if (!id) return null;
+
+  const owner = lookup(row.Owner);
+  const account = lookup(row.Account_Name);
+  const date = createdDate(row);
+
+  if (moduleName === 'Leads') {
+    const first = text(row.First_Name);
+    const last = text(row.Last_Name);
+    return {
+      entityType: 'crm_lead',
+      entityId: id,
+      metricKey: 'record',
+      date,
+      value: 1,
+      entityLabel: [first, last].filter(Boolean).join(' ') || (text(row.Company) ?? id),
+      entityMeta: {
+        firstName: first,
+        lastName: last,
+        email: text(row.Email),
+        phone: text(row.Phone),
+        companyName: text(row.Company),
+        title: text(row.Designation),
+        message: text(row.Description),
+        status: text(row.Lead_Status),
+        leadSource: text(row.Lead_Source),
+        ownerEmail: owner?.name ?? null,
+      },
+    };
+  }
+
+  if (moduleName === 'Contacts') {
+    const first = text(row.First_Name);
+    const last = text(row.Last_Name);
+    return {
+      entityType: 'crm_contact',
+      entityId: id,
+      metricKey: 'record',
+      date,
+      value: 1,
+      entityLabel: [first, last].filter(Boolean).join(' ') || id,
+      entityMeta: {
+        firstName: first,
+        lastName: last,
+        email: text(row.Email),
+        phone: text(row.Phone),
+        title: text(row.Title),
+        accountId: account?.id ?? null,
+        accountName: account?.name ?? null,
+        ownerEmail: owner?.name ?? null,
+      },
+    };
+  }
+
+  const contact = lookup(row.Contact_Name);
+  return {
+    entityType: 'crm_deal',
+    entityId: id,
+    metricKey: 'record',
+    date,
+    value: Number(row.Amount) || 0,
+    entityLabel: text(row.Deal_Name) ?? id,
+    entityMeta: {
+      amount: Number(row.Amount) || 0,
+      currency: text(row.Currency) ?? 'USD',
+      stage: text(row.Stage),
+      probability: Number(row.Probability) || 0,
+      closingDate: text(row.Closing_Date),
+      accountId: account?.id ?? null,
+      accountName: account?.name ?? null,
+      contactId: contact?.id ?? null,
+      ownerEmail: owner?.name ?? null,
+    },
+  };
 }
 
 export const zohoCrm: IntegrationProvider = {
@@ -174,7 +290,7 @@ export const zohoCrm: IntegrationProvider = {
     return { secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored) };
   },
 
-  async sync(credential, _config, range) {
+  async syncPaged(credential, _config, ctx) {
     const { refreshToken } = JSON.parse(credential) as Stored;
     const token = await accessToken(refreshToken);
 
@@ -183,109 +299,40 @@ export const zohoCrm: IntegrationProvider = {
     // so a perfect sync left every one of them showing only seeded rows. The points below
     // carry the whole record in entityMeta so writeCrmRecords() in service.ts can
     // materialise it, the same way ad_campaign points become Campaign rows.
+    const state = readCursor(ctx.cursor);
     const points: MetricPoint[] = [];
-    const truncated: string[] = [];
 
-    const modules: Module[] = ['Leads', 'Contacts', 'Deals'];
-    for (const moduleName of modules) {
-      const { rows, truncated: cut } = await readAll(token, moduleName);
-      if (cut) truncated.push(moduleName);
+    let { module: moduleName, page, pageToken } = state;
+
+    // Fetch until the caller's deadline, then hand back where we stopped. Always at least
+    // one page, so a tight budget still makes progress instead of spinning.
+    do {
+      const { rows, nextPageToken, more } = await readPage(
+        token,
+        moduleName,
+        { page, pageToken },
+        ctx.since,
+      );
 
       for (const row of rows) {
-        const id = text(row.id);
-        if (!id) continue;
-
-        const owner = lookup(row.Owner);
-        const account = lookup(row.Account_Name);
-        const date = createdDate(row);
-
-        if (moduleName === 'Leads') {
-          const first = text(row.First_Name);
-          const last = text(row.Last_Name);
-          points.push({
-            entityType: 'crm_lead',
-            entityId: id,
-            metricKey: 'record',
-            date,
-            value: 1,
-            entityLabel: [first, last].filter(Boolean).join(' ') || (text(row.Company) ?? id),
-            entityMeta: {
-              firstName: first,
-              lastName: last,
-              email: text(row.Email),
-              phone: text(row.Phone),
-              companyName: text(row.Company),
-              title: text(row.Designation),
-              message: text(row.Description),
-              status: text(row.Lead_Status),
-              leadSource: text(row.Lead_Source),
-              ownerEmail: owner?.name ?? null,
-              createdAt: text(row.Created_Time),
-            },
-          });
-        } else if (moduleName === 'Contacts') {
-          const first = text(row.First_Name);
-          const last = text(row.Last_Name);
-          points.push({
-            entityType: 'crm_contact',
-            entityId: id,
-            metricKey: 'record',
-            date,
-            value: 1,
-            entityLabel: [first, last].filter(Boolean).join(' ') || id,
-            entityMeta: {
-              firstName: first,
-              lastName: last,
-              email: text(row.Email),
-              phone: text(row.Phone),
-              title: text(row.Title),
-              accountId: account?.id ?? null,
-              accountName: account?.name ?? null,
-              ownerEmail: owner?.name ?? null,
-            },
-          });
-        } else {
-          const contact = lookup(row.Contact_Name);
-          points.push({
-            entityType: 'crm_deal',
-            entityId: id,
-            metricKey: 'record',
-            date,
-            value: Number(row.Amount) || 0,
-            entityLabel: text(row.Deal_Name) ?? id,
-            entityMeta: {
-              amount: Number(row.Amount) || 0,
-              currency: text(row.Currency) ?? 'USD',
-              stage: text(row.Stage),
-              probability: Number(row.Probability) || 0,
-              closingDate: text(row.Closing_Date),
-              accountId: account?.id ?? null,
-              accountName: account?.name ?? null,
-              contactId: contact?.id ?? null,
-              ownerEmail: owner?.name ?? null,
-            },
-          });
-        }
+        const point = toPoint(moduleName, row);
+        if (point) points.push(point);
       }
-    }
 
-    if (truncated.length) {
-      // Not an error — a bounded read. Surfaced as a point so the cap is visible in the
-      // archive rather than being a silent ceiling.
-      points.push({
-        entityType: 'zoho_sync',
-        entityId: 'truncated',
-        metricKey: 'modules_capped',
-        date: new Date(new Date().setUTCHours(0, 0, 0, 0)),
-        value: truncated.length,
-      });
-    }
+      if (more && page < MAX_PAGES) {
+        page += 1;
+        pageToken = nextPageToken;
+      } else {
+        // This module is done. Move to the next, or finish the pull.
+        const next = MODULES[MODULES.indexOf(moduleName) + 1];
+        if (!next) return { points, cursor: null };
+        moduleName = next;
+        page = 1;
+        pageToken = null;
+      }
+    } while (Date.now() < ctx.deadline);
 
-    if (points.length === 0) {
-      throw new IntegrationError('Zoho returned no records — check the granted scopes.');
-    }
-    void range;
-    return points;
+    return { points, cursor: { module: moduleName, page, pageToken } };
   },
 
   async getEntities(credential, _config, type) {

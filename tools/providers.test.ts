@@ -8,6 +8,7 @@ import {
   walkedPast,
 } from '../lib/integrations/providers/meta-social.ts';
 import { searchConsole } from '../lib/integrations/providers/search-console.ts';
+import { readCursor } from '../lib/integrations/providers/zoho-crm.ts';
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { leadSourceType, leadStatus, matchStage } from '../lib/integrations/crm-mapping.ts';
@@ -210,5 +211,41 @@ test('the Zoho provider advertises the records it now imports', () => {
   // be able to drift back to claiming records it does not materialise.
   for (const claim of ['Leads', 'Contacts', 'Deals', 'Accounts']) {
     assert.ok(PROVIDERS.zoho_crm.provides.includes(claim), claim);
+  }
+});
+
+// ── resumable syncs ────────────────────────────────────────────────────────────
+// The cursor is what lets a 39,000-record backfill span several runs. A cursor that
+// cannot be read back is an integration that restarts its import forever.
+
+test('readCursor starts a fresh pull when there is nothing stored', () => {
+  assert.deepEqual(readCursor(null), { module: 'Leads', page: 1, pageToken: null });
+  assert.deepEqual(readCursor(undefined), { module: 'Leads', page: 1, pageToken: null });
+});
+
+test('readCursor round-trips a cursor it wrote', () => {
+  const cursor = { module: 'Deals', page: 7, pageToken: 'abc123' };
+  assert.deepEqual(readCursor(cursor), cursor);
+});
+
+test('readCursor restarts rather than throwing on a cursor it does not recognise', () => {
+  // A cursor written by an older version, or naming a module since removed. Restarting
+  // costs one pass; throwing would wedge the integration with no way out from the UI.
+  assert.equal(readCursor({ module: 'Invoices', page: 4 }).module, 'Leads');
+  assert.equal(readCursor({ module: 'Deals', page: 'nonsense' }).page, 1);
+  assert.equal(readCursor({ module: 'Deals', page: -3 }).page, 1);
+  assert.equal(readCursor('a string').module, 'Leads');
+});
+
+test('readCursor treats an empty page token as absent', () => {
+  // '' would be sent as page_token= and Zoho would reject the request.
+  assert.equal(readCursor({ module: 'Leads', page: 2, pageToken: '' }).pageToken, null);
+});
+
+test('every registered provider implements sync or syncPaged', () => {
+  // The contract went from one required method to two optional ones. A provider with
+  // neither would type-check and then fail only at sync time, in production.
+  for (const [id, provider] of Object.entries(PROVIDERS)) {
+    assert.ok(provider.sync ?? provider.syncPaged, `${id} implements neither`);
   }
 });

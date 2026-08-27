@@ -50,6 +50,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   const router = useRouter();
   const [busy, setBusy] = useState<null | 'connect' | 'sync' | 'disconnect' | 'settings'>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [keyModal, setKeyModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
 
@@ -117,11 +118,37 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
     }
   }
 
+  /**
+   * Drives a sync to completion.
+   *
+   * A provider with tens of thousands of records cannot be pulled inside one request, so
+   * the server does a bounded slice and answers `done: false` with its place saved. This
+   * calls back until it says done, which is what lets a 39,000-record backfill finish
+   * without any single request being long enough to time out.
+   *
+   * Bounded so a provider that never reports done cannot spin the browser forever.
+   */
+  async function syncToCompletion() {
+    for (let pass = 0; pass < 200; pass++) {
+      const res = await api<{ rows: number; detail: string; done: boolean }>(
+        `/api/integrations/${card.id}/sync`,
+        { method: 'POST', json: {} },
+      );
+      setProgress(res.detail);
+      if (res.done) return;
+      // Each pass writes what it fetched, so the tables fill as this runs.
+      router.refresh();
+    }
+    setError('The sync is taking an unusual number of passes. It will continue overnight.');
+  }
+
   async function run(action: 'sync' | 'disconnect') {
     setBusy(action);
     setError(null);
+    setProgress(null);
     try {
-      await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
+      if (action === 'sync') await syncToCompletion();
+      else await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -222,6 +249,9 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
       ) : null}
 
       {error ? <p className="mt-3 text-[11px] text-destructive">{error}</p> : null}
+      {progress && !error ? (
+        <p className="mt-3 text-[11px] text-muted-foreground">{progress}</p>
+      ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
         {!canManage ? (

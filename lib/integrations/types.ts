@@ -38,6 +38,34 @@ export type SyncResult = {
   rows: number;
   /** Human-readable summary shown on the integration card after a sync. */
   detail: string;
+  /** False when a backfill ran out of time and has more to fetch. The caller — the Sync
+   *  button, or the nightly cron — comes straight back to finish it. */
+  done: boolean;
+};
+
+/**
+ * Where a paged pull stopped. Opaque to everything but the provider that wrote it: the
+ * service stores it and hands it back, and never looks inside.
+ */
+export type SyncCursor = Record<string, unknown>;
+
+export type SyncContext = {
+  /** null to start a pull from the beginning; otherwise resume from here. */
+  cursor: SyncCursor | null;
+  /**
+   * Ask only for records modified at or after this instant. null means a full pull —
+   * the first sync, or a provider that cannot filter by modification time.
+   */
+  since: Date | null;
+  /** Stop fetching once Date.now() passes this and return the cursor instead. */
+  deadline: number;
+  range: DateRange;
+};
+
+export type PagedSyncResult = {
+  points: MetricPoint[];
+  /** null when the pull is complete. Anything else is handed back on the next call. */
+  cursor: SyncCursor | null;
 };
 
 export type DateRange = { from: Date; to: Date };
@@ -100,9 +128,31 @@ export interface IntegrationProvider {
    *  seal and any non-secret config to store alongside it. */
   connect(input: ConnectInput): Promise<ConnectResult>;
 
-  /** Pulls data and returns MetricSnapshot rows. Throws on failure — the caller records
-   *  the error against the integration and emits integration.sync_failed. */
-  sync(credential: string, config: Record<string, unknown>, range: DateRange): Promise<MetricPoint[]>;
+  /**
+   * Pulls data and returns MetricSnapshot rows. Throws on failure — the caller records
+   * the error against the integration and emits integration.sync_failed.
+   *
+   * Optional because a provider may implement syncPaged instead. Every provider must
+   * implement one of the two; tools/providers.test.ts asserts it.
+   */
+  sync?(credential: string, config: Record<string, unknown>, range: DateRange): Promise<MetricPoint[]>;
+
+  /**
+   * One bounded slice of a pull, for providers whose data does not fit in a single
+   * request.
+   *
+   * Fetch until `ctx.deadline` passes, then return what you have along with a cursor
+   * saying where to resume; return a null cursor when the pull is complete. Honour
+   * `ctx.since` when the API can filter by modification time — that is what turns a
+   * nightly sync from a full re-import into a handful of changed records.
+   *
+   * Preferred over sync() when both exist.
+   */
+  syncPaged?(
+    credential: string,
+    config: Record<string, unknown>,
+    ctx: SyncContext,
+  ): Promise<PagedSyncResult>;
 
   /**
    * Renews a credential that is approaching expiry, called by sync() before the pull.
