@@ -6,6 +6,7 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
+import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
@@ -15,6 +16,7 @@ import { rangeParam } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { leadFilters, listLeads } from '@/lib/leads';
 import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
+import { DEMO_SOURCE } from '@/lib/sources';
 import { listAssignable, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
 import { NewLeadButton } from './NewLeadButton';
@@ -112,9 +114,15 @@ export default async function LeadsPage({
                   {rows.map((lead) => (
                     <TR key={lead.id}>
                       <TD>
-                        <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
-                          {[lead.firstName, lead.lastName].filter(Boolean).join(' ')}
-                        </Link>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
+                            {[lead.firstName, lead.lastName].filter(Boolean).join(' ')}
+                          </Link>
+                          {/* Which system wrote the row, distinct from the `sourceType`
+                              column beside it — that says how the lead found us, this
+                              says whether the record is real or the seeder's. */}
+                          <ProvenanceBadge source={lead.source ?? DEMO_SOURCE} />
+                        </span>
                         {lead.email ? (
                           <p className="text-xs text-muted-foreground">{lead.email}</p>
                         ) : null}

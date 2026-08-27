@@ -231,11 +231,17 @@ model Company {
   noteEntries   Note[]
   tasks         Task[]
 
+
+  /// The provider's own id for this record, when a sync imported it. Lets a re-sync
+  /// update in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: zoho_crm, …
   metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@index([name])
   @@map("company")
 }
@@ -261,11 +267,17 @@ model Contact {
   tasks         Task[]
   prospects     Prospect[]
 
+
+  /// The provider's own id for this record, when a sync imported it. Lets a re-sync
+  /// update in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: zoho_crm, …
   metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@index([companyId])
   @@index([lastName, firstName])
   @@map("contact")
@@ -323,11 +335,17 @@ model Lead {
   noteEntries   Note[]
   tasks         Task[]
 
+
+  /// The provider's own id for this record, when a sync imported it. Lets a re-sync
+  /// update in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: zoho_crm, …
   metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@index([status])
   @@index([email])
   @@index([createdAt])
@@ -401,11 +419,17 @@ model Opportunity {
   tasks      Task[]
   revenue    RevenueEntry[]
 
+
+  /// The provider's own id for this record, when a sync imported it. Lets a re-sync
+  /// update in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: zoho_crm, …
   metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@index([stageId])
   @@index([companyId])
   @@index([campaignId])
@@ -702,6 +726,12 @@ model SeoKeyword {
   intent       String?
   isTracked    Boolean  @default(true)
 
+  /// Which integration reported this keyword, or null for a row the seeder invented.
+  /// Same purpose as SocialAccount.integrationId: the SEO page has to be able to say
+  /// which rankings are real, and a table-wide flag could not survive live and seeded
+  /// rows sitting side by side.
+  source String?
+
   website  Website             @relation(fields: [websiteId], references: [id], onDelete: Cascade)
   rankings SeoKeywordRanking[]
 
@@ -742,6 +772,9 @@ model SeoPage {
   /// issues table: nothing queries across issues yet, and the shape comes from whichever
   /// crawler produced it.
   issues Json?
+
+  /// As on SeoKeyword — the integration that reported it, null when seeded.
+  source String?
 
   website Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
 
@@ -786,6 +819,9 @@ model SocialPost {
   likes       Int @default(0)
   comments    Int @default(0)
   shares      Int @default(0)
+  // Instagram's nearest equivalent to a share, and kept apart from one: it is a
+  // different action, and only one of the two networks reports each.
+  saves       Int @default(0)
   clicks      Int @default(0)
 
   account SocialAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)

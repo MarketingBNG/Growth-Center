@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
-import { SEO_HAS_LIVE_SOURCE, seoOverview } from '@/lib/seo';
+import { seoOverview } from '@/lib/seo';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
 
@@ -40,7 +40,7 @@ export default async function SeoPage() {
     );
   }
 
-  const { totals, keywords, pages, issues, website } = data;
+  const { totals, keywords, pages, issues, website, liveness } = data;
   const movers = keywords.filter((k) => k.move !== null && k.move !== 0);
   const improved = [...movers].sort((a, b) => (b.move ?? 0) - (a.move ?? 0)).slice(0, 5);
   const declined = [...movers].sort((a, b) => (a.move ?? 0) - (b.move ?? 0)).slice(0, 5);
@@ -53,16 +53,19 @@ export default async function SeoPage() {
         actions={semrush ? <StateBadge state={semrush.state} /> : null}
       />
 
-      {/* Keyed on whether anything actually writes these tables, NOT on whether Semrush is
-          connected — Semrush writes elsewhere, so connecting it changes nothing here. */}
-      {!SEO_HAS_LIVE_SOURCE ? (
+      {/* Keyed on whether these rows actually came from a provider, NOT on whether an SEO
+          integration is connected — Semrush writes domain totals elsewhere, so connecting
+          it changes nothing on this page. */}
+      {!liveness.allLive ? (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
           <p className="text-xs text-warning">
-            Rankings and page data are seeded, not crawled.{' '}
+            {liveness.hasLive
+              ? `${liveness.seeded} of ${liveness.seeded + liveness.live} keyword and page rows are still seeded; the rest come from Search Console.`
+              : 'Rankings and page data are seeded, not crawled.'}{' '}
             {semrush?.state === 'connected' || semrush?.state === 'syncing'
-              ? 'Semrush is connected, but it reports domain-level totals only — it does not yet populate per-keyword rankings, so these figures are still seeded.'
-              : 'No SEO source is connected.'}
+              ? 'Semrush reports domain-level totals only — it does not populate per-keyword rankings.'
+              : 'Connect Google Search Console to replace them with real ones.'}
           </p>
         </div>
       ) : null}

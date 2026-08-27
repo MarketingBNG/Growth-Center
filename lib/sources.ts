@@ -56,6 +56,18 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by Zoho CRM and refreshed on each sync.',
   },
+  meta_social: {
+    label: 'Meta',
+    name: 'Facebook & Instagram',
+    tone: 'live',
+    hint: 'Reported by the Facebook Page and Instagram Business APIs on each sync.',
+  },
+  google_search_console: {
+    label: 'GSC',
+    name: 'Google Search Console',
+    tone: 'live',
+    hint: 'Reported by Google Search Console and refreshed on each sync.',
+  },
   google_ads: {
     label: 'Google Ads',
     name: 'Google Ads',

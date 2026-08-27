@@ -1,6 +1,8 @@
 import type { IntegrationProvider } from './types.ts';
 import { googleAnalytics } from './providers/google-analytics.ts';
 import { metaAds } from './providers/meta-ads.ts';
+import { metaSocial } from './providers/meta-social.ts';
+import { searchConsole } from './providers/search-console.ts';
 import { semrush } from './providers/semrush.ts';
 import { zohoCrm } from './providers/zoho-crm.ts';
 
@@ -9,6 +11,8 @@ import { zohoCrm } from './providers/zoho-crm.ts';
 export const PROVIDERS: Record<string, IntegrationProvider> = {
   [googleAnalytics.id]: googleAnalytics,
   [metaAds.id]: metaAds,
+  [metaSocial.id]: metaSocial,
+  [searchConsole.id]: searchConsole,
   [semrush.id]: semrush,
   [zohoCrm.id]: zohoCrm,
 };

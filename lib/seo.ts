@@ -6,17 +6,23 @@ import { num, rate } from './calc.ts';
 // metrics layer holds site-wide series, not per-entity attributes with their own shape.
 
 /**
- * Nothing writes SeoKeyword, SeoKeywordRanking or SeoPage except the seeder.
+ * Which rows in the SEO tables came from a provider, and which the seeder invented.
  *
- * The Semrush provider writes three domain-level numbers into MetricSnapshot
- * (organic_keywords, organic_traffic, organic_traffic_value) and touches none of these
- * tables. The page's "seeded" warning used to key off Semrush's connection state, so
- * connecting it removed the warning without replacing a single figure — the page would
- * have started presenting invented rankings as live.
+ * This used to be a hardcoded `false`, because nothing but the seeder wrote SeoKeyword,
+ * SeoKeywordRanking or SeoPage. Semrush does not: it writes three domain-level numbers
+ * into MetricSnapshot and touches none of these tables, so keying the page's warning off
+ * Semrush's connection state would have removed the warning without replacing a single
+ * figure.
  *
- * Flip this to true in the same change that makes an ingestion write these tables.
+ * Search Console does write them, so the answer is now read from the rows themselves via
+ * their `source` column rather than asserted in code. Per row, not per table: a live
+ * ranking and a seeded one can sit side by side while the first sync backfills, and the
+ * page has to be able to say which is which.
  */
-export const SEO_HAS_LIVE_SOURCE = false;
+export function seoLiveness(rows: { source: string | null }[]) {
+  const live = rows.filter((r) => r.source !== null).length;
+  return { live, seeded: rows.length - live, hasLive: live > 0, allLive: rows.length > 0 && live === rows.length };
+}
 
 export async function seoOverview() {
   const website = await db().website.findFirst({ select: { id: true, domain: true, name: true } });
@@ -44,6 +50,7 @@ export async function seoOverview() {
       id: k.id,
       keyword: k.keyword,
       country: k.country,
+      source: k.source,
       searchVolume: k.searchVolume,
       difficulty: k.difficulty,
       cpc: k.cpc === null ? null : num(k.cpc),
@@ -71,13 +78,19 @@ export async function seoOverview() {
     return list.map((i) => ({ url: p.url, code: i.code ?? 'unknown', severity: i.severity ?? 'low', message: i.message ?? '' }));
   });
 
+  // Keywords and pages are judged together: the page's warning covers both tables, and a
+  // provider that populated one but not the other is still only partly live.
+  const liveness = seoLiveness([...keywords, ...pages]);
+
   return {
     website,
+    liveness,
     keywords: tracked,
     pages: pages.map((p) => ({
       id: p.id,
       url: p.url,
       title: p.title,
+      source: p.source,
       clicks: p.clicks,
       impressions: p.impressions,
       ctr: p.ctr,

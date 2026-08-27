@@ -6,6 +6,7 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { rangeParam } from '@/lib/range';
 import { pageQuery } from '@/lib/query';
 import { listCompanies, listContacts } from '@/lib/crm';
 import { fmtDate } from '@/lib/format';
+import { DEMO_SOURCE } from '@/lib/sources';
 import { NewCrmRecordButton } from './NewCrmRecordButton';
 
 export const metadata = { title: 'CRM · Growth Center' };
@@ -106,6 +108,7 @@ type CompanyRow = {
   industry: string | null;
   country: string | null;
   ownerEmail: string | null;
+  source: string | null;
   _count: { contacts: number; opportunities: number };
   customer: { wonAt: Date } | null;
 };
@@ -127,9 +130,12 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
         {rows.map((c) => (
           <TR key={c.id}>
             <TD>
-              <Link href={`/crm/companies/${c.id}`} className="font-medium hover:text-primary">
-                {c.name}
-              </Link>
+              <span className="inline-flex items-center gap-1.5">
+                <Link href={`/crm/companies/${c.id}`} className="font-medium hover:text-primary">
+                  {c.name}
+                </Link>
+                <SourceBadge source={c.source ?? DEMO_SOURCE} />
+              </span>
               {c.domain ? <p className="text-xs text-muted-foreground">{c.domain}</p> : null}
             </TD>
             <TD className="text-muted-foreground">{c.industry ?? '—'}</TD>
@@ -160,6 +166,7 @@ type ContactRow = {
   title: string | null;
   phone: string | null;
   ownerEmail: string | null;
+  source: string | null;
   company: { id: string; name: string } | null;
 };
 
@@ -179,9 +186,12 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
         {rows.map((c) => (
           <TR key={c.id}>
             <TD>
-              <Link href={`/crm/contacts/${c.id}`} className="font-medium hover:text-primary">
-                {[c.firstName, c.lastName].filter(Boolean).join(' ')}
-              </Link>
+              <span className="inline-flex items-center gap-1.5">
+                <Link href={`/crm/contacts/${c.id}`} className="font-medium hover:text-primary">
+                  {[c.firstName, c.lastName].filter(Boolean).join(' ')}
+                </Link>
+                <SourceBadge source={c.source ?? DEMO_SOURCE} />
+              </span>
             </TD>
             <TD className="text-muted-foreground">{c.title ?? '—'}</TD>
             <TD>

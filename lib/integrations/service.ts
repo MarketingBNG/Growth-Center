@@ -1,7 +1,8 @@
 import { db } from '../prisma.ts';
-import type { Prisma } from '../generated/prisma/client.ts';
+import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
+import { leadSourceType, leadStatus, matchStage } from './crm-mapping.ts';
 import { getProvider, providerList } from './registry.ts';
 import { IntegrationError, type ConfigField, type ConnectInput, type MetricPoint } from './types.ts';
 
@@ -344,6 +345,502 @@ async function writeCampaignSpend(
   return rows.length;
 }
 
+/**
+ * Turns `social_account` and `social_post` points into SocialAccount and SocialPost rows.
+ *
+ * Same reason writeCampaignSpend exists: the Social page reads those tables and never
+ * touches metric_snapshot, so without this a social provider could sync perfectly and the
+ * page would still show only what the seeder left behind.
+ *
+ * The account's `integrationId` is stamped here, which is what lets the page drop its
+ * "seeded" badge for this network while keeping it on the others.
+ */
+async function writeSocialActivity(
+  integrationId: string,
+  points: MetricPoint[],
+): Promise<number> {
+  const accountPoints = points.filter((p) => p.entityType === 'social_account' && p.entityId);
+  const postPoints = points.filter((p) => p.entityType === 'social_post' && p.entityId);
+  if (!accountPoints.length && !postPoints.length) return 0;
+
+  // Anything outside the SocialNetwork enum is dropped rather than guessed at: a bad
+  // value would fail the insert and take the whole sync down with it.
+  const NETWORKS = new Set(['instagram', 'facebook', 'linkedin', 'x', 'youtube', 'tiktok']);
+  const networkOf = (p: MetricPoint) => {
+    const n = (p.entityMeta?.network as string | undefined)?.toLowerCase();
+    return n && NETWORKS.has(n) ? n : null;
+  };
+
+  // (network, handle) is SocialAccount's natural key, so accounts are keyed the same way
+  // here and a re-sync updates in place rather than duplicating.
+  const accountIdByKey = new Map<string, string>();
+
+  for (const p of accountPoints) {
+    const network = networkOf(p);
+    const handle = p.entityMeta?.handle as string | undefined;
+    if (!network || !handle) continue;
+
+    const name = (p.entityMeta?.name as string | undefined) ?? null;
+    const row = await db().socialAccount.upsert({
+      where: { network_handle: { network: network as never, handle } },
+      create: {
+        network: network as never,
+        handle,
+        name,
+        followers: Math.round(p.value),
+        integrationId,
+      },
+      update: { name: name ?? undefined, followers: Math.round(p.value), integrationId },
+      select: { id: true },
+    });
+    accountIdByKey.set(`${network}:${handle}`, row.id);
+  }
+
+  // One row per post, carrying whichever metrics that network reported. A key the
+  // provider omitted keeps the column default rather than being written as zero —
+  // Instagram reports no link clicks on organic media, and a 0 there would read as
+  // "nobody clicked" rather than "not measured".
+  type Post = {
+    accountKey: string;
+    externalId: string;
+    publishedAt: Date;
+    permalink: string | null;
+    caption: string | null;
+    metrics: Record<string, number>;
+  };
+  const posts = new Map<string, Post>();
+
+  // The metrics are spread straight into the insert, so a key with no column behind it
+  // would fail the write and take the whole sync down with it. Providers are free to
+  // report more than the schema holds; anything unrecognised is dropped here instead.
+  const METRIC_COLUMNS = new Set([
+    'reach',
+    'impressions',
+    'likes',
+    'comments',
+    'shares',
+    'saves',
+    'clicks',
+  ]);
+
+  for (const p of postPoints) {
+    const network = networkOf(p);
+    const handle = p.entityMeta?.handle as string | undefined;
+    if (!network || !handle) continue;
+
+    const externalId = p.entityId as string;
+    let post = posts.get(externalId);
+    if (!post) {
+      const published = new Date(String(p.entityMeta?.publishedAt ?? p.date.toISOString()));
+      post = {
+        accountKey: `${network}:${handle}`,
+        externalId,
+        publishedAt: Number.isNaN(published.getTime()) ? p.date : published,
+        permalink: (p.entityMeta?.permalink as string | null | undefined) ?? null,
+        caption: (p.entityMeta?.caption as string | null | undefined) ?? null,
+        metrics: {},
+      };
+      posts.set(externalId, post);
+    }
+    if (METRIC_COLUMNS.has(p.metricKey)) post.metrics[p.metricKey] = Math.round(p.value);
+  }
+
+  let postsWritten = 0;
+  for (const post of posts.values()) {
+    const accountId = accountIdByKey.get(post.accountKey);
+    // A post whose account never reported a follower count has nothing to hang off.
+    if (!accountId) continue;
+
+    const fields = {
+      publishedAt: post.publishedAt,
+      permalink: post.permalink,
+      caption: post.caption,
+      ...post.metrics,
+    };
+
+    await db().socialPost.upsert({
+      where: { accountId_externalId: { accountId, externalId: post.externalId } },
+      create: { accountId, externalId: post.externalId, ...fields },
+      update: fields,
+    });
+    postsWritten++;
+  }
+
+  return accountIdByKey.size + postsWritten;
+}
+
+/**
+ * Turns `seo_keyword` and `seo_page` points into the SEO tables.
+ *
+ * Until this existed nothing but the seeder wrote SeoKeyword, SeoKeywordRanking or
+ * SeoPage — which is why connecting Semrush was always going to leave the SEO page fully
+ * seeded. Rows written here carry `source`, so the page can tell a reported ranking from
+ * an invented one sitting in the same table.
+ */
+async function writeSeoRows(
+  provider: ReturnType<typeof requireProvider>,
+  config: Record<string, unknown>,
+  points: MetricPoint[],
+): Promise<number> {
+  const keywordPoints = points.filter((p) => p.entityType === 'seo_keyword' && p.entityId);
+  const pagePoints = points.filter((p) => p.entityType === 'seo_page' && p.entityId);
+  if (!keywordPoints.length && !pagePoints.length) return 0;
+
+  // Every SEO row hangs off a Website. Prefer the domain the provider was configured
+  // with; fall back to whatever site already exists, so a provider without such a setting
+  // lands on the existing site rather than creating a second one.
+  const configured = typeof config.siteUrl === 'string' ? config.siteUrl : '';
+  const domain = configured
+    .replace(/^sc-domain:/, '')
+    .replace(/^https?:[/][/]/, '')
+    .replace(/[/].*$/, '')
+    .trim();
+
+  const website = domain
+    ? await db().website.upsert({
+        where: { domain },
+        create: { domain, name: domain },
+        update: {},
+        select: { id: true },
+      })
+    : await db().website.findFirst({ select: { id: true } });
+  if (!website) return 0;
+
+  let written = 0;
+
+  // ── keywords: one row per phrase, one ranking row per phrase-day ─────────────────
+  type Ranking = { date: Date; position: number };
+  const byKeyword = new Map<string, Ranking[]>();
+
+  for (const p of keywordPoints) {
+    if (p.metricKey !== 'position') continue;
+    const keyword = p.entityId as string;
+    const rankings = byKeyword.get(keyword) ?? [];
+    rankings.push({ date: p.date, position: Math.round(p.value) });
+    byKeyword.set(keyword, rankings);
+  }
+
+  for (const [keyword, rankings] of byKeyword) {
+    const row = await db().seoKeyword.upsert({
+      where: { websiteId_keyword_country: { websiteId: website.id, keyword, country: 'us' } },
+      // searchVolume, difficulty and cpc are deliberately left unset. Search Console does
+      // not report them, and a number invented to fill the column is exactly the kind of
+      // figure this app labels rather than fabricates.
+      create: { websiteId: website.id, keyword, country: 'us', source: provider.id },
+      update: { source: provider.id },
+      select: { id: true },
+    });
+
+    for (const ranking of rankings) {
+      await db().seoKeywordRanking.upsert({
+        where: { keywordId_date: { keywordId: row.id, date: ranking.date } },
+        create: { keywordId: row.id, date: ranking.date, position: ranking.position },
+        update: { position: ranking.position },
+      });
+      written++;
+    }
+  }
+
+  // ── pages: one current row per URL ───────────────────────────────────────────────
+  const byPage = new Map<string, Record<string, number>>();
+  for (const p of pagePoints) {
+    const url = p.entityId as string;
+    const entry = byPage.get(url) ?? {};
+    entry[p.metricKey] = p.value;
+    byPage.set(url, entry);
+  }
+
+  for (const [url, m] of byPage) {
+    const fields = {
+      clicks: Math.round(m.clicks ?? 0),
+      impressions: Math.round(m.impressions ?? 0),
+      ctr: m.ctr ?? 0,
+      avgPosition: m.position ?? 0,
+      source: provider.id,
+    };
+    await db().seoPage.upsert({
+      where: { websiteId_url: { websiteId: website.id, url } },
+      create: { websiteId: website.id, url, ...fields },
+      update: fields,
+    });
+    written++;
+  }
+
+  return written;
+}
+
+const STAGE_SELECT = {
+  id: true,
+  name: true,
+  position: true,
+  probability: true,
+  isWon: true,
+  isLost: true,
+} as const;
+
+/**
+ * One chunked `INSERT … ON CONFLICT DO UPDATE`, returning the id of every row it touched.
+ *
+ * The CRM import writes tens of thousands of records — this org has 26,000 leads alone —
+ * and a per-record Prisma upsert is one network round trip each. At that size the sync
+ * cannot finish inside the cron's 300s budget, so the rows go out in batches the way
+ * writePoints and writeCampaignSpend already do.
+ *
+ * `casts` carries the Postgres type for any column a text placeholder cannot satisfy on
+ * its own — the enum columns and the numerics.
+ */
+async function bulkUpsert(
+  table: string,
+  columns: string[],
+  rows: unknown[][],
+  conflict: string,
+  casts: Record<string, string> = {},
+): Promise<{ id: string; externalId: string | null }[]> {
+  if (!rows.length) return [];
+
+  const cols = [...columns, 'updatedAt'];
+  const quoted = cols.map((c) => `"${c}"`).join(', ');
+  const assignments = cols.map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ');
+  const touched: { id: string; externalId: string | null }[] = [];
+
+  for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
+    const chunk = rows.slice(i, i + WRITE_CHUNK);
+    const values = chunk.map((r) => [...r, new Date()]);
+    const width = cols.length;
+
+    const placeholders = values
+      .map((_, r) => {
+        const cells = cols.map((c, k) => {
+          const n = r * width + k + 1;
+          return casts[c] ? `$${n}::${casts[c]}` : `$${n}`;
+        });
+        return `(gen_random_uuid()::text, ${cells.join(', ')})`;
+      })
+      .join(', ');
+
+    const returned = await db().$queryRawUnsafe<{ id: string; externalId: string | null }[]>(
+      `INSERT INTO "${table}" (id, ${quoted})
+       VALUES ${placeholders}
+       ON CONFLICT (${conflict}) DO UPDATE SET ${assignments}
+       RETURNING id, "externalId"`,
+      ...values.flat(),
+    );
+    touched.push(...returned);
+  }
+
+  return touched;
+}
+
+/**
+ * Turns `crm_lead`, `crm_contact` and `crm_deal` points into real Lead, Contact and
+ * Opportunity rows, plus the Company rows they hang off.
+ *
+ * Same reason writeCampaignSpend and writeSocialActivity exist. Zoho CRM shipped
+ * reporting three `record_count` numbers into metric_snapshot and nothing else — and
+ * nothing in the app reads metric_snapshot for CRM. The Leads, Contacts and Pipeline
+ * pages all read these tables, so a Zoho sync could succeed completely and every one of
+ * those pages would still show only what the seeder left behind.
+ *
+ * Records are matched on (source, externalId), so a re-sync updates in place. Within the
+ * fields the provider reports, the provider wins: an edit made in Growth Center to a
+ * Zoho-owned lead is overwritten on the next sync. That is the right default for a mirror
+ * of an upstream CRM, and the things Growth Center owns alone — tags, notes, tasks,
+ * activities, owner assignment — are never touched here.
+ */
+async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promise<number> {
+  const leadPoints = points.filter((p) => p.entityType === 'crm_lead' && p.entityId);
+  const contactPoints = points.filter((p) => p.entityType === 'crm_contact' && p.entityId);
+  const dealPoints = points.filter((p) => p.entityType === 'crm_deal' && p.entityId);
+  if (!leadPoints.length && !contactPoints.length && !dealPoints.length) return 0;
+
+  const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null => {
+    const t = v == null ? '' : String(v).trim();
+    return t === '' ? null : t;
+  };
+
+  let written = 0;
+
+  // ── companies ───────────────────────────────────────────────────────────────
+  // Contacts and deals both reference an account by id. Written first so the rows that
+  // point at them can be linked in the same pass rather than a second reconciliation.
+  const accounts = new Map<string, string>();
+  for (const p of [...contactPoints, ...dealPoints]) {
+    const id = str(meta(p).accountId);
+    const name = str(meta(p).accountName);
+    if (id && name) accounts.set(id, name);
+  }
+
+  const companyRows = [...accounts].map(([externalId, name]) => [name, providerId, externalId]);
+  const companies = await bulkUpsert('company', ['name', 'source', 'externalId'], companyRows, '"source", "externalId"');
+  const companyIdByExternal = new Map(companies.map((r) => [r.externalId ?? '', r.id]));
+  written += companies.length;
+
+  // ── contacts ────────────────────────────────────────────────────────────────
+  const contactIdByExternal = new Map<string, string>();
+  if (contactPoints.length) {
+    // Contact.email is globally unique, which a bulk insert cannot negotiate: a row whose
+    // address already exists would abort the whole batch on the wrong index. So the
+    // colliding addresses are resolved up front — rows already here are adopted (stamped
+    // with this provider's id) one by one, and everything else goes out in batches.
+    const emails = [...new Set(contactPoints.map((p) => str(meta(p).email)).filter((e): e is string => !!e))];
+    const existing = emails.length
+      ? await db().contact.findMany({
+          where: { email: { in: emails } },
+          select: { id: true, email: true, source: true, externalId: true },
+        })
+      : [];
+    const byEmail = new Map(existing.map((c) => [c.email ?? '', c]));
+
+    // Zoho permits two contacts to share an address; this schema does not. First occurrence
+    // keeps the address, later ones are imported without it rather than being dropped.
+    const claimedInBatch = new Set<string>();
+    let deduped = 0;
+
+    const adopt: { id: string; row: Record<string, unknown>; externalId: string }[] = [];
+    const fresh: unknown[][] = [];
+
+    for (const p of contactPoints) {
+      const m = meta(p);
+      const externalId = p.entityId as string;
+      let email = str(m.email);
+
+      if (email && claimedInBatch.has(email)) {
+        email = null;
+        deduped++;
+      } else if (email) {
+        claimedInBatch.add(email);
+      }
+
+      const accountId = str(m.accountId);
+      const row = {
+        firstName: str(m.firstName) ?? p.entityLabel ?? externalId,
+        lastName: str(m.lastName),
+        email,
+        phone: str(m.phone),
+        title: str(m.title),
+        companyId: accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
+      };
+
+      const clash = email ? byEmail.get(email) : undefined;
+      const alreadyOurs = clash?.source === providerId && clash?.externalId === externalId;
+
+      if (clash && !alreadyOurs) {
+        adopt.push({ id: clash.id, row, externalId });
+      } else {
+        fresh.push([row.firstName, row.lastName, row.email, row.phone, row.title, row.companyId, providerId, externalId]);
+      }
+    }
+
+    for (const a of adopt) {
+      await db().contact.update({
+        where: { id: a.id },
+        data: { ...a.row, source: providerId, externalId: a.externalId },
+      });
+      contactIdByExternal.set(a.externalId, a.id);
+      written++;
+    }
+
+    const touched = await bulkUpsert(
+      'contact',
+      ['firstName', 'lastName', 'email', 'phone', 'title', 'companyId', 'source', 'externalId'],
+      fresh,
+      '"source", "externalId"',
+    );
+    for (const t of touched) if (t.externalId) contactIdByExternal.set(t.externalId, t.id);
+    written += touched.length;
+
+    if (deduped) {
+      console.warn(`[${providerId}] ${deduped} contacts imported without an email: address already used by another contact.`);
+    }
+  }
+
+  // ── leads ───────────────────────────────────────────────────────────────────
+  const leadRows = leadPoints.map((p) => {
+    const m = meta(p);
+    const externalId = p.entityId as string;
+    return [
+      str(m.firstName) ?? p.entityLabel ?? externalId,
+      str(m.lastName),
+      str(m.email),
+      str(m.phone),
+      str(m.companyName),
+      str(m.title),
+      str(m.message),
+      leadStatus(str(m.status)),
+      leadSourceType(str(m.leadSource)),
+      providerId,
+      externalId,
+    ];
+  });
+  const leadsTouched = await bulkUpsert(
+    'lead',
+    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'source', 'externalId'],
+    leadRows,
+    '"source", "externalId"',
+    { status: '"LeadStatus"', sourceType: '"SourceType"' },
+  );
+  written += leadsTouched.length;
+
+  // ── deals ───────────────────────────────────────────────────────────────────
+  if (dealPoints.length) {
+    // Opportunity.pipelineId and .stageId are both required, so a deal cannot be written
+    // without a pipeline to put it in. Rather than inventing one, the deals are skipped —
+    // and because this count is reported separately on the card, a skip shows up as a
+    // smaller number instead of a silent success.
+    const pipeline =
+      (await db().pipeline.findFirst({
+        where: { isDefault: true },
+        select: { id: true, stages: { select: STAGE_SELECT } },
+      })) ??
+      (await db().pipeline.findFirst({
+        select: { id: true, stages: { select: STAGE_SELECT } },
+        orderBy: { createdAt: 'asc' },
+      }));
+
+    if (pipeline?.stages.length) {
+      const dealRows: unknown[][] = [];
+
+      for (const p of dealPoints) {
+        const m = meta(p);
+        const externalId = p.entityId as string;
+        const stage = matchStage(pipeline.stages, str(m.stage));
+        if (!stage) continue;
+
+        const closing = str(m.closingDate);
+        const closingDate = closing ? new Date(closing) : null;
+        const accountId = str(m.accountId);
+        const contactId = str(m.contactId);
+
+        dealRows.push([
+          p.entityLabel ?? externalId,
+          pipeline.id,
+          stage.id,
+          Number(m.amount) || 0,
+          str(m.currency) ?? 'USD',
+          Number(m.probability) || stage.probability,
+          closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null,
+          accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
+          contactId ? (contactIdByExternal.get(contactId) ?? null) : null,
+          providerId,
+          externalId,
+        ]);
+      }
+
+      const dealsTouched = await bulkUpsert(
+        'opportunity',
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'companyId', 'contactId', 'source', 'externalId'],
+        dealRows,
+        '"source", "externalId"',
+        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)' },
+      );
+      written += dealsTouched.length;
+    }
+  }
+
+  return written;
+}
+
 /** How long before expiry a credential is renewed. Comfortably longer than any
  *  plausible gap between syncs, so a token is never used on its last day. */
 const RENEW_WITHIN_MS = 7 * 24 * 60 * 60 * 1000;
@@ -403,13 +900,16 @@ export async function sync(id: string, days = 30) {
     let credential = open(integration.credential);
     credential = await renewIfNearExpiry(provider, integration.id, credential, integration.credential.expiresAt);
 
-    const points = await provider.sync(
-      credential,
-      (integration.config as Record<string, unknown>) ?? {},
-      { from, to },
-    );
+    const config = (integration.config as Record<string, unknown>) ?? {};
+    const points = await provider.sync(credential, config, { from, to });
+
+    // metric_snapshot first — it is the honest archive of what the provider reported.
+    // The materialisers after it populate the tables the pages actually read.
     const rows = await writePoints(id, points);
     const campaignDays = await writeCampaignSpend(provider, points);
+    const socialRows = await writeSocialActivity(integration.id, points);
+    const seoRows = await writeSeoRows(provider, config, points);
+    const crmRows = await writeCrmRecords(id, points);
 
     await db().integration.update({
       where: { id: integration.id },
@@ -422,10 +922,20 @@ export async function sync(id: string, days = 30) {
       },
     });
 
+    // Each materialiser is named separately so a card cannot report a healthy metric row
+    // count while the tables the pages actually read stayed empty — which is the failure
+    // Meta Ads shipped with once.
+    const materialised = [
+      campaignDays ? `${campaignDays} campaign-days` : null,
+      socialRows ? `${socialRows} social rows` : null,
+      seoRows ? `${seoRows} SEO rows` : null,
+      crmRows ? `${crmRows} CRM records` : null,
+    ].filter(Boolean);
+
     return {
       rows,
-      detail: campaignDays
-        ? `Wrote ${rows} metric rows and ${campaignDays} campaign-days.`
+      detail: materialised.length
+        ? `Wrote ${rows} metric rows, ${materialised.join(', ')}.`
         : `Wrote ${rows} metric rows.`,
     };
   } catch (e) {

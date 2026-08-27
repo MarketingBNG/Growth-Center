@@ -22,7 +22,7 @@ export default async function SocialPage() {
     );
   }
 
-  const { accounts, recent, totals } = await socialOverview();
+  const { accounts, recent, totals, seededNetworks } = await socialOverview();
 
   if (accounts.length === 0) {
     return (
@@ -43,14 +43,18 @@ export default async function SocialPage() {
     <>
       <PageHeader title="Social" subtitle={`${accounts.length} accounts · ${fmtCompact(totals.followers)} followers`} />
 
-      <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
-        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-        <p className="text-xs text-warning">
-          These figures are seeded. No social account is connected, and there is deliberately no
-          publishing here — that would need a live publish API.{' '}
-          <Link href="/integrations" className="underline">Integrations</Link>
-        </p>
-      </div>
+      {seededNetworks.length > 0 ? (
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+          <p className="text-xs text-warning">
+            {seededNetworks.length === accounts.length
+              ? 'These figures are seeded — no social account is connected.'
+              : `Some figures are seeded: ${seededNetworks.join(', ')}. The rest come from a live connection.`}{' '}
+            There is deliberately no publishing here — that would need a live publish API.{' '}
+            <Link href="/integrations" className="underline">Integrations</Link>
+          </p>
+        </div>
+      ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Followers" value={fmtCompact(totals.followers)} />
@@ -81,7 +85,10 @@ export default async function SocialPage() {
                 {accounts.map((a) => (
                   <TR key={a.id}>
                     <TD>
-                      <span className="font-medium capitalize">{a.network}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-medium capitalize">{a.network}</span>
+                        {a.live ? null : <Badge tone="warning">seeded</Badge>}
+                      </span>
                       <p className="text-[11px] text-muted-foreground">@{a.handle}</p>
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(a.followers)}</TD>

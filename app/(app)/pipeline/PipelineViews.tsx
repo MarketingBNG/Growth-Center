@@ -10,8 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState } from '@/components/patterns/state';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { api } from '@/lib/fetcher';
 import { fmtDate, fmtMoney } from '@/lib/format';
+import { DEMO_SOURCE } from '@/lib/sources';
 
 /** Assigned by column position rather than by stage name, so a renamed or added stage
  *  still gets a colour instead of falling back to nothing. */
@@ -30,6 +32,8 @@ export type Deal = {
   value: number;
   probability: number;
   ownerEmail: string | null;
+  /** Which system wrote the deal — a Zoho import, or the seeder. */
+  source: string | null;
   expectedCloseDate: string | null;
   companyName: string | null;
   contactName: string | null;
@@ -176,8 +180,11 @@ function Board({ columns }: { columns: Column[] }) {
                       ) : null}
                       <div className="mt-2 flex items-center justify-between gap-2">
                         <span className="text-[13px] font-bold tnum">{fmtMoney(deal.value)}</span>
-                        <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground tnum">
-                          {deal.probability}%
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          <SourceBadge source={deal.source ?? DEMO_SOURCE} />
+                          <span className="rounded-full bg-track px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground tnum">
+                            {deal.probability}%
+                          </span>
                         </span>
                       </div>
                     </motion.div>
@@ -232,9 +239,12 @@ function DealTable({ columns }: { columns: Column[] }) {
             {rows.map((d) => (
               <TR key={d.id}>
                 <TD>
-                  <Link href={`/pipeline/${d.id}`} className="font-medium hover:text-primary">
-                    {d.name}
-                  </Link>
+                  <span className="inline-flex items-center gap-1.5">
+                    <Link href={`/pipeline/${d.id}`} className="font-medium hover:text-primary">
+                      {d.name}
+                    </Link>
+                    <SourceBadge source={d.source ?? DEMO_SOURCE} />
+                  </span>
                 </TD>
                 <TD className="text-muted-foreground">{d.companyName ?? '—'}</TD>
                 <TD>

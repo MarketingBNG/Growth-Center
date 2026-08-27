@@ -66,6 +66,7 @@ export default async function PipelinePage({
       value: Number(o.value),
       probability: o.probability,
       ownerEmail: o.ownerEmail,
+      source: o.source,
       expectedCloseDate: o.expectedCloseDate ? o.expectedCloseDate.toISOString() : null,
       companyName: o.company?.name ?? null,
       contactName: o.contact

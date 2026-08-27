@@ -11,12 +11,13 @@ import type { CurrentUser } from '@/lib/auth';
 
 export function AppShell({
   user,
-  demoData = false,
+  demoSources = [],
   children,
 }: {
   user: CurrentUser;
-  /** True when at least one integration is still on seeded data. Drives the header pill. */
-  demoData?: boolean;
+  /** Display names of the integrations still on seeded data. Drives the header pill;
+   *  empty means every provider with a row is either connected or plainly disconnected. */
+  demoSources?: string[];
   children: React.ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -71,13 +72,18 @@ export function AppShell({
           </label>
 
           <div className="ml-auto flex items-center gap-2">
-            {/* Load-bearing: the figures below are seeded until a source is connected, and
-                this is the only thing on most screens that says so. */}
-            {demoData ? (
-              <span className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2.5 py-[5px] text-[11px] font-semibold text-warning-strong md:inline-flex">
+            {/* Load-bearing: some figures below are seeded, and this is the only thing on
+                most screens that says so. It names the providers rather than claiming
+                nothing is connected — that was false as soon as the first one went live. */}
+            {demoSources.length > 0 ? (
+              <Link
+                href="/integrations"
+                title={`Seeded data: ${demoSources.join(', ')}. Connect these to replace it.`}
+                className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2.5 py-[5px] text-[11px] font-semibold text-warning-strong hover:bg-warning/20 md:inline-flex"
+              >
                 <TriangleAlert className="size-3" />
-                Demo data · no source connected
-              </span>
+                Demo data · {demoSources.length === 1 ? demoSources[0] : `${demoSources.length} sources`}
+              </Link>
             ) : null}
 
             <ThemeToggle />

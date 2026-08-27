@@ -51,6 +51,17 @@ export type MetricPoint = {
   /** Human name for the entity, e.g. the ad campaign's title. Carried so a sync can
    *  materialise a real Campaign row rather than leaving a bare provider id. */
   entityLabel?: string;
+  /**
+   * Everything about the entity that is not a number on a date — a post's permalink and
+   * caption, a social account's network and handle, a search query's landing page.
+   *
+   * MetricSnapshot itself never stores this; it exists so the materialisers in
+   * service.ts can build a real SocialPost or SeoPage row from the same points that
+   * carry the metrics, the way entityLabel already lets them build a Campaign. Without
+   * it a social or SEO provider could report numbers but never populate the tables the
+   * pages actually read — which is the failure Meta Ads already had once.
+   */
+  entityMeta?: Record<string, unknown>;
 };
 
 /** A record the provider can hand over, e.g. a Zoho lead or a Meta campaign. */
