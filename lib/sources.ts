@@ -56,6 +56,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by Zoho CRM and refreshed on each sync.',
   },
+  smartlead: {
+    label: 'Smartlead',
+    name: 'Smartlead',
+    tone: 'live',
+    hint: 'Reported by Smartlead and refreshed on each sync.',
+  },
   meta_social: {
     label: 'Meta',
     name: 'Facebook & Instagram',

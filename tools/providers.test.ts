@@ -9,6 +9,11 @@ import {
 } from '../lib/integrations/providers/meta-social.ts';
 import { searchConsole } from '../lib/integrations/providers/search-console.ts';
 import { readCursor, repairEncoding } from '../lib/integrations/providers/zoho-crm.ts';
+import {
+  prospectStatus,
+  readCursor as smartleadCursor,
+  sequenceStatus,
+} from '../lib/integrations/providers/smartlead.ts';
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { leadSourceType, leadStatus, matchStage } from '../lib/integrations/crm-mapping.ts';
@@ -283,4 +288,53 @@ test('repairEncoding leaves text that is already correct in its own script', () 
 test('repairEncoding is idempotent', () => {
   const broken = Buffer.from('श्री', 'utf8').toString('latin1');
   assert.equal(repairEncoding(repairEncoding(broken)), repairEncoding(broken));
+});
+
+// ── Smartlead ──────────────────────────────────────────────────────────────────
+
+test('sequenceStatus maps Smartlead campaign states onto the app vocabulary', () => {
+  assert.equal(sequenceStatus('ACTIVE'), 'active');
+  assert.equal(sequenceStatus('PAUSED'), 'paused');
+  assert.equal(sequenceStatus('COMPLETED'), 'archived');
+  assert.equal(sequenceStatus('DRAFTED'), 'draft');
+  assert.equal(sequenceStatus(null), 'draft');
+});
+
+test('prospectStatus lets a real reply outrank the campaign state', () => {
+  // A lead marked INPROGRESS that has actually replied is a reply. Showing it as merely
+  // active is the difference between someone following up and not.
+  assert.equal(prospectStatus('INPROGRESS', { replied: true }), 'replied');
+  assert.equal(prospectStatus('INPROGRESS'), 'active');
+  assert.equal(prospectStatus('COMPLETED'), 'completed');
+  assert.equal(prospectStatus('STARTED'), 'pending');
+  assert.equal(prospectStatus('BLOCKED'), 'unsubscribed');
+});
+
+test('prospectStatus ranks unsubscribed above bounced above replied', () => {
+  // All three can be true at once on a lead that replied, later bounced, then opted out.
+  // The most final one is the truth about where that address stands now.
+  const all = { replied: true, bounced: true, unsubscribed: true };
+  assert.equal(prospectStatus('INPROGRESS', all), 'unsubscribed');
+  assert.equal(prospectStatus('INPROGRESS', { replied: true, bounced: true }), 'bounced');
+});
+
+test('smartleadCursor restarts on anything it cannot read', () => {
+  assert.equal(smartleadCursor(null), null);
+  assert.equal(smartleadCursor({ index: 2 }), null); // no ids — nothing to resume through
+  assert.deepEqual(smartleadCursor({ ids: [7, 8], index: 1, stage: 'leads', offset: 200 }), {
+    ids: [7, 8],
+    index: 1,
+    stage: 'leads',
+    offset: 200,
+  });
+  assert.equal(smartleadCursor({ ids: [7], index: -1, stage: 'nope', offset: 'x' })?.index, 0);
+  assert.equal(smartleadCursor({ ids: [7], index: 0, stage: 'nope', offset: 0 })?.stage, 'sequences');
+});
+
+test('Smartlead needs no environment variables, so the card is connectable as shipped', () => {
+  // The key is supplied through the UI. A requiredEnv entry would grey the card out and
+  // leave no way to enter one.
+  assert.deepEqual(PROVIDERS.smartlead.requiredEnv, []);
+  assert.equal(PROVIDERS.smartlead.isConfigured(), true);
+  assert.equal(PROVIDERS.smartlead.authKind, 'apiKey');
 });

@@ -3,6 +3,7 @@ import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { leadSourceType, leadStatus, matchStage } from './crm-mapping.ts';
+import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
   IntegrationError,
@@ -609,17 +610,22 @@ async function bulkUpsert(
   rows: unknown[][],
   conflict: string,
   casts: Record<string, string> = {},
+  /** False for the few tables Prisma gave no updatedAt column — sequence_step. */
+  stamped = true,
 ): Promise<{ id: string; externalId: string | null }[]> {
   if (!rows.length) return [];
 
-  const cols = [...columns, 'updatedAt'];
+  const cols = stamped ? [...columns, 'updatedAt'] : [...columns];
   const quoted = cols.map((c) => `"${c}"`).join(', ');
   const assignments = cols.map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ');
+  // Only tables that carry provenance can return it; sequence_step is keyed on its
+  // parent and position instead.
+  const returning = columns.includes('externalId') ? 'id, "externalId"' : 'id, NULL AS "externalId"';
   const touched: { id: string; externalId: string | null }[] = [];
 
   for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
     const chunk = rows.slice(i, i + WRITE_CHUNK);
-    const values = chunk.map((r) => [...r, new Date()]);
+    const values = stamped ? chunk.map((r) => [...r, new Date()]) : chunk.map((r) => [...r]);
     const width = cols.length;
 
     const placeholders = values
@@ -636,7 +642,7 @@ async function bulkUpsert(
       `INSERT INTO "${table}" (id, ${quoted})
        VALUES ${placeholders}
        ON CONFLICT (${conflict}) DO UPDATE SET ${assignments}
-       RETURNING id, "externalId"`,
+       RETURNING ${returning}`,
       ...values.flat(),
     );
     touched.push(...returned);
@@ -888,6 +894,191 @@ async function renewIfNearExpiry(
 }
 
 /**
+ * Turns `outreach_sequence`, `outreach_step`, `outreach_prospect` and
+ * `outreach_engagement` points into real Sequence, SequenceStep and Prospect rows.
+ *
+ * The Outreach page reads those three tables and nothing else — it has never read
+ * metric_snapshot — so without this a mail provider could sync perfectly and the page
+ * would still show only the seeder's three invented sequences.
+ *
+ * Rows match on (source, externalId), so a re-sync updates in place.
+ */
+async function writeOutreach(providerId: string, points: MetricPoint[]): Promise<number> {
+  const sequencePoints = points.filter((p) => p.entityType === 'outreach_sequence' && p.entityId);
+  const stepPoints = points.filter((p) => p.entityType === 'outreach_step' && p.entityId);
+  const prospectPoints = points.filter((p) => p.entityType === 'outreach_prospect' && p.entityId);
+  const engagementPoints = points.filter((p) => p.entityType === 'outreach_engagement' && p.entityId);
+
+  if (!sequencePoints.length && !stepPoints.length && !prospectPoints.length && !engagementPoints.length) {
+    return 0;
+  }
+
+  const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
+  const str = (v: unknown): string | null => {
+    const t = v == null ? '' : String(v).trim();
+    return t === '' ? null : t;
+  };
+
+  let written = 0;
+
+  // ── sequences ───────────────────────────────────────────────────────────────
+  // Only the `record` points carry a name; the rest are the campaign's totals, which
+  // belong in metric_snapshot and have no column on Sequence.
+  const sequenceRows = sequencePoints
+    .filter((p) => p.metricKey === 'record')
+    .map((p) => [p.entityLabel ?? (p.entityId as string), str(meta(p).status) ?? 'draft', providerId, p.entityId]);
+
+  const sequences = await bulkUpsert(
+    'sequence',
+    ['name', 'status', 'source', 'externalId'],
+    sequenceRows,
+    '"source", "externalId"',
+  );
+  const sequenceIdByExternal = new Map(sequences.map((r) => [r.externalId ?? '', r.id]));
+  written += sequences.length;
+
+  // A slice that carries prospects but not their sequence — the pull resumed mid-campaign
+  // — still needs the sequence's id to hang them off.
+  const referenced = new Set(
+    [...stepPoints, ...prospectPoints, ...engagementPoints]
+      .map((p) => str(meta(p).sequenceExternalId))
+      .filter((v): v is string => !!v && !sequenceIdByExternal.has(v)),
+  );
+  if (referenced.size) {
+    const known = await db().sequence.findMany({
+      where: { source: providerId, externalId: { in: [...referenced] } },
+      select: { id: true, externalId: true },
+    });
+    for (const s of known) if (s.externalId) sequenceIdByExternal.set(s.externalId, s.id);
+  }
+
+  // ── steps ───────────────────────────────────────────────────────────────────
+  // SequenceStep is keyed on (sequenceId, position), which is the platform's own notion of
+  // a step, so no externalId of its own is needed.
+  const stepRows: unknown[][] = [];
+  for (const p of stepPoints) {
+    const sequenceId = sequenceIdByExternal.get(str(meta(p).sequenceExternalId) ?? '');
+    if (!sequenceId) continue;
+
+    const m = meta(p);
+    stepRows.push([
+      sequenceId,
+      Number(m.position) || 1,
+      Number(m.waitDays) || 0,
+      str(m.subject) ?? '',
+      str(m.body) ?? '',
+      'email',
+    ]);
+  }
+  const steps = await bulkUpsert(
+    'sequence_step',
+    ['sequenceId', 'position', 'waitDays', 'subject', 'body', 'channel'],
+    stepRows,
+    '"sequenceId", "position"',
+    { position: 'int', waitDays: 'int' },
+    false,
+  );
+  written += steps.length;
+
+  // ── prospects ───────────────────────────────────────────────────────────────
+  // Prospect carries a second unique key, (sequenceId, email), which a bulk insert cannot
+  // negotiate at the same time as (source, externalId): a lead whose address is already in
+  // the sequence under a different id would abort the batch on the wrong index. Those are
+  // resolved first, and are rare.
+  const prospectRows: unknown[][] = [];
+  const collisions: { id: string; data: Record<string, unknown> }[] = [];
+
+  if (prospectPoints.length) {
+    const wanted = prospectPoints
+      .map((p) => {
+        const sequenceId = sequenceIdByExternal.get(str(meta(p).sequenceExternalId) ?? '');
+        const email = str(meta(p).email);
+        return sequenceId && email ? { p, sequenceId, email } : null;
+      })
+      .filter((v): v is { p: MetricPoint; sequenceId: string; email: string } => !!v);
+
+    const existing = wanted.length
+      ? await db().prospect.findMany({
+          where: { OR: wanted.map((w) => ({ sequenceId: w.sequenceId, email: w.email })) },
+          select: { id: true, sequenceId: true, email: true, source: true, externalId: true },
+        })
+      : [];
+    const byPair = new Map(existing.map((r) => [`${r.sequenceId}|${r.email}`, r]));
+
+    for (const { p, sequenceId, email } of wanted) {
+      const m = meta(p);
+      const externalId = p.entityId as string;
+      const data = {
+        sequenceId,
+        email,
+        firstName: str(m.firstName),
+        lastName: str(m.lastName),
+        companyName: str(m.companyName),
+        status: prospectStatusOf(str(m.status)),
+      };
+
+      const clash = byPair.get(`${sequenceId}|${email}`);
+      const alreadyOurs = clash?.source === providerId && clash?.externalId === externalId;
+
+      if (clash && !alreadyOurs) {
+        collisions.push({ id: clash.id, data: { ...data, source: providerId, externalId } });
+      } else {
+        prospectRows.push([
+          data.sequenceId,
+          data.email,
+          data.firstName,
+          data.lastName,
+          data.companyName,
+          data.status,
+          providerId,
+          externalId,
+        ]);
+      }
+    }
+  }
+
+  for (const c of collisions) {
+    await db().prospect.update({ where: { id: c.id }, data: c.data });
+    written++;
+  }
+
+  const prospects = await bulkUpsert(
+    'prospect',
+    ['sequenceId', 'email', 'firstName', 'lastName', 'companyName', 'status', 'source', 'externalId'],
+    prospectRows,
+    '"source", "externalId"',
+    { status: '"ProspectStatus"' },
+  );
+  written += prospects.length;
+
+  // ── engagement ──────────────────────────────────────────────────────────────
+  // Replies and bounces arrive from a different endpoint, keyed by address rather than by
+  // lead id, so they are applied as a status upgrade on top of the prospects above.
+  for (const p of engagementPoints) {
+    const m = meta(p);
+    const sequenceId = sequenceIdByExternal.get(str(m.sequenceExternalId) ?? '');
+    const email = str(m.email);
+    if (!sequenceId || !email) continue;
+
+    const status = prospectStatusOf(null, {
+      replied: !!m.replied,
+      bounced: !!m.bounced,
+      unsubscribed: !!m.unsubscribed,
+    });
+    // Nothing happened to this lead worth overriding the campaign's own state with.
+    if (status === 'pending') continue;
+
+    const updated = await db().prospect.updateMany({
+      where: { sequenceId, email },
+      data: { status },
+    });
+    written += updated.count;
+  }
+
+  return written;
+}
+
+/**
  * How long one sync request may spend fetching before it saves its place and returns.
  *
  * Under Vercel's 300s function ceiling with room for the final write and the response.
@@ -993,7 +1184,7 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0 };
+  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, outreachRows: 0 };
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
@@ -1004,6 +1195,7 @@ async function runPaged(
     total.socialRows += counts.socialRows;
     total.seoRows += counts.seoRows;
     total.crmRows += counts.crmRows;
+    total.outreachRows += counts.outreachRows;
 
     cursor = slice.cursor;
     await db().integration.update({
@@ -1030,7 +1222,14 @@ async function runPaged(
   return { rows: total.rows, detail, done };
 }
 
-type Counts = { rows: number; campaignDays: number; socialRows: number; seoRows: number; crmRows: number };
+type Counts = {
+  rows: number;
+  campaignDays: number;
+  socialRows: number;
+  seoRows: number;
+  crmRows: number;
+  outreachRows: number;
+};
 
 /** metric_snapshot first — the honest archive of what the provider reported — then the
  *  materialisers that populate the tables the pages actually read. */
@@ -1046,6 +1245,7 @@ async function persist(
     socialRows: await writeSocialActivity(integrationId, points),
     seoRows: await writeSeoRows(provider, config, points),
     crmRows: await writeCrmRecords(provider.id, points),
+    outreachRows: await writeOutreach(provider.id, points),
   };
 }
 
@@ -1060,6 +1260,7 @@ function describe(c: Counts): string {
     c.socialRows ? `${c.socialRows} social rows` : null,
     c.seoRows ? `${c.seoRows} SEO rows` : null,
     c.crmRows ? `${c.crmRows} CRM records` : null,
+    c.outreachRows ? `${c.outreachRows} outreach rows` : null,
   ].filter(Boolean);
 
   return materialised.length

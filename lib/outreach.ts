@@ -35,6 +35,9 @@ export async function sequences() {
       id: s.id,
       name: s.name,
       status: s.status,
+      /// Which system wrote the sequence, so the page can tell a real campaign from a
+      /// seeded one. Null means the seeder or someone typing into the UI.
+      source: s.source,
       ownerEmail: s.ownerEmail,
       steps: s.steps.map((st) => ({
         id: st.id,

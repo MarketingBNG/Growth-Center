@@ -1,10 +1,12 @@
 import { Send, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { hasDb } from '@/lib/prisma';
 import { sequences } from '@/lib/outreach';
+import { DEMO_SOURCE } from '@/lib/sources';
 import { emailStatus } from '@/lib/email';
 import { fmtPercent, fmtRelative } from '@/lib/format';
 
@@ -53,7 +55,7 @@ export default async function OutreachPage() {
           <EmptyState
             icon={<Send className="size-6" />}
             title="No sequences yet"
-            hint="Run npm run db:seed for a demo sequence, or create one once an email provider is wired up."
+            hint="Connect Smartlead in the Integration Center, or run npm run db:seed for a demo sequence."
           />
         </Card>
       ) : (
@@ -63,7 +65,10 @@ export default async function OutreachPage() {
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <CardTitle>{s.name}</CardTitle>
+                    <span className="flex items-center gap-1.5">
+                      <CardTitle>{s.name}</CardTitle>
+                      <SourceBadge source={s.source ?? DEMO_SOURCE} />
+                    </span>
                     <p className="text-xs text-muted-foreground">
                       {s.steps.length} steps · {s.prospects} prospects
                       {s.ownerEmail ? ` · ${s.ownerEmail.split('@')[0]}` : ''} · created{' '}

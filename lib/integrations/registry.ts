@@ -4,6 +4,7 @@ import { metaAds } from './providers/meta-ads.ts';
 import { metaSocial } from './providers/meta-social.ts';
 import { searchConsole } from './providers/search-console.ts';
 import { semrush } from './providers/semrush.ts';
+import { smartlead } from './providers/smartlead.ts';
 import { zohoCrm } from './providers/zoho-crm.ts';
 
 // A plain map. The Integration Center renders from this, so a provider added here
@@ -14,6 +15,7 @@ export const PROVIDERS: Record<string, IntegrationProvider> = {
   [metaSocial.id]: metaSocial,
   [searchConsole.id]: searchConsole,
   [semrush.id]: semrush,
+  [smartlead.id]: smartlead,
   [zohoCrm.id]: zohoCrm,
 };
 

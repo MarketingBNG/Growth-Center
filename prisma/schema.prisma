@@ -853,9 +853,16 @@ model Sequence {
   steps     SequenceStep[]
   prospects Prospect[]
 
+
+  /// The provider's own id for this row, when a sync imported it. Lets a re-sync update
+  /// in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: smartlead, …
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@map("sequence")
 }
 
@@ -892,9 +899,16 @@ model Prospect {
   contact  Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
   messages OutreachMessage[]
 
+
+  /// The provider's own id for this row, when a sync imported it. Lets a re-sync update
+  /// in place instead of duplicating — the pattern Campaign already uses.
+  externalId String?
+  source     String? // integration id: smartlead, …
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@unique([sequenceId, email])
   @@map("prospect")
 }
