@@ -16,6 +16,7 @@ import {
 } from '../lib/integrations/providers/smartlead.ts';
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
+import { splitName } from '../lib/integrations/service.ts';
 import { leadSourceType, leadStatus, matchStage } from '../lib/integrations/crm-mapping.ts';
 
 // The parts of the new providers that can be tested without a live API: the parsing of
@@ -337,4 +338,20 @@ test('Smartlead needs no environment variables, so the card is connectable as sh
   assert.deepEqual(PROVIDERS.smartlead.requiredEnv, []);
   assert.equal(PROVIDERS.smartlead.isConfigured(), true);
   assert.equal(PROVIDERS.smartlead.authKind, 'apiKey');
+});
+
+// ── name assembly ──────────────────────────────────────────────────────────────
+// splitName is not exported — it is exercised here through the shape it has to produce.
+// Zoho makes Last_Name mandatory and First_Name optional, so most records carry the whole
+// name in Last_Name alone, and 21,151 leads rendered as "Irshad Alli Irshad Alli".
+
+test('a lone name goes in firstName so joining the two does not repeat it', () => {
+  const join = (n: { firstName: string; lastName: string | null }) =>
+    [n.firstName, n.lastName].filter(Boolean).join(' ');
+
+  assert.equal(join(splitName('Basisth', 'Jha', undefined, 'x')), 'Basisth Jha');
+  assert.equal(join(splitName(null, 'Irshad Alli', 'Irshad Alli', 'x')), 'Irshad Alli');
+  assert.equal(join(splitName('Sanju', null, 'Sanju', 'x')), 'Sanju');
+  // Nothing usable at all still has to satisfy a NOT NULL column.
+  assert.equal(join(splitName(null, null, undefined, 'lead-9931')), 'lead-9931');
 });

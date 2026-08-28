@@ -652,6 +652,28 @@ async function bulkUpsert(
 }
 
 /**
+ * Puts a person's name into the two columns the schema has.
+ *
+ * Lead.firstName and Contact.firstName are NOT NULL, so something must fill them. The
+ * obvious fallback — first name, else the display label — is wrong: Zoho makes Last_Name
+ * mandatory and First_Name optional, so most records here carry the whole name in
+ * Last_Name alone. Falling back to the label then copied that same name into firstName,
+ * and 21,151 of 26,073 leads rendered as "Irshad Alli Irshad Alli".
+ *
+ * A lone name belongs in firstName with lastName empty, so joining the two reads correctly
+ * whichever way round the source happened to store it.
+ */
+export function splitName(
+  first: string | null,
+  last: string | null,
+  label: string | undefined,
+  fallback: string,
+): { firstName: string; lastName: string | null } {
+  if (first && last) return { firstName: first, lastName: last };
+  return { firstName: first ?? last ?? label ?? fallback, lastName: null };
+}
+
+/**
  * Turns `crm_lead`, `crm_contact` and `crm_deal` points into real Lead, Contact and
  * Opportunity rows, plus the Company rows they hang off.
  *
@@ -733,9 +755,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       }
 
       const accountId = str(m.accountId);
+      const name = splitName(str(m.firstName), str(m.lastName), p.entityLabel, externalId);
       const row = {
-        firstName: str(m.firstName) ?? p.entityLabel ?? externalId,
-        lastName: str(m.lastName),
+        firstName: name.firstName,
+        lastName: name.lastName,
         email,
         phone: str(m.phone),
         title: str(m.title),
@@ -779,9 +802,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   const leadRows = leadPoints.map((p) => {
     const m = meta(p);
     const externalId = p.entityId as string;
+    const name = splitName(str(m.firstName), str(m.lastName), p.entityLabel, externalId);
     return [
-      str(m.firstName) ?? p.entityLabel ?? externalId,
-      str(m.lastName),
+      name.firstName,
+      name.lastName,
       str(m.email),
       str(m.phone),
       str(m.companyName),
