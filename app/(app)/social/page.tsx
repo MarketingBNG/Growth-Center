@@ -32,7 +32,7 @@ export default async function SocialPage() {
           <EmptyState
             icon={<Share2 className="size-6" />}
             title="No social accounts"
-            hint="Run npm run db:seed for demo data. Connecting a live account needs a Meta or LinkedIn app."
+            hint="Connect Facebook and Instagram on the Integrations page. LinkedIn needs their Marketing Developer Platform approval."
           />
         </Card>
       </>

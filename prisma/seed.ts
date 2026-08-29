@@ -208,7 +208,49 @@ async function wipe() {
   await db.channel.deleteMany();
 }
 
+/**
+ * Refuses to run against a database that holds real data.
+ *
+ * `wipe()` empties every table, integrations and their credentials included — so running
+ * this against production would delete the imported CRM and disconnect every provider,
+ * with the OAuth grants gone and no way back but re-authorising each one by hand. There
+ * was nothing stopping it: one wrong DATABASE_URL and the workspace is empty.
+ *
+ * Provenance is the test, not row counts: seeded rows carry no `source`, so a database
+ * with even one provider-written record has something worth losing.
+ */
+async function guard() {
+  if (process.env.SEED_FORCE === 'yes-delete-everything') {
+    console.warn('SEED_FORCE set — wiping a database that may hold real data.');
+    return;
+  }
+
+  const [leads, deals, integrations] = await Promise.all([
+    db.lead.count({ where: { source: { not: null } } }),
+    db.opportunity.count({ where: { source: { not: null } } }),
+    db.integrationCredential.count(),
+  ]);
+
+  if (leads + deals + integrations === 0) return;
+
+  console.error(
+    [
+      'Refusing to seed: this database holds real data.',
+      `  ${leads} imported leads, ${deals} imported deals, ${integrations} stored credentials.`,
+      '',
+      'Seeding deletes every table, including the integration credentials — every',
+      'provider would have to be re-authorised by hand.',
+      '',
+      'If that is genuinely what you want:',
+      '  SEED_FORCE=yes-delete-everything npm run db:seed',
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 async function main() {
+  await guard();
+
   console.log('Clearing existing rows…');
   await wipe();
 

@@ -52,7 +52,7 @@ export default async function PipelinePage({
           <EmptyState
             icon={<Kanban className="size-6" />}
             title="No pipeline configured"
-            hint="Run npm run db:seed to create the default pipeline and its stages."
+            hint="No pipeline exists yet. One is created with its stages when the workspace is first set up."
           />
         </Card>
       </>

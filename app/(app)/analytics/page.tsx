@@ -122,7 +122,7 @@ export default async function AnalyticsPage({
             <EmptyState
               icon={<ChartLine className="size-6" />}
               title="No metrics recorded yet"
-              hint="Run npm run db:seed for demo figures, or connect a provider."
+              hint="Connect Google Analytics on the Integrations page to start collecting figures."
             />
           ) : (
             <TableWrap>

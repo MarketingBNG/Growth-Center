@@ -24,7 +24,9 @@ stack and conventions on purpose, so the team reads one codebase.
    - `APP_ENCRYPTION_KEY` — `openssl rand -hex 32` (exactly 64 hex chars)
 2. `npm install`
 3. `npm run db:migrate` — creates the schema
-4. `npm run db:seed` — 12 months of coherent demo data
+4. `npm run db:seed` — 12 months of coherent demo data, for an empty database only.
+   It deletes every table, integration credentials included, and refuses to run against
+   a database holding provider-written rows.
 5. `npm run dev` → http://localhost:3000
 
 Without `DATABASE_URL` the app still boots: every page renders a "no database

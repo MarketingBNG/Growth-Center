@@ -55,7 +55,7 @@ export default async function OutreachPage() {
           <EmptyState
             icon={<Send className="size-6" />}
             title="No sequences yet"
-            hint="Connect Smartlead in the Integration Center, or run npm run db:seed for a demo sequence."
+            hint="Connect Smartlead on the Integrations page to import your campaigns."
           />
         </Card>
       ) : (

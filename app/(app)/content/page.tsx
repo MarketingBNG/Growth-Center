@@ -45,7 +45,7 @@ export default async function ContentPage() {
           <EmptyState
             icon={<FileText className="size-6" />}
             title="No content yet"
-            hint="Add an idea, or run npm run db:seed for demo data."
+            hint="Add an idea to start planning. Nothing imports content — this board is filled by hand."
           />
         </Card>
       ) : (
