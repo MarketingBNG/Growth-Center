@@ -10,7 +10,7 @@ import { can } from '@/lib/roles';
 import { db, hasDb } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { aiStatus } from '@/lib/ai';
-import { currencySettings } from '@/lib/settings';
+import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
 import { ApiKeys } from './ApiKeys';
@@ -47,7 +47,9 @@ export default async function SettingsPage() {
       orderBy: { createdAt: 'asc' },
       include: { stages: { orderBy: { position: 'asc' } } },
     }),
-    currencySettings(),
+    // Refreshed on read as well as on the cron, so opening the page after a quiet
+    // week converts at today's rate rather than last week's.
+    refreshRatesIfStale(),
   ]);
 
   const ai = aiStatus();

@@ -1,5 +1,13 @@
 import { db, hasDb } from './prisma.ts';
-import { CURRENCIES, defaultCurrencySettings, parseCurrencySettings, type CurrencySettings } from './currency.ts';
+import {
+  CURRENCIES,
+  RATE_STALE_HOURS,
+  defaultCurrencySettings,
+  parseCurrencySettings,
+  rateAgeHours,
+  type CurrencySettings,
+} from './currency.ts';
+import { fetchRates } from './fx.ts';
 
 // Workspace preferences. One row per key in app_setting, read as a block.
 //
@@ -33,3 +41,34 @@ export async function saveCurrencySettings(input: unknown): Promise<CurrencySett
 
 export { CURRENCIES };
 export type { CurrencySettings };
+
+/**
+ * Refreshes the live rates if they are stale, and returns the settings either way.
+ *
+ * Called from the page that reads them rather than only from the cron, so a workspace
+ * that has not synced today still converts at today's rate. `force` is the settings
+ * page's Refresh button.
+ *
+ * A failed fetch keeps the rates already stored — at worst yesterday's — and leaves
+ * `fetchedAt` alone so the settings page can say how old they are. Falling back to a
+ * constant would put a figure nobody chose behind every total.
+ */
+export async function refreshRatesIfStale(force = false): Promise<CurrencySettings> {
+  const settings = await currencySettings();
+  if (settings.mode !== 'live') return settings;
+
+  const age = rateAgeHours(settings);
+  if (!force && age !== null && age < RATE_STALE_HOURS) return settings;
+
+  const fresh = await fetchRates(settings.reporting);
+  if (!fresh) return settings;
+
+  return saveCurrencySettings({
+    ...settings,
+    rates: { ...settings.rates, ...fresh.rates },
+    fetchedAt: fresh.fetchedAt,
+    source: fresh.source,
+  });
+}
+
+export { rateAgeHours, RATE_STALE_HOURS };

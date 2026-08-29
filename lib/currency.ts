@@ -25,13 +25,22 @@ export type CurrencySettings = {
    * quoted against.
    */
   rates: Record<string, number>;
+  /** `live` refreshes from the daily reference rate; `manual` leaves the figures alone. */
+  mode: 'live' | 'manual';
+  /** When the live rates were last fetched, ISO, or null if they never have been. */
+  fetchedAt: string | null;
+  /** Where a live rate came from, for the settings page to name. */
+  source: string | null;
 };
 
 export const defaultCurrencySettings = (): CurrencySettings => ({
   reporting: 'USD',
-  // A starting point, not a live rate. Shown in the settings form so it is edited
-  // knowingly rather than trusted silently.
-  rates: { USD: 1, INR: 87 },
+  // A starting point only. Live mode replaces it on the first refresh; a stale constant
+  // is exactly what a fixed rate becomes, and this one was already 9% out.
+  rates: { USD: 1, INR: 95.4 },
+  mode: 'live',
+  fetchedAt: null,
+  source: null,
 });
 
 const isCode = (v: unknown): v is CurrencyCode =>
@@ -62,8 +71,30 @@ export function parseCurrencySettings(raw: unknown): CurrencySettings {
 
   // The reporting currency is its own unit by definition.
   rates[reporting] = 1;
-  return { reporting, rates };
+
+  const mode = v.mode === 'manual' ? 'manual' : 'live';
+  const fetchedAt = typeof v.fetchedAt === 'string' ? v.fetchedAt : null;
+  const source = typeof v.source === 'string' ? v.source : null;
+
+  return { reporting, rates, mode, fetchedAt, source };
 }
+
+/**
+ * How old the live rates are, in hours, or null if they have never been fetched.
+ *
+ * Surfaced rather than hidden: a rate that silently stopped refreshing is a wrong number
+ * that looks exactly like a right one, which is the failure this whole file exists for.
+ */
+export function rateAgeHours(settings: CurrencySettings, now = new Date()): number | null {
+  if (!settings.fetchedAt) return null;
+  const at = new Date(settings.fetchedAt);
+  if (Number.isNaN(at.getTime())) return null;
+  return (now.getTime() - at.getTime()) / 3_600_000;
+}
+
+/** Rates are published once a working day, so a day and a half covers a weekend without
+ *  calling every Saturday stale. */
+export const RATE_STALE_HOURS = 36;
 
 export const symbolOf = (code: string): string =>
   CURRENCIES.find((c) => c.code === code)?.symbol ?? `${code} `;

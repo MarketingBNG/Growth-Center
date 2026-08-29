@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
+import { refreshRatesIfStale } from '@/lib/settings';
 import { hasDb } from '@/lib/prisma';
 
 /**
@@ -27,6 +28,11 @@ export async function GET(req: Request) {
   }
 
   const started = Date.now();
+
+  // Before the syncs, not after: they can run to a deadline and stop, and the rates are
+  // what every money figure on every page is converted with.
+  const currency = await refreshRatesIfStale();
+
   const results = await syncAll();
 
   // Logged as well as returned: the response goes to the scheduler, which nobody reads
@@ -40,6 +46,7 @@ export async function GET(req: Request) {
     ok: failed.length === 0,
     ms: Date.now() - started,
     synced: results.filter((r) => r.status === 'synced').length,
+    rates: { fetchedAt: currency.fetchedAt, source: currency.source },
     results,
   });
 }

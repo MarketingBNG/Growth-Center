@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  RATE_STALE_HOURS,
   convert,
   defaultCurrencySettings,
   parseCurrencySettings,
+  rateAgeHours,
   sumInReporting,
 } from '../lib/currency.ts';
 
@@ -36,14 +38,37 @@ test('the reporting currency is always its own unit, whatever is stored', () => 
 });
 
 test('a nonsense rate falls back rather than blanking every figure', () => {
+  // Compared against the default rather than a literal: the fallback is a starting point
+  // that live mode overwrites, and a test that pins its value would fail on every update.
+  const fallback = defaultCurrencySettings().rates.INR;
+
   const zero = parseCurrencySettings({ reporting: 'USD', rates: { INR: 0 } });
-  assert.equal(zero.rates.INR, 87, 'zero would divide the figure into infinity');
+  assert.equal(zero.rates.INR, fallback, 'zero would divide the figure into infinity');
 
   const negative = parseCurrencySettings({ reporting: 'USD', rates: { INR: -3 } });
-  assert.equal(negative.rates.INR, 87);
+  assert.equal(negative.rates.INR, fallback);
 
-  const text = parseCurrencySettings({ reporting: 'USD', rates: { INR: 'eighty-seven' } });
-  assert.equal(text.rates.INR, 87);
+  const text = parseCurrencySettings({ reporting: 'USD', rates: { INR: 'ninety-five' } });
+  assert.equal(text.rates.INR, fallback);
+});
+
+test('rate age is reported so a feed that stopped is visible', () => {
+  const now = new Date('2026-08-29T12:00:00Z');
+  // Never fetched is not "fresh"; it is unknown, and the caller must be able to tell.
+  assert.equal(rateAgeHours(parseCurrencySettings({}), now), null);
+  assert.equal(rateAgeHours(parseCurrencySettings({ fetchedAt: 'not a date' }), now), null);
+
+  const six = parseCurrencySettings({ fetchedAt: '2026-08-29T06:00:00Z' });
+  assert.equal(rateAgeHours(six, now), 6);
+
+  const old = parseCurrencySettings({ fetchedAt: '2026-08-25T12:00:00Z' });
+  assert.ok((rateAgeHours(old, now) ?? 0) > RATE_STALE_HOURS);
+});
+
+test('mode defaults to live, and only the exact word turns it off', () => {
+  assert.equal(parseCurrencySettings({}).mode, 'live');
+  assert.equal(parseCurrencySettings({ mode: 'manual' }).mode, 'manual');
+  assert.equal(parseCurrencySettings({ mode: 'whatever' }).mode, 'live');
 });
 
 test('a malformed settings row degrades to the defaults', () => {
