@@ -1153,6 +1153,44 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
  */
 const SYNC_BUDGET_MS = 230_000;
 
+/**
+ * How long a run may hold the sync lock before another is allowed to take it.
+ *
+ * A serverless function can be killed without ever clearing `state`, and a provider left
+ * permanently "syncing" would be a provider that can never sync again. The longest a run
+ * can legitimately live is the route's maxDuration (300s), so anything past double that
+ * is dead rather than slow.
+ */
+const SYNC_LEASE_MS = 10 * 60 * 1000;
+
+/**
+ * Takes the sync lock, or refuses.
+ *
+ * Two runs of the same provider both read the same cursor, fetch the same pages and then
+ * race to write it back — the loser's progress is lost and a long backfill starts over.
+ * Easy to cause: clicking Sync now while the card already says Syncing, or clicking
+ * during the nightly cron.
+ *
+ * Written as a conditional updateMany rather than a read-then-write so the check and the
+ * claim are one statement. Reading the state first and updating after leaves the window
+ * this is meant to close.
+ */
+async function claimSync(integrationId: string, providerName: string): Promise<void> {
+  const claimed = await db().integration.updateMany({
+    where: {
+      id: integrationId,
+      OR: [{ state: { not: 'syncing' } }, { updatedAt: { lt: new Date(Date.now() - SYNC_LEASE_MS) } }],
+    },
+    data: { state: 'syncing' },
+  });
+
+  if (claimed.count === 0) {
+    throw new IntegrationError(
+      `${providerName} is already syncing. It will carry on from where it stopped — no need to start another.`,
+    );
+  }
+}
+
 export async function sync(id: string, days = 30) {
   const provider = requireProvider(id);
 
@@ -1172,7 +1210,7 @@ export async function sync(id: string, days = 30) {
     throw new IntegrationError(`${provider.name} is not connected.`);
   }
 
-  await db().integration.update({ where: { id: integration.id }, data: { state: 'syncing' } });
+  await claimSync(integration.id, provider.name);
 
   const to = new Date();
   const from = new Date(to);
@@ -1652,7 +1690,16 @@ export async function syncAll(days = 30): Promise<SyncAllResult[]> {
       const { rows: written, done } = await sync(row.provider, days);
       results.push({ provider: row.provider, status: 'synced', rows: written, done });
     } catch (e) {
-      results.push({ provider: row.provider, status: 'failed', reason: (e as Error).message });
+      const reason = (e as Error).message;
+      // A provider already mid-run is not a failure — someone started it by hand and it
+      // is still going. Reported as skipped so the cron log keeps meaning "something
+      // broke" rather than "the two schedules overlapped".
+      const busy = e instanceof IntegrationError && reason.includes('already syncing');
+      results.push(
+        busy
+          ? { provider: row.provider, status: 'skipped', reason }
+          : { provider: row.provider, status: 'failed', reason },
+      );
     }
   }
 
