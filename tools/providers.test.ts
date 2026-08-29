@@ -224,9 +224,12 @@ test('the Zoho provider advertises the records it now imports', () => {
 // The cursor is what lets a 39,000-record backfill span several runs. A cursor that
 // cannot be read back is an integration that restarts its import forever.
 
-test('readCursor starts a fresh pull when there is nothing stored', () => {
-  assert.deepEqual(readCursor(null), { module: 'Leads', page: 1, pageToken: null });
-  assert.deepEqual(readCursor(undefined), { module: 'Leads', page: 1, pageToken: null });
+test('readCursor starts a fresh pull at the FIRST module, not a named one', () => {
+  // The pull walks the module list forwards, so a hardcoded starting point silently skips
+  // everything ordered before it — which is how adding Accounts ahead of Leads meant
+  // Accounts was never fetched at all.
+  assert.deepEqual(readCursor(null), { module: 'Accounts', page: 1, pageToken: null });
+  assert.deepEqual(readCursor(undefined), { module: 'Accounts', page: 1, pageToken: null });
 });
 
 test('readCursor round-trips a cursor it wrote', () => {
@@ -237,10 +240,10 @@ test('readCursor round-trips a cursor it wrote', () => {
 test('readCursor restarts rather than throwing on a cursor it does not recognise', () => {
   // A cursor written by an older version, or naming a module since removed. Restarting
   // costs one pass; throwing would wedge the integration with no way out from the UI.
-  assert.equal(readCursor({ module: 'Invoices', page: 4 }).module, 'Leads');
+  assert.equal(readCursor({ module: 'Invoices', page: 4 }).module, 'Accounts');
   assert.equal(readCursor({ module: 'Deals', page: 'nonsense' }).page, 1);
   assert.equal(readCursor({ module: 'Deals', page: -3 }).page, 1);
-  assert.equal(readCursor('a string').module, 'Leads');
+  assert.equal(readCursor('a string').module, 'Accounts');
 });
 
 test('readCursor treats an empty page token as absent', () => {
