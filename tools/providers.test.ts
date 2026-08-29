@@ -17,7 +17,7 @@ import {
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { splitName } from '../lib/integrations/service.ts';
-import { leadSourceType, leadStatus, matchStage } from '../lib/integrations/crm-mapping.ts';
+import { leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from '../lib/integrations/crm-mapping.ts';
 
 // The parts of the new providers that can be tested without a live API: the parsing of
 // what the platform sends back, and the normalising of what a person types in.
@@ -355,3 +355,51 @@ test('a lone name goes in firstName so joining the two does not repeat it', () =
   // Nothing usable at all still has to satisfy a NOT NULL column.
   assert.equal(join(splitName(null, null, undefined, 'lead-9931')), 'lead-9931');
 });
+
+const STAGE_NAMES = [
+  'Open Deal Flow',
+  'Qualified Deal',
+  'Deal Complete',
+  'Project In Progress',
+  'Project Completed',
+  'Deal Lost',
+];
+
+test('taskStatus keeps deferred and waiting work open', () => {
+  // Neither has been done nor called off, so marking them done would hide live work.
+  assert.equal(taskStatus('Deferred'), 'open');
+  assert.equal(taskStatus('Waiting for input'), 'open');
+  assert.equal(taskStatus('Not Started'), 'open');
+  assert.equal(taskStatus('In Progress'), 'in_progress');
+  assert.equal(taskStatus('Completed'), 'done');
+  assert.equal(taskStatus(null), 'open');
+});
+
+test('taskPriority tests the extremes before the words they contain', () => {
+  // "Highest" contains "high" and "Lowest" contains "low", so order decides correctness.
+  assert.equal(taskPriority('Highest'), 'urgent');
+  assert.equal(taskPriority('High'), 'high');
+  assert.equal(taskPriority('Lowest'), 'low');
+  assert.equal(taskPriority('Low'), 'low');
+  assert.equal(taskPriority('Normal'), 'normal');
+  assert.equal(taskPriority(undefined), 'normal');
+});
+
+test('the pipeline stages match the ones the CRM actually sends', () => {
+  // The seeded pipeline used generic names, so every imported deal fell through to the
+  // first open stage and the pipeline showed as a single column.
+  const stages = STAGE_NAMES.map((name, i) => ({
+    id: String(i),
+    name,
+    position: i,
+    probability: 0,
+    isWon: name === 'Deal Complete' || name.startsWith('Project'),
+    isLost: name === 'Deal Lost',
+  }));
+  for (const name of STAGE_NAMES) {
+    assert.equal(matchStage(stages, name)?.name, name);
+  }
+  assert.equal(matchStage(stages, 'Deal Complete')?.isWon, true);
+  assert.equal(matchStage(stages, 'Deal Lost')?.isLost, true);
+});
+

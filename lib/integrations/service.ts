@@ -2,7 +2,7 @@ import { db } from '../prisma.ts';
 import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
-import { leadSourceType, leadStatus, matchStage } from './crm-mapping.ts';
+import { leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
@@ -620,6 +620,14 @@ const STAGE_SELECT = {
  * `casts` carries the Postgres type for any column a text placeholder cannot satisfy on
  * its own — the enum columns and the numerics.
  */
+/** A point's provider payload, and a trimmed string from it — every materialiser reads
+ *  entityMeta the same defensive way, so they read it through these. */
+const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
+const str = (v: unknown): string | null => {
+  const t = v == null ? '' : String(v).trim();
+  return t === '' ? null : t;
+};
+
 async function bulkUpsert(
   table: string,
   columns: string[],
@@ -721,12 +729,6 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   const contactPoints = points.filter((p) => p.entityType === 'crm_contact' && p.entityId);
   const dealPoints = points.filter((p) => p.entityType === 'crm_deal' && p.entityId);
   if (!leadPoints.length && !contactPoints.length && !dealPoints.length) return 0;
-
-  const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
-  const str = (v: unknown): string | null => {
-    const t = v == null ? '' : String(v).trim();
-    return t === '' ? null : t;
-  };
 
   let written = 0;
 
@@ -974,12 +976,6 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
   if (!sequencePoints.length && !stepPoints.length && !prospectPoints.length && !engagementPoints.length) {
     return 0;
   }
-
-  const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
-  const str = (v: unknown): string | null => {
-    const t = v == null ? '' : String(v).trim();
-    return t === '' ? null : t;
-  };
 
   let written = 0;
 
@@ -1254,7 +1250,7 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, revenueRows: 0, outreachRows: 0 };
+  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
@@ -1298,9 +1294,155 @@ type Counts = {
   socialRows: number;
   seoRows: number;
   crmRows: number;
+  activityRows: number;
   revenueRows: number;
   outreachRows: number;
 };
+
+/**
+ * Turns `crm_task` and `crm_activity` points into Task and Activity rows.
+ *
+ * Zoho keeps the work log in three modules — Tasks, Calls, Events — and until now none of
+ * it was imported, so the activity feed and task list showed only what the seeder wrote.
+ *
+ * Both tables hang off whichever record the activity was about. Zoho names it in What_Id
+ * (a lead or a deal) and Who_Id (a contact) without saying which module either belongs
+ * to, so the ids are resolved here against the records already imported: whatever matches
+ * wins, and an activity whose subject was never imported still lands, unattached, rather
+ * than being dropped.
+ */
+async function writeCrmActivity(providerId: string, points: MetricPoint[]): Promise<number> {
+  const taskPoints = points.filter((p) => p.entityType === 'crm_task' && p.entityId);
+  const activityPoints = points.filter((p) => p.entityType === 'crm_activity' && p.entityId);
+  if (!taskPoints.length && !activityPoints.length) return 0;
+
+  const referenced = new Set<string>();
+  for (const p of [...taskPoints, ...activityPoints]) {
+    const m = meta(p);
+    const what = str(m.whatId);
+    const who = str(m.whoId);
+    if (what) referenced.add(what);
+    if (who) referenced.add(who);
+  }
+
+  // One lookup per table over the whole referenced set, sliced so a large pull cannot
+  // exceed Postgres's bind-parameter limit.
+  const LOOKUP_CHUNK = 1000;
+  const ids = [...referenced];
+  const leadBy = new Map<string, string>();
+  const contactBy = new Map<string, string>();
+  const dealBy = new Map<string, string>();
+  const dealCompany = new Map<string, string | null>();
+
+  for (let i = 0; i < ids.length; i += LOOKUP_CHUNK) {
+    const slice = ids.slice(i, i + LOOKUP_CHUNK);
+    const where = { source: providerId, externalId: { in: slice } };
+    const [leads, contacts, deals] = await Promise.all([
+      db().lead.findMany({ where, select: { id: true, externalId: true } }),
+      db().contact.findMany({ where, select: { id: true, externalId: true } }),
+      db().opportunity.findMany({ where, select: { id: true, externalId: true, companyId: true } }),
+    ]);
+    for (const r of leads) if (r.externalId) leadBy.set(r.externalId, r.id);
+    for (const r of contacts) if (r.externalId) contactBy.set(r.externalId, r.id);
+    for (const r of deals) {
+      if (!r.externalId) continue;
+      dealBy.set(r.externalId, r.id);
+      dealCompany.set(r.externalId, r.companyId);
+    }
+  }
+
+  /** Whatever the two Zoho ids turn out to point at. A contact reference also carries no
+   *  company of its own, so only a deal can supply one. */
+  const link = (whatId: string | null, whoId: string | null) => {
+    const opportunityId = whatId ? (dealBy.get(whatId) ?? null) : null;
+    const leadId = (whatId && leadBy.get(whatId)) || (whoId && leadBy.get(whoId)) || null;
+    const contactId = (whoId && contactBy.get(whoId)) || (whatId && contactBy.get(whatId)) || null;
+    const companyId = whatId ? (dealCompany.get(whatId) ?? null) : null;
+    return { opportunityId, leadId, contactId, companyId };
+  };
+
+  let written = 0;
+
+  if (taskPoints.length) {
+    const rows: unknown[][] = [];
+    for (const p of taskPoints) {
+      const m = meta(p);
+      const status = taskStatus(str(m.status));
+      const due = str(m.dueDate);
+      const dueDate = due ? new Date(due) : null;
+      const { opportunityId, leadId, contactId, companyId } = link(str(m.whatId), str(m.whoId));
+
+      rows.push([
+        str(m.title) ?? p.entityLabel ?? (p.entityId as string),
+        str(m.detail),
+        status,
+        taskPriority(str(m.priority)),
+        dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
+        str(m.ownerEmail),
+        // Zoho records no completion time, so a done task is dated by the day it was last
+        // touched rather than left null, which the task list reads as still open.
+        status === 'done' ? p.date : null,
+        leadId,
+        contactId,
+        companyId,
+        opportunityId,
+        providerId,
+        p.entityId as string,
+      ]);
+    }
+
+    const touched = await bulkUpsert(
+      'task',
+      ['title', 'detail', 'status', 'priority', 'dueDate', 'assigneeEmail', 'completedAt', 'leadId', 'contactId', 'companyId', 'opportunityId', 'source', 'externalId'],
+      rows,
+      '"source", "externalId"',
+      { status: '"TaskStatus"', priority: '"Priority"', dueDate: 'timestamp(3)', completedAt: 'timestamp(3)' },
+    );
+    written += touched.length;
+  }
+
+  if (activityPoints.length) {
+    const rows: unknown[][] = [];
+    for (const p of activityPoints) {
+      const m = meta(p);
+      const { opportunityId, leadId, contactId, companyId } = link(str(m.whatId), str(m.whoId));
+
+      rows.push([
+        str(m.kind) === 'meeting' ? 'meeting' : 'call',
+        str(m.summary) ?? p.entityLabel ?? (p.entityId as string),
+        str(m.ownerEmail),
+        JSON.stringify({
+          detail: str(m.detail),
+          direction: str(m.direction),
+          duration: str(m.duration),
+          endsAt: str(m.endsAt),
+        }),
+        leadId,
+        contactId,
+        companyId,
+        opportunityId,
+        // The feed is ordered by createdAt, so it has to be when the call or meeting
+        // happened. Left to default(now()) every imported activity would stack up on the
+        // day of the sync.
+        p.date,
+        providerId,
+        p.entityId as string,
+      ]);
+    }
+
+    const touched = await bulkUpsert(
+      'activity',
+      ['type', 'summary', 'actorEmail', 'detail', 'leadId', 'contactId', 'companyId', 'opportunityId', 'createdAt', 'source', 'externalId'],
+      rows,
+      '"source", "externalId"',
+      { type: '"ActivityType"', detail: 'jsonb', createdAt: 'timestamp(3)' },
+      false,
+    );
+    written += touched.length;
+  }
+
+  return written;
+}
 
 /**
  * Derives Customer and RevenueEntry rows from deals sitting in a won stage.
@@ -1377,6 +1519,8 @@ async function persist(
     socialRows: await writeSocialActivity(integrationId, points),
     seoRows: await writeSeoRows(provider, config, points),
     crmRows: await writeCrmRecords(provider.id, points),
+    // After the CRM records too: activities are attached to the leads and deals above.
+    activityRows: await writeCrmActivity(provider.id, points),
     // After the CRM records, never before: it reads the deals that step just wrote.
     revenueRows: await writeRevenueFromWonDeals(),
     outreachRows: await writeOutreach(provider.id, points),
@@ -1394,6 +1538,7 @@ function describe(c: Counts): string {
     c.socialRows ? `${c.socialRows} social rows` : null,
     c.seoRows ? `${c.seoRows} SEO rows` : null,
     c.crmRows ? `${c.crmRows} CRM records` : null,
+    c.activityRows ? `${c.activityRows} activities and tasks` : null,
     c.revenueRows ? `${c.revenueRows} revenue entries` : null,
     c.outreachRows ? `${c.outreachRows} outreach rows` : null,
   ].filter(Boolean);

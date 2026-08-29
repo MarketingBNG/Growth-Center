@@ -516,11 +516,18 @@ model Activity {
   company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
+  /// Set when a sync imported this instead of the app recording it, so a re-sync updates
+  /// in place — the pattern Lead and Opportunity already use.
+  externalId String?
+  source     String? // integration id: zoho_crm, …
+
   createdAt DateTime @default(now())
 
+  @@unique([source, externalId])
   @@index([leadId, createdAt])
   @@index([opportunityId, createdAt])
   @@index([createdAt])
+  @@index([source, createdAt])
   @@map("activity")
 }
 
@@ -567,9 +574,13 @@ model Task {
   company     Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
 
+  externalId String?
+  source     String? // integration id: zoho_crm, …
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([source, externalId])
   @@index([status, dueDate])
   @@index([assigneeEmail])
   @@map("task")

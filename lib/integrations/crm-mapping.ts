@@ -5,7 +5,7 @@
 // a mis-mapped status hides a live lead. Pure and import-free so tools/providers.test.ts
 // can assert them without a database.
 
-import type { LeadStatus, SourceType } from '../generated/prisma/client.ts';
+import type { LeadStatus, Priority, SourceType, TaskStatus } from '../generated/prisma/client.ts';
 
 /**
  * Zoho's Lead_Status is free text configured per org, so anything unrecognised stays
@@ -81,4 +81,34 @@ export function matchStage(stages: StageLike[], zohoStage: string | null | undef
   }
 
   return ordered.find((s) => !s.isWon && !s.isLost) ?? ordered[0];
+}
+
+/**
+ * Zoho's Task Status onto TaskStatus.
+ *
+ * "Deferred" and "Waiting for input" are still open work — nobody has done them and
+ * nobody has called them off — so they stay `open` rather than being hidden as done.
+ */
+export function taskStatus(value: string | null | undefined): TaskStatus {
+  const v = (value ?? '').toLowerCase();
+  if (v.includes('complet')) return 'done';
+  if (v.includes('cancel')) return 'cancelled';
+  if (v.includes('progress')) return 'in_progress';
+  return 'open';
+}
+
+/**
+ * Zoho's Task Priority onto Priority.
+ *
+ * Order matters: "Highest" and "Lowest" contain "high" and "low", so the extremes are
+ * tested first or every Lowest task would arrive as low-but-not-lowest — and worse,
+ * "Highest" would match the `high` test and lose its urgency.
+ */
+export function taskPriority(value: string | null | undefined): Priority {
+  const v = (value ?? '').toLowerCase();
+  if (v.includes('highest')) return 'urgent';
+  if (v.includes('lowest')) return 'low';
+  if (v.includes('high')) return 'high';
+  if (v.includes('low')) return 'low';
+  return 'normal';
 }
