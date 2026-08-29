@@ -54,7 +54,14 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   const [keyModal, setKeyModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
 
-  const connected = card.state === 'connected' || card.state === 'syncing';
+  // A stored credential is what "connected" means, not the last sync's verdict. One
+  // failed sync sets the row to `error`, and treating that as disconnected swapped the
+  // card's Sync/Disconnect buttons for Connect — which for an API-key provider is a
+  // prompt to type the key again, even though the working key was still in the database.
+  // `cards()` already downgrades a credential-less `connected` row to `error`, so an
+  // error carrying a credential is a sync failure, not a lost connection.
+  const connected =
+    card.state === 'connected' || card.state === 'syncing' || (card.state === 'error' && card.hasCredential);
 
   async function connectOauth() {
     setBusy('connect');
@@ -272,6 +279,13 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
                 onClick={() => setSettingsModal(true)}
               >
                 <Settings2 /> Settings
+              </Button>
+            ) : null}
+            {card.authKind !== 'oauth2' ? (
+              // The way back when the key itself is the problem — reachable without
+              // disconnecting first, which would throw away the sync watermark.
+              <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => setKeyModal(true)}>
+                <Plug /> Replace key
               </Button>
             ) : null}
             <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => run('disconnect')}>

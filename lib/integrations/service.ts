@@ -205,8 +205,13 @@ export async function disconnect(id: string, actorEmail: string) {
       lastErrorAt: null,
       connectedByEmail: null,
       connectedAt: null,
+      // `config` is deliberately left standing, and `undefined` is how Prisma is told to
+      // leave a column alone. It holds no secret — the GA4 property ID, the Meta ad
+      // account, the Search Console site URL, all typed by hand on the card's Settings
+      // form — so keeping it costs nothing and saves re-typing them on the next connect.
+      // The secret is the credential row, and that is deleted above.
       config: undefined,
-      // Reconnecting means starting clean. Without this the watermark survives, so the
+      // The sync watermark is the opposite case: reconnecting means starting clean. Without this the watermark survives, so the
       // next sync would ask only for records modified since the old connection and quietly
       // skip everything already imported — which is also the only way to re-pull records
       // whose stored copy is wrong.
