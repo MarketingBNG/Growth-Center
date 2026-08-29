@@ -319,12 +319,39 @@ async function writeCampaignSpend(
     if (p.entityLabel) names.set(p.entityId as string, p.entityLabel);
   }
 
+  // The campaign's own schedule and budget, carried on the points rather than fetched
+  // again here. Every campaign read as an undated, unbudgeted "active" until the provider
+  // started sending them.
+  const details = new Map<string, Record<string, unknown>>();
+  for (const p of relevant) {
+    const m = meta(p);
+    if (m.status || m.startDate || m.endDate || m.budget != null) {
+      details.set(p.entityId as string, m);
+    }
+  }
+
   const campaignIdByExternal = new Map<string, string>();
   for (const [externalId, name] of names) {
+    const d = details.get(externalId);
+    const date = (v: unknown) => {
+      const parsed = v ? new Date(String(v)) : null;
+      return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null;
+    };
+    // Only what the provider actually reported. Spreading undefined into a Prisma update
+    // is a no-op, so a campaign whose details failed to load keeps whatever it had.
+    const extra = d
+      ? {
+          status: str(d.status) ?? undefined,
+          startDate: date(d.startDate) ?? undefined,
+          endDate: date(d.endDate) ?? undefined,
+          budget: typeof d.budget === 'number' ? d.budget : undefined,
+        }
+      : {};
+
     const row = await db().campaign.upsert({
       where: { source_externalId: { source: provider.id, externalId } },
-      create: { name, channelId: channelRow.id, source: provider.id, externalId },
-      update: { name },
+      create: { name, channelId: channelRow.id, source: provider.id, externalId, ...extra },
+      update: { name, ...extra },
       select: { id: true },
     });
     campaignIdByExternal.set(externalId, row.id);
@@ -540,14 +567,16 @@ async function writeSeoRows(
   let written = 0;
 
   // ── keywords: one row per phrase, one ranking row per phrase-day ─────────────────
-  type Ranking = { date: Date; position: number };
+  type Ranking = { date: Date; position: number; url: string | null };
   const byKeyword = new Map<string, Ranking[]>();
 
   for (const p of keywordPoints) {
     if (p.metricKey !== 'position') continue;
     const keyword = p.entityId as string;
     const rankings = byKeyword.get(keyword) ?? [];
-    rankings.push({ date: p.date, position: Math.round(p.value) });
+    // Which page holds the position. The column existed and stayed null on all 5,000
+    // rows, so the table could say a term ranked third without saying third with what.
+    rankings.push({ date: p.date, position: Math.round(p.value), url: str(meta(p).url) });
     byKeyword.set(keyword, rankings);
   }
 
@@ -565,8 +594,8 @@ async function writeSeoRows(
     for (const ranking of rankings) {
       await db().seoKeywordRanking.upsert({
         where: { keywordId_date: { keywordId: row.id, date: ranking.date } },
-        create: { keywordId: row.id, date: ranking.date, position: ranking.position },
-        update: { position: ranking.position },
+        create: { keywordId: row.id, date: ranking.date, position: ranking.position, url: ranking.url },
+        update: { position: ranking.position, ...(ranking.url ? { url: ranking.url } : {}) },
       });
       written++;
     }
@@ -736,27 +765,74 @@ export function splitName(
  * activities, owner assignment — are never touched here.
  */
 async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promise<number> {
+  const accountPoints = points.filter((p) => p.entityType === 'crm_account' && p.entityId);
   const leadPoints = points.filter((p) => p.entityType === 'crm_lead' && p.entityId);
   const contactPoints = points.filter((p) => p.entityType === 'crm_contact' && p.entityId);
   const dealPoints = points.filter((p) => p.entityType === 'crm_deal' && p.entityId);
-  if (!leadPoints.length && !contactPoints.length && !dealPoints.length) return 0;
+  if (!accountPoints.length && !leadPoints.length && !contactPoints.length && !dealPoints.length) {
+    return 0;
+  }
 
   let written = 0;
 
   // ── companies ───────────────────────────────────────────────────────────────
-  // Contacts and deals both reference an account by id. Written first so the rows that
-  // point at them can be linked in the same pass rather than a second reconciliation.
+  // Two ways a company arrives, and the richer one goes first.
+  //
+  // The account module carries the details — website, phone, industry, country. Contacts
+  // and deals only mention an account by id and name, which is all a company row used to
+  // get: 2,761 of them with a name and nine empty columns.
+  //
+  // The name-only pass still runs, for an account referenced by a deal in this batch whose
+  // own record has not been fetched yet. It sets `name` alone, so it cannot blank the
+  // details a fuller row already has.
+  //
+  // `domain` is left alone deliberately. It is unique, and two companies sharing a website
+  // — a group and its subsidiary, or two records for one client — would abort the whole
+  // batch on that index rather than write anything.
+  const companyIdByExternal = new Map<string, string>();
+
+  if (accountPoints.length) {
+    const rows = accountPoints.map((p) => {
+      const m = meta(p);
+      const externalId = p.entityId as string;
+      return [
+        str(m.name) ?? p.entityLabel ?? externalId,
+        str(m.website),
+        str(m.phone),
+        str(m.industry),
+        str(m.country),
+        str(m.size),
+        str(m.notes),
+        str(m.ownerEmail),
+        createdAtOf(p),
+        providerId,
+        externalId,
+      ];
+    });
+    const detailed = await bulkUpsert(
+      'company',
+      ['name', 'website', 'phone', 'industry', 'country', 'size', 'notes', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+      rows,
+      '"source", "externalId"',
+      { createdAt: 'timestamp(3)' },
+    );
+    for (const r of detailed) if (r.externalId) companyIdByExternal.set(r.externalId, r.id);
+    written += detailed.length;
+  }
+
   const accounts = new Map<string, string>();
   for (const p of [...contactPoints, ...dealPoints]) {
     const id = str(meta(p).accountId);
     const name = str(meta(p).accountName);
-    if (id && name) accounts.set(id, name);
+    if (id && name && !companyIdByExternal.has(id)) accounts.set(id, name);
   }
 
-  const companyRows = [...accounts].map(([externalId, name]) => [name, providerId, externalId]);
-  const companies = await bulkUpsert('company', ['name', 'source', 'externalId'], companyRows, '"source", "externalId"');
-  const companyIdByExternal = new Map(companies.map((r) => [r.externalId ?? '', r.id]));
-  written += companies.length;
+  if (accounts.size) {
+    const companyRows = [...accounts].map(([externalId, name]) => [name, providerId, externalId]);
+    const companies = await bulkUpsert('company', ['name', 'source', 'externalId'], companyRows, '"source", "externalId"');
+    for (const r of companies) if (r.externalId) companyIdByExternal.set(r.externalId, r.id);
+    written += companies.length;
+  }
 
   // ── contacts ────────────────────────────────────────────────────────────────
   const contactIdByExternal = new Map<string, string>();
@@ -1146,6 +1222,24 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
     { status: '"ProspectStatus"' },
   );
   written += prospects.length;
+
+  // Outreach and the CRM are two lists of the same people, and nothing joined them: every
+  // prospect sat with a null contact, so a reply in a campaign told you nothing about the
+  // company it came from. Matched on address, which is the only identifier both systems
+  // agree on.
+  //
+  // Set once and left alone — a contact deliberately reassigned here should not be undone
+  // by the next sync.
+  await db().$executeRawUnsafe(
+    `UPDATE prospect p
+     SET "contactId" = c.id
+     FROM contact c
+     WHERE p.source = $1
+       AND p."contactId" IS NULL
+       AND p.email IS NOT NULL
+       AND lower(c.email) = lower(p.email)`,
+    providerId,
+  );
 
   // ── engagement ──────────────────────────────────────────────────────────────
   // Replies and bounces arrive from a different endpoint, keyed by address rather than by

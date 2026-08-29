@@ -172,6 +172,11 @@ export const metaAds: IntegrationProvider = {
       url = json.paging?.next ?? null;
     }
 
+    // Insights report performance and nothing else, so a campaign's own schedule, budget
+    // and status were never fetched and those four columns stayed null on every campaign.
+    // One extra request for the whole account, not one per campaign.
+    const details = await campaignDetails(adAccountId, accessToken);
+
     const points: MetricPoint[] = [];
     for (const row of rows) {
       const date = new Date(`${row.date_start}T00:00:00Z`);
@@ -189,9 +194,72 @@ export const metaAds: IntegrationProvider = {
           metricKey,
           date,
           value: Number(value) || 0,
+          entityMeta: details.get(row.campaign_id),
         });
       }
     }
     return points;
   },
 };
+
+type CampaignDetail = {
+  status: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  budget: number | null;
+};
+
+/**
+ * A campaign's schedule, budget and status, which the insights edge does not carry.
+ *
+ * Budget is reported in minor units — 5000 means £50.00 — and a campaign carries either a
+ * daily or a lifetime one, never both. The daily figure is preferred because it is what
+ * the account is actually pacing to; a lifetime budget stands in when there is no daily.
+ *
+ * A failure here is not a failure of the sync. Spend is the number every ROAS and CAC
+ * figure depends on and it has already been fetched; losing a start date is worth far
+ * less than losing the run.
+ */
+async function campaignDetails(
+  adAccountId: string,
+  accessToken: string,
+): Promise<Map<string, CampaignDetail>> {
+  const out = new Map<string, CampaignDetail>();
+  const params = new URLSearchParams({
+    access_token: accessToken,
+    fields: 'id,status,start_time,stop_time,daily_budget,lifetime_budget',
+    limit: '500',
+  });
+
+  type Row = {
+    id: string;
+    status?: string;
+    start_time?: string;
+    stop_time?: string;
+    daily_budget?: string;
+    lifetime_budget?: string;
+  };
+
+  let url: string | null = `${GRAPH}/${adAccountId}/campaigns?${params}`;
+  try {
+    for (let page = 0; url && page < 50; page++) {
+      const res: Response = await fetch(url);
+      if (!res.ok) return out;
+
+      const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };
+      for (const row of json.data ?? []) {
+        const minorUnits = Number(row.daily_budget ?? row.lifetime_budget);
+        out.set(row.id, {
+          status: row.status?.toLowerCase() ?? null,
+          startDate: row.start_time ?? null,
+          endDate: row.stop_time ?? null,
+          budget: Number.isFinite(minorUnits) && minorUnits > 0 ? minorUnits / 100 : null,
+        });
+      }
+      url = json.paging?.next ?? null;
+    }
+  } catch {
+    return out;
+  }
+  return out;
+}

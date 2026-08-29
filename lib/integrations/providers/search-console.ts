@@ -163,11 +163,28 @@ export const searchConsole: IntegrationProvider = {
 
     // Three shapes from the same window, because they populate three different things:
     // a daily site series for the charts, per-query rankings, and per-page performance.
-    const [daily, queries, pages] = await Promise.all([
+    const [daily, queries, pages, landing] = await Promise.all([
       searchAnalytics(token, siteUrl, { ...window, dimensions: ['date'] }),
       searchAnalytics(token, siteUrl, { ...window, dimensions: ['query', 'date'] }),
       searchAnalytics(token, siteUrl, { ...window, dimensions: ['page'] }),
+      // A fourth shape only to answer "which page ranks for this?" — the ranking table
+      // had a url column that nothing ever filled, because query and page were asked for
+      // separately and neither answer knows about the other.
+      searchAnalytics(token, siteUrl, { ...window, dimensions: ['query', 'page'] }),
     ]);
+
+    // The page that earns the most impressions for a term is the one that ranks for it.
+    // Clicks would be the wrong test: a term can rank well and be clicked rarely, and the
+    // page that happened to win one click is not the page that holds the position.
+    const pageForQuery = new Map<string, { url: string; impressions: number }>();
+    for (const row of landing) {
+      const keyword = row.keys?.[0];
+      const url = row.keys?.[1];
+      if (!keyword || !url) continue;
+      const impressions = row.impressions ?? 0;
+      const best = pageForQuery.get(keyword);
+      if (!best || impressions > best.impressions) pageForQuery.set(keyword, { url, impressions });
+    }
 
     const points: MetricPoint[] = [];
 
@@ -203,7 +220,7 @@ export const searchConsole: IntegrationProvider = {
           entityType: 'seo_keyword',
           entityId: keyword,
           entityLabel: keyword,
-          entityMeta: { keyword },
+          entityMeta: { keyword, url: pageForQuery.get(keyword)?.url ?? null },
           metricKey,
           date,
           value,
