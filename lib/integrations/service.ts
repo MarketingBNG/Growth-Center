@@ -1114,6 +1114,15 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
         const closed = stage.isWon || stage.isLost;
         const validClosing = closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null;
 
+        // The deal's own Lead_Source, mapped the same way a lead's is.
+        //
+        // Zoho puts a source on the deal record as well as the lead, and this is the only
+        // one most deals have: 6,886 of 7,810 here were never converted from a lead, so
+        // walking deal -> lead -> channel left 88% of the revenue attributed to nothing
+        // while the answer sat on the deal itself.
+        const dealSource = str(m.leadSource);
+        const dealChannelSlug = channelSlugFor(leadSourceType(dealSource), dealSource);
+
         dealRows.push([
           p.entityLabel ?? externalId,
           pipeline.id,
@@ -1126,6 +1135,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           closed ? validClosing : null,
           accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
           contactId ? (contactIdByExternal.get(contactId) ?? null) : null,
+          dealChannelSlug ? (channelIdBySlug.get(dealChannelSlug) ?? null) : null,
           // Kept because a stage that fails to match is otherwise invisible: every deal
           // lands in the first open stage and the import looks like it worked. With the
           // CRM's own wording stored beside the mapped stage, a mismatch is one query away.
@@ -1139,7 +1149,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'channelId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
@@ -1871,11 +1881,16 @@ async function writeRevenueFromWonDeals(): Promise<number> {
   return db().$executeRawUnsafe(`
     INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "channelId", "createdAt")
     SELECT gen_random_uuid()::text, c.id, o."closedAt"::date,
-           o.value, o.currency, 'one_time', o.id, o."campaignId", l."channelId", now()
+           o.value, o.currency, 'one_time', o.id, o."campaignId",
+           COALESCE(l."channelId", o."channelId"), now()
     FROM opportunity o
     -- The channel the originating lead arrived through, so revenue can be attributed to
-    -- the thing that produced it. Left join: a deal created directly has no lead, and
-    -- that is unattributed revenue rather than a missing row.
+    -- the thing that produced it. Left join: a deal created directly has no lead.
+    --
+    -- The lead's channel wins where there is one: it records how the person first reached
+    -- the firm, which is the question the Marketing page asks. The deal's own channel is
+    -- the fallback, and for most of this CRM it is the only answer there is — 6,886 of
+    -- 7,810 deals have no lead at all, so without it 88% of the revenue was unattributed.
     LEFT JOIN lead l ON l.id = o."leadId"
     JOIN pipeline_stage s ON s.id = o."stageId"
     JOIN customer c ON c."companyId" = o."companyId"

@@ -146,6 +146,7 @@ model Channel {
   campaigns Campaign[]
   leads     Lead[]
   revenue   RevenueEntry[]
+  opportunities Opportunity[]
 
   createdAt DateTime @default(now())
 
@@ -442,6 +443,15 @@ model Opportunity {
   companyId  String?
   campaignId String?
 
+  /// The channel the deal itself was credited to, from the CRM's own Lead_Source on the
+  /// deal record.
+  ///
+  /// Separate from the lead's channel because most deals have no lead: 6,886 of 7,810 here
+  /// were opened straight on an account or contact and never converted from one. Revenue
+  /// attributed by walking deal -> lead -> channel could therefore only ever reach 12% of
+  /// the money, while the source of every one of them sat unread on the deal itself.
+  channelId  String?
+
   lostReason String?
 
   pipeline   Pipeline      @relation(fields: [pipelineId], references: [id])
@@ -450,6 +460,7 @@ model Opportunity {
   contact    Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   company    Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   campaign   Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  channel    Channel?      @relation(fields: [channelId], references: [id], onDelete: SetNull)
   customer   Customer?
   activities Activity[]
   noteEntries Note[]
