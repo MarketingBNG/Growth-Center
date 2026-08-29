@@ -1515,21 +1515,30 @@ async function writeRevenueFromWonDeals(): Promise<number> {
       SET "wonAt" = LEAST(customer."wonAt", EXCLUDED."wonAt"), "updatedAt" = now()
   `);
 
-  // A deal that moved back out of a won stage, or lost its value, must not leave revenue
-  // behind. Only derived rows are touched — manual revenue carries no opportunity.
+  // A deal that moved back out of a won stage, lost its value, or had its close date
+  // pushed into the future must not leave revenue behind. Only derived rows are touched —
+  // manual revenue carries no opportunity.
   await db().$executeRawUnsafe(`
     DELETE FROM revenue_entry r
     WHERE r."opportunityId" IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM opportunity o
         JOIN pipeline_stage s ON s.id = o."stageId"
-        WHERE o.id = r."opportunityId" AND s."isWon" AND o.value > 0
+        WHERE o.id = r."opportunityId"
+          AND s."isWon"
+          AND o.value > 0
+          AND COALESCE(o."closedAt", o."updatedAt")::date <= current_date
       )
   `);
 
-  // Zero-value deals are excluded on purpose: a won deal with no amount is a bookkeeping
-  // gap in the CRM, and importing it as £0 of revenue would drag the average down as if
-  // the work had been given away.
+  // Two exclusions, both so the total means money actually earned.
+  //
+  // Zero-value deals: a won deal with no amount is a bookkeeping gap in the CRM, and
+  // importing it as £0 would drag the average down as if the work had been given away.
+  //
+  // Future close dates: 656 won deals here close as late as 2027, and counting them today
+  // would put £2.9m of unearned money into the revenue total. They are not lost — this
+  // runs on every sync, so each one appears by itself on the day its date arrives.
   return db().$executeRawUnsafe(`
     INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "createdAt")
     SELECT gen_random_uuid()::text, c.id, COALESCE(o."closedAt", o."updatedAt")::date,
@@ -1537,7 +1546,10 @@ async function writeRevenueFromWonDeals(): Promise<number> {
     FROM opportunity o
     JOIN pipeline_stage s ON s.id = o."stageId"
     JOIN customer c ON c."companyId" = o."companyId"
-    WHERE s."isWon" AND o."companyId" IS NOT NULL AND o.value > 0
+    WHERE s."isWon"
+      AND o."companyId" IS NOT NULL
+      AND o.value > 0
+      AND COALESCE(o."closedAt", o."updatedAt")::date <= current_date
     ON CONFLICT ("opportunityId") DO UPDATE
       SET amount = EXCLUDED.amount, date = EXCLUDED.date, currency = EXCLUDED.currency
   `);
