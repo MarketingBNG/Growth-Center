@@ -96,7 +96,19 @@ export function registerAutomations() {
     });
     if (!opp?.companyId) return;
 
-    const wonAt = opp.closedAt ?? new Date();
+    // The same three rules the sync derives revenue by, so moving a deal to Won by hand
+    // and importing the same deal cannot produce different revenue. Without this a deal
+    // won in the UI with a future close date got an entry the next sync would silently
+    // delete again.
+    //
+    //  - a close date, because revenue has to be dated and the import's own date is not
+    //    an answer;
+    //  - not in the future, because it has not been earned yet;
+    //  - a value above zero, because a won deal with no amount is a gap in the CRM.
+    if (!opp.closedAt) return;
+    const wonAt = opp.closedAt;
+    if (wonAt.getTime() > Date.now()) return;
+    if (Number(opp.value) <= 0) return;
 
     // Customer keyed on the company, so a second won deal for an existing customer
     // records revenue without creating a duplicate customer row.
@@ -128,16 +140,18 @@ export function registerAutomations() {
   });
 
   /**
-   * Undoes what opportunity.won did.
+   * Undoes what opportunity.won did, for a deal that stops being won.
+   *
    *
    * opportunity.lost was dispatched from the start but nothing listened, so correcting a
    * deal wrongly marked Won left its revenue entry and its customer row behind for good —
-   * one mis-click permanently inflated revenue, ROAS and the customer count.
+   * one mis-click permanently inflated revenue, ROAS and the customer count. The same was
+   * true of moving it back to an open stage, which fired nothing at all.
    *
    * Only reverses what this deal created: a customer with revenue from other deals keeps
    * its row, and only the entry tied to this opportunity is removed.
    */
-  on('opportunity.lost', async ({ opportunityId }) => {
+  const undoWin = async (opportunityId: string) => {
     const entry = await db().revenueEntry.findFirst({
       where: { opportunityId },
       select: { id: true, customerId: true },
@@ -159,7 +173,13 @@ export function registerAutomations() {
     }
 
     // Otherwise it is a real customer whose other deals stand. Leave it be.
-  });
+  };
+
+  on('opportunity.lost', ({ opportunityId }) => undoWin(opportunityId));
+
+  // A deal moved back to an open stage is no more won than a lost one, and leaves the
+  // same revenue behind if nothing undoes it.
+  on('opportunity.reopened', ({ opportunityId }) => undoWin(opportunityId));
 
   on('integration.sync_failed', async ({ provider, message }) => {
     await db().notification.create({

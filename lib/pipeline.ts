@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { db } from './prisma.ts';
+import { currencySettings } from './settings.ts';
 import { dispatch } from './events.ts';
 
 /**
@@ -22,7 +23,10 @@ export const opportunityInput = z.object({
   pipelineId: z.string().cuid(),
   stageId: z.string().cuid(),
   value: z.number().nonnegative().max(1_000_000_000),
-  currency: z.string().trim().length(3).default('USD'),
+  // Optional, not defaulted to USD: this workspace reports in rupees, and a deal typed
+  // into the app would otherwise be recorded in a currency nobody chose and converted on
+  // every screen that shows it. Filled from the workspace setting at creation.
+  currency: z.string().trim().length(3).optional(),
   probability: z.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().date().optional(),
   ownerEmail: z.string().trim().email().optional(),
@@ -91,9 +95,12 @@ export async function createOpportunity(input: OpportunityInput, actorEmail: str
     throw new Error('Stage does not belong to that pipeline');
   }
 
+  const fx = await currencySettings();
   const opp = await db().opportunity.create({
     data: {
       ...input,
+      // The workspace's currency unless the caller named one.
+      currency: input.currency ?? fx.reporting,
       expectedCloseDate: input.expectedCloseDate ? new Date(input.expectedCloseDate) : null,
       probability: input.probability ?? stage.probability,
     },
@@ -120,7 +127,12 @@ export async function moveOpportunity(id: string, stageId: string, actorEmail: s
   const [opp, stage] = await Promise.all([
     db().opportunity.findUnique({
       where: { id },
-      select: { pipelineId: true, stageId: true, stage: { select: { name: true } } },
+      select: {
+        pipelineId: true,
+        stageId: true,
+        closedAt: true,
+        stage: { select: { name: true, isWon: true } },
+      },
     }),
     db().pipelineStage.findUnique({
       where: { id: stageId },
@@ -135,12 +147,18 @@ export async function moveOpportunity(id: string, stageId: string, actorEmail: s
 
   const closing = stage.isWon || stage.isLost;
 
+  // The date it FIRST closed, not the date it last moved. This pipeline has three won
+  // stages — Deal Complete, then the two Project stages the work goes through — so moving
+  // a deal along after the sale would otherwise re-stamp it with today, and the revenue
+  // derived from that date would jump to the current month each time.
+  const closedAt = closing ? (opp.closedAt ?? new Date()) : null;
+
   await db().opportunity.update({
     where: { id },
     data: {
       stageId,
       probability: stage.isWon ? 100 : stage.isLost ? 0 : stage.probability,
-      closedAt: closing ? new Date() : null,
+      closedAt,
     },
   });
 
@@ -156,6 +174,13 @@ export async function moveOpportunity(id: string, stageId: string, actorEmail: s
 
   if (stage.isWon) await dispatch({ type: 'opportunity.won', opportunityId: id, actorEmail });
   if (stage.isLost) await dispatch({ type: 'opportunity.lost', opportunityId: id, actorEmail });
+
+  // Dragged back out of a won stage without being lost. Nothing fired for this before, so
+  // correcting a mis-click left the revenue and the customer it created standing —
+  // exactly the hole opportunity.lost was written to close, one move to the left.
+  if (opp.stage.isWon && !stage.isWon && !stage.isLost) {
+    await dispatch({ type: 'opportunity.reopened', opportunityId: id, actorEmail });
+  }
 
   return { ok: true as const, unchanged: false };
 }
@@ -182,12 +207,14 @@ export async function convertLead(leadId: string, actorEmail: string, value = 0)
   const who = [lead.firstName, lead.lastName].filter(Boolean).join(' ');
   const name = lead.companyName?.trim() || who || 'New opportunity';
 
+  const fx = await currencySettings();
   const opp = await db().opportunity.create({
     data: {
       name,
       pipelineId: pipeline.id,
       stageId: firstStage.id,
       value,
+      currency: fx.reporting,
       probability: firstStage.probability,
       ownerEmail: lead.ownerEmail,
       leadId: lead.id,
@@ -240,7 +267,7 @@ export async function updateOpportunity(
 ) {
   const existing = await db().opportunity.findUnique({
     where: { id },
-    select: { id: true, name: true, value: true, ownerEmail: true },
+    select: { id: true, name: true, value: true, currency: true, ownerEmail: true },
   });
   if (!existing) return null;
 
@@ -258,10 +285,19 @@ export async function updateOpportunity(
 
   await db().opportunity.update({ where: { id }, data });
 
-  if (input.value !== undefined && Number(existing.value) !== input.value) {
+  // The amount AND the currency: correcting a deal from 1,000 dollars to 87,000 rupees
+  // changed both, and rewriting only the number left an entry reading 87,000 dollars —
+  // a correction that made the figure ninety times worse than the mistake.
+  const valueChanged = input.value !== undefined && Number(existing.value) !== input.value;
+  const currencyChanged = input.currency !== undefined && existing.currency !== input.currency;
+
+  if (valueChanged || currencyChanged) {
     await db().revenueEntry.updateMany({
       where: { opportunityId: id },
-      data: { amount: input.value },
+      data: {
+        ...(valueChanged ? { amount: input.value } : {}),
+        ...(currencyChanged ? { currency: input.currency } : {}),
+      },
     });
   }
 

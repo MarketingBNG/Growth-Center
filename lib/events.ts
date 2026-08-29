@@ -9,6 +9,8 @@ export type GrowthEvent =
   | { type: 'lead.converted'; leadId: string; opportunityId: string; actorEmail: string | null }
   | { type: 'opportunity.won'; opportunityId: string; actorEmail: string | null }
   | { type: 'opportunity.lost'; opportunityId: string; actorEmail: string | null }
+  /** Moved back out of a won stage without being lost — someone corrected a mis-click. */
+  | { type: 'opportunity.reopened'; opportunityId: string; actorEmail: string | null }
   | { type: 'integration.sync_failed'; provider: string; message: string };
 
 type Handler = (event: GrowthEvent) => Promise<void>;
