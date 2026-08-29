@@ -443,6 +443,15 @@ model Opportunity {
   companyId  String?
   campaignId String?
 
+  /// The CRM's own wording for where the deal came from, stored beside the mapped
+  /// channel and never instead of it.
+  ///
+  /// The same reason Lead.sourceDetail exists: a source that maps to no channel is
+  /// otherwise invisible, and the gap reads as "no source" when it may only be a mapping
+  /// this app has not learned yet. "Trademark_Meta" sat unattributed on 44 leads for
+  /// exactly that reason, and was only findable because the raw string was kept.
+  sourceDetail String?
+
   /// The channel the deal itself was credited to, from the CRM's own Lead_Source on the
   /// deal record.
   ///

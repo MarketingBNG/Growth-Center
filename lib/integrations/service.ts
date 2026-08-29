@@ -1135,6 +1135,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           closed ? validClosing : null,
           accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
           contactId ? (contactIdByExternal.get(contactId) ?? null) : null,
+          dealSource,
           dealChannelSlug ? (channelIdBySlug.get(dealChannelSlug) ?? null) : null,
           // Kept because a stage that fails to match is otherwise invisible: every deal
           // lands in the first open stage and the import looks like it worked. With the
@@ -1149,7 +1150,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'channelId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
