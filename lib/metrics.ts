@@ -277,11 +277,15 @@ export async function channelPerformance(range: Range) {
     spendByChannel.set(channelId, acc);
   }
 
+  // '' is the unattributed bucket, here and in leadCount and revenueSum below — a lead
+  // whose channelId is null still happened, and dropping it makes the table disagree with
+  // every other lead count in the app.
   const customerCount = new Map<string, number>();
   for (const c of customersByChannel) {
-    const channelId = c.opportunity?.lead?.channelId;
-    if (!channelId) continue;
-    customerCount.set(channelId, (customerCount.get(channelId) ?? 0) + 1);
+    customerCount.set(
+      c.opportunity?.lead?.channelId ?? '',
+      (customerCount.get(c.opportunity?.lead?.channelId ?? '') ?? 0) + 1,
+    );
   }
 
   const leadCount = new Map(leadsByChannel.map((r) => [r.channelId ?? '', r._count._all]));
@@ -291,7 +295,7 @@ export async function channelPerformance(range: Range) {
     revenueSum.set(key, (revenueSum.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, money) ?? 0));
   }
 
-  return channels
+  const rows = channels
     .map((ch) => {
       const spend = spendByChannel.get(ch.id) ?? { spend: 0, clicks: 0, impressions: 0 };
       const leads = leadCount.get(ch.id) ?? 0;
@@ -314,6 +318,37 @@ export async function channelPerformance(range: Range) {
       };
     })
     .sort((a, b) => b.revenue - a.revenue || b.leads - a.leads);
+
+  // Everything that reached no channel, named rather than dropped.
+  //
+  // These rows used to be left out entirely, so the Leads column summed to 1,064 fewer
+  // than the workspace's own lead count with nothing on the page to say why. They are not
+  // put in Direct: Direct means someone arrived by typing the address, and 934 of these
+  // are filed under a service line that says nothing about how the person found the firm.
+  // Unattributed is the true statement, and it belongs on the page precisely because it
+  // is the row that shows how much of the table cannot be trusted to attribute spend.
+  //
+  // Last, whatever its size, and never sorted up among the real channels. No spend can
+  // reach it — spend joins through a campaign, which always carries a channel — so CAC
+  // and ROAS stay null rather than dividing by a zero that means "not measured".
+  const unattributed = {
+    id: 'unattributed',
+    name: 'Unattributed',
+    kind: 'unknown',
+    spend: 0,
+    clicks: 0,
+    impressions: 0,
+    leads: leadCount.get('') ?? 0,
+    customers: customerCount.get('') ?? 0,
+    revenue: revenueSum.get('') ?? 0,
+    ctr: null,
+    costPerLead: null,
+    cac: null,
+    roas: null,
+  };
+
+  const hasAny = unattributed.leads > 0 || unattributed.customers > 0 || unattributed.revenue > 0;
+  return hasAny ? [...rows, unattributed] : rows;
 }
 
 export type ChannelRow = Awaited<ReturnType<typeof channelPerformance>>[number];
