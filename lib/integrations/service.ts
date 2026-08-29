@@ -991,7 +991,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
         const contactId = str(m.contactId);
 
         // A deal in a won or lost stage is closed, and Closing_Date is the day it closed.
-        // Revenue is dated from this, so leaving it null would strand every sale.
+        //
+        // Left null when the CRM has no date, never today's: 982 won deals carry no
+        // Closing_Date, and stamping them with the moment of the import dropped them all
+        // into whichever month the sync happened to run in.
         const closed = stage.isWon || stage.isLost;
         const validClosing = closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null;
 
@@ -1003,7 +1006,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           str(m.currency) ?? 'USD',
           Number(m.probability) || stage.probability,
           validClosing,
-          closed ? (validClosing ?? new Date()) : null,
+          closed ? validClosing : null,
           accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
           contactId ? (contactIdByExternal.get(contactId) ?? null) : null,
           // Kept because a stage that fails to match is otherwise invisible: every deal
@@ -1629,11 +1632,11 @@ async function writeRevenueFromWonDeals(): Promise<number> {
     SELECT gen_random_uuid()::text, d."companyId", d.id, d.won_at, now(), now()
     FROM (
       SELECT DISTINCT ON (o."companyId")
-             o."companyId", o.id, COALESCE(o."closedAt", o."updatedAt") AS won_at
+             o."companyId", o.id, o."closedAt" AS won_at
       FROM opportunity o
       JOIN pipeline_stage s ON s.id = o."stageId"
-      WHERE s."isWon" AND o."companyId" IS NOT NULL
-      ORDER BY o."companyId", COALESCE(o."closedAt", o."updatedAt") ASC
+      WHERE s."isWon" AND o."companyId" IS NOT NULL AND o."closedAt" IS NOT NULL
+      ORDER BY o."companyId", o."closedAt" ASC
     ) d
     ON CONFLICT ("companyId") DO UPDATE
       SET "wonAt" = LEAST(customer."wonAt", EXCLUDED."wonAt"), "updatedAt" = now()
@@ -1651,11 +1654,12 @@ async function writeRevenueFromWonDeals(): Promise<number> {
         WHERE o.id = r."opportunityId"
           AND s."isWon"
           AND o.value > 0
-          AND COALESCE(o."closedAt", o."updatedAt")::date <= current_date
+          AND o."closedAt" IS NOT NULL
+          AND o."closedAt"::date <= current_date
       )
   `);
 
-  // Two exclusions, both so the total means money actually earned.
+  // Three exclusions, all so the total means money actually earned.
   //
   // Zero-value deals: a won deal with no amount is a bookkeeping gap in the CRM, and
   // importing it as £0 would drag the average down as if the work had been given away.
@@ -1663,9 +1667,14 @@ async function writeRevenueFromWonDeals(): Promise<number> {
   // Future close dates: 656 won deals here close as late as 2027, and counting them today
   // would put £2.9m of unearned money into the revenue total. They are not lost — this
   // runs on every sync, so each one appears by itself on the day its date arrives.
+  //
+  // No close date at all: 982 won deals have none. Revenue has to be dated, and the only
+  // dates available are the import's own — which would file the money under whichever
+  // month the sync ran in and move it again on the next re-import. Left out until the CRM
+  // says when the deal closed.
   return db().$executeRawUnsafe(`
     INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "createdAt")
-    SELECT gen_random_uuid()::text, c.id, COALESCE(o."closedAt", o."updatedAt")::date,
+    SELECT gen_random_uuid()::text, c.id, o."closedAt"::date,
            o.value, o.currency, 'one_time', o.id, o."campaignId", now()
     FROM opportunity o
     JOIN pipeline_stage s ON s.id = o."stageId"
@@ -1673,7 +1682,8 @@ async function writeRevenueFromWonDeals(): Promise<number> {
     WHERE s."isWon"
       AND o."companyId" IS NOT NULL
       AND o.value > 0
-      AND COALESCE(o."closedAt", o."updatedAt")::date <= current_date
+      AND o."closedAt" IS NOT NULL
+      AND o."closedAt"::date <= current_date
     ON CONFLICT ("opportunityId") DO UPDATE
       SET amount = EXCLUDED.amount, date = EXCLUDED.date, currency = EXCLUDED.currency
   `);
