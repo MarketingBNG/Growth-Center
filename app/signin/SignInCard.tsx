@@ -16,7 +16,16 @@ function message(error?: string) {
   return 'Sign-in failed. Please try again.';
 }
 
-export function SignInCard({ error, configured }: { error?: string; configured: boolean }) {
+export function SignInCard({
+  error,
+  configured,
+  returnTo,
+}: {
+  error?: string;
+  configured: boolean;
+  /** Already validated on the server — never pass a raw `?from=` here. */
+  returnTo: string;
+}) {
   const msg = message(error);
 
   return (
@@ -40,7 +49,7 @@ export function SignInCard({ error, configured }: { error?: string; configured: 
           ) : null}
 
           {configured ? (
-            <Button className="w-full" onClick={() => signIn('google', { callbackUrl: '/' })}>
+            <Button className="w-full" onClick={() => signIn('google', { callbackUrl: returnTo })}>
               Continue with Google
             </Button>
           ) : (

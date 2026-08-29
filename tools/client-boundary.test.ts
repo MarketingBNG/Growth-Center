@@ -36,7 +36,20 @@ const SERVER_ONLY = [
 ];
 
 /** Modules with no imports at all, safe for either side. */
-const CLIENT_SAFE = ['lib/enums', 'lib/calc', 'lib/utils', 'lib/format', 'lib/nav', 'lib/fetcher', 'lib/kpi', 'lib/sources'];
+const CLIENT_SAFE = [
+  'lib/enums',
+  'lib/calc',
+  'lib/utils',
+  'lib/format',
+  'lib/nav',
+  'lib/fetcher',
+  'lib/kpi',
+  'lib/sources',
+  // The currency arithmetic and the settings shape. The settings form renders it, and it
+  // is deliberately import-free for that reason — lib/settings.ts is the half that
+  // touches the database.
+  'lib/currency',
+];
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -85,11 +98,28 @@ test("no 'use client' file imports a server-only module", () => {
   );
 });
 
-test('the client-safe modules really do have no imports', () => {
-  for (const mod of ['lib/enums', 'lib/calc']) {
+test('a client-safe module only reaches other client-safe modules', () => {
+  // The list is what the other tests trust, so it has to keep being true. The invariant
+  // is not "imports nothing" — lib/kpi imports lib/calc, and that is fine — it is that
+  // nothing on the list can reach the database, directly or through a neighbour.
+  //
+  // A type-only import is exempt: it is erased before the bundle exists.
+  const safe = new Set(CLIENT_SAFE.map((m) => m.replace('lib/', '')));
+
+  for (const mod of CLIENT_SAFE) {
     const source = readFileSync(join(ROOT, `${mod}.ts`), 'utf8');
-    const imports = source.match(/^\s*import\s/gm) ?? [];
-    assert.equal(imports.length, 0, `${mod}.ts must import nothing, found ${imports.length}`);
+    for (const line of source.match(/^\s*import\s[^;]+;/gm) ?? []) {
+      const from = line.match(/from\s+'([^']+)'/)?.[1];
+      // A package, not a module of ours.
+      if (!from || !from.startsWith('.')) continue;
+      if (/^\s*import\s+type\s/.test(line)) continue;
+
+      const target = from.replace(/^\.\//, '').replace(/\.ts$/, '');
+      assert.ok(
+        safe.has(target),
+        `${mod}.ts imports ./${target}, which is not client-safe — a client component that renders it would pull ${target} into the browser bundle`,
+      );
+    }
   }
 });
 
