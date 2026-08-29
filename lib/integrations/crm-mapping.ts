@@ -204,22 +204,41 @@ export function taskPriority(value: string | null | undefined): Priority {
  * ROAS and cost-per-lead figure on the page.
  */
 export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | null): string | null {
-  const v = (sourceDetail ?? '').trim().toLowerCase();
+  // Underscores read as word separators. The CRM writes "Trademark_Meta", and matching on
+  // whole words is what keeps a rule for "meta" off "metallurgy".
+  const v = (sourceDetail ?? '').trim().toLowerCase().replace(/_/g, ' ');
+  const word = (w: string) => new RegExp(String.raw`\b${w}\b`).test(v);
 
   if (v) {
     // Paid first: "Meta Ads" is an ad, not organic Facebook.
-    if (v.startsWith('meta') || v.includes('meta ad')) return 'meta-ads';
+    // `word('meta')` rather than startsWith: the campaign name is not always the prefix —
+    // 44 leads came in under "Trademark_Meta" and reached no channel at all.
+    if (word('meta') || v.includes('meta ad')) return 'meta-ads';
     if (v.includes('google ad') || v.includes('adwords')) return 'google-ads';
 
     if (v === 'ig' || v.includes('instagram')) return 'instagram';
     if (v === 'fb' || v.includes('facebook')) return 'facebook';
     if (v.includes('whatsapp')) return 'whatsapp';
-    // Misspelt as "LinkdIn" on thousands of leads in this account.
-    if (v.includes('linkedin') || v.includes('linkdin')) return 'linkedin';
+    // Misspelt in this CRM as "LinkdIn" on thousands of leads and "LinkediIn" on one, so
+    // the stem is matched rather than either spelling.
+    if (v.includes('linkedi') || v.includes('linkdin')) return 'linkedin';
 
-    if (v.includes('calendly') || v.includes('booking')) return 'events';
-    if (v.includes('call') || v.includes('research')) return 'outreach';
+    // Anything the firm showed up at in person. Expos and summits were landing nowhere.
+    if (
+      v.includes('calendly') ||
+      v.includes('booking') ||
+      v.includes('expo') ||
+      v.includes('summit') ||
+      v.includes('conference') ||
+      v.includes('webinar')
+    ) {
+      return 'events';
+    }
+    // Smartlead is the cold-email tool, so a lead credited to it came from outreach.
+    if (v.includes('smartlead') || v.includes('call') || v.includes('research')) return 'outreach';
     if (v.includes('email')) return 'email';
+    // The firm's own web properties.
+    if (v.includes('site') || v.includes('website')) return 'direct';
   }
 
   switch (sourceType) {

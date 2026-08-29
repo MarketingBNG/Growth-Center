@@ -488,6 +488,30 @@ test('channelSlugFor tells the platforms apart, which SourceType cannot', () => 
   assert.equal(channelSlugFor('social', 'Incorporation LinkdIn'), 'linkedin');
 });
 
+test('channelSlugFor reaches the sources that were landing nowhere', () => {
+  // Every one of these was a real `sourceDetail` on a lead with no channel at all.
+  // The campaign name is not always the prefix, so "meta" is matched as a word.
+  assert.equal(channelSlugFor('import', 'Trademark_Meta'), 'meta-ads');
+  // ...but as a whole word only. A rule of `includes('meta')` would swallow this.
+  assert.equal(channelSlugFor('import', 'Metallurgy Ltd'), null);
+
+  assert.equal(channelSlugFor('import', 'Convergence India Expo 2026'), 'events');
+  assert.equal(channelSlugFor('import', 'Discovery Meet: AI Impact Summit'), 'events');
+  // Smartlead is the cold-email tool, so the lead came from outreach.
+  assert.equal(channelSlugFor('import', 'Smartlead'), 'outreach');
+  assert.equal(channelSlugFor('import', 'USAIndiaCFO Site'), 'direct');
+  // A third spelling of LinkedIn, on one lead.
+  assert.equal(channelSlugFor('import', 'LinkediIn'), 'linkedin');
+});
+
+test('a product name is not a channel, and is left unmapped rather than guessed', () => {
+  // 934 leads arrive under a service line and 23 under a podcast. Neither says how the
+  // person found the firm, and inventing a channel for them would be inventing the
+  // attribution the Marketing page is read for.
+  assert.equal(channelSlugFor('import', 'BNG US Incorp'), null);
+  assert.equal(channelSlugFor('import', 'NG Podcast'), null);
+});
+
 test('a paid source is an ad, not the organic platform it runs on', () => {
   assert.equal(channelSlugFor('paid_ads', 'Meta Ads'), 'meta-ads');
   assert.equal(channelSlugFor('paid_ads', 'Canada Meta Ads'), 'meta-ads');
