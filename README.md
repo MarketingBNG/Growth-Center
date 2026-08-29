@@ -5,7 +5,7 @@ social, outreach, content, analytics and AI insights — instead of switching be
 platforms.
 
 Growth Center is the layer of **intelligence and orchestration**. External platforms
-(Zoho CRM, Meta Ads, Google Analytics, Semrush) stay the execution systems; this reads
+(Zoho CRM, Meta Ads, Google Analytics, Search Console) stay the execution systems; this reads
 from them, it does not reimplement them.
 
 Sibling of [bng-command-center](../bng-command-center), not a merge — that one is the
@@ -178,7 +178,6 @@ Everything below degrades to an honest "requires credentials" state — nothing 
 | Google Analytics, Search Console, Ads | the Google OAuth client, `GOOGLE_ADS_DEVELOPER_TOKEN` |
 | Meta / Instagram Ads | `META_APP_ID`, `META_APP_SECRET` |
 | LinkedIn | `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET` |
-| Semrush (SEO) | none — the key is pasted into the connect form |
 | Zoho CRM | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` |
 | AI insights | `ANTHROPIC_API_KEY` |
 | Outreach sending | `SMTP_*` |

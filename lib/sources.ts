@@ -44,12 +44,6 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by Google Analytics 4 and refreshed on each sync.',
   },
-  semrush: {
-    label: 'Semrush',
-    name: 'Semrush',
-    tone: 'live',
-    hint: 'Reported by Semrush and refreshed on each sync.',
-  },
   zoho_crm: {
     label: 'Zoho',
     name: 'Zoho CRM',

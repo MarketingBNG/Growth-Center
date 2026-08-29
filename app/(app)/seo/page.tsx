@@ -23,7 +23,7 @@ export default async function SeoPage() {
   }
 
   const [data, providers] = await Promise.all([seoOverview(), cards()]);
-  const semrush = providers.find((p) => p.id === 'semrush');
+  const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
   if (!data) {
     return (
@@ -33,7 +33,7 @@ export default async function SeoPage() {
           <EmptyState
             icon={<Search className="size-6" />}
             title="No website configured"
-            hint="Run npm run db:seed for demo data, or connect Semrush to pull real keyword data."
+            hint="Run npm run db:seed for demo data, or connect Google Search Console to pull real keyword data."
           />
         </Card>
       </>
@@ -50,12 +50,12 @@ export default async function SeoPage() {
       <PageHeader
         title="SEO"
         subtitle={`${website.domain} — ${totals.keywords} tracked keywords`}
-        actions={semrush ? <StateBadge state={semrush.state} /> : null}
+        actions={searchConsole ? <StateBadge state={searchConsole.state} /> : null}
       />
 
       {/* Keyed on whether these rows actually came from a provider, NOT on whether an SEO
-          integration is connected — Semrush writes domain totals elsewhere, so connecting
-          it changes nothing on this page. */}
+          integration is merely connected — a connection that has never synced leaves
+          every row on this page seeded. */}
       {!liveness.allLive ? (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />
@@ -63,8 +63,8 @@ export default async function SeoPage() {
             {liveness.hasLive
               ? `${liveness.seeded} of ${liveness.seeded + liveness.live} keyword and page rows are still seeded; the rest come from Search Console.`
               : 'Rankings and page data are seeded, not crawled.'}{' '}
-            {semrush?.state === 'connected' || semrush?.state === 'syncing'
-              ? 'Semrush reports domain-level totals only — it does not populate per-keyword rankings.'
+            {searchConsole?.state === 'connected' || searchConsole?.state === 'syncing'
+              ? 'Run a Search Console sync to replace them with real ones.'
               : 'Connect Google Search Console to replace them with real ones.'}
           </p>
         </div>

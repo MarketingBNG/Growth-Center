@@ -1,16 +1,12 @@
 import { IntegrationError, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
-// Google Search Console — the first provider that actually populates the SEO tables.
-//
-// Semrush already reported three domain-level totals into MetricSnapshot, which is why
-// the SEO page stayed seeded even with Semrush connected: nothing wrote SeoKeyword,
-// SeoKeywordRanking or SeoPage. Search Console does, because it reports per-query and
-// per-page rows from the site's own traffic rather than an estimate of it.
+// Google Search Console — the provider that populates the SEO tables. It reports
+// per-query and per-page rows from the site's own traffic rather than an estimate of it,
+// which is what makes SeoKeyword, SeoKeywordRanking and SeoPage real.
 //
 // The trade-off it comes with, stated plainly because it shows on the page: Search
-// Console has no search volume, keyword difficulty or CPC. Those columns stay empty
-// until something that has them (Semrush's keyword reports) fills them in. An average
-// position from real impressions is worth more than an invented volume beside it.
+// Console has no search volume, keyword difficulty or CPC, so those columns stay empty.
+// An average position from real impressions is worth more than an invented volume.
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://searchconsole.googleapis.com/webmasters/v3';
@@ -93,7 +89,7 @@ export const searchConsole: IntegrationProvider = {
     {
       name: 'siteUrl',
       label: 'Property',
-      placeholder: 'sc-domain:usaindiacfo.com',
+      placeholder: 'https://usaindiacfo.com/',
       help: 'Exactly as Search Console lists it: sc-domain:example.com for a domain property, or the full https://example.com/ for a URL-prefix one.',
       required: true,
       normalise: (v) => {

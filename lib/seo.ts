@@ -9,13 +9,9 @@ import { num, rate } from './calc.ts';
  * Which rows in the SEO tables came from a provider, and which the seeder invented.
  *
  * This used to be a hardcoded `false`, because nothing but the seeder wrote SeoKeyword,
- * SeoKeywordRanking or SeoPage. Semrush does not: it writes three domain-level numbers
- * into MetricSnapshot and touches none of these tables, so keying the page's warning off
- * Semrush's connection state would have removed the warning without replacing a single
- * figure.
- *
- * Search Console does write them, so the answer is now read from the rows themselves via
- * their `source` column rather than asserted in code. Per row, not per table: a live
+ * SeoKeywordRanking or SeoPage. Search Console does, so the answer is read from the rows
+ * themselves via their `source` column rather than asserted in code — a connection that
+ * has never synced must not be allowed to remove the warning. Per row, not per table: a live
  * ranking and a seeded one can sit side by side while the first sync backfills, and the
  * page has to be able to say which is which.
  */

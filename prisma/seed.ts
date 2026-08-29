@@ -758,7 +758,6 @@ async function main() {
     { provider: 'zoho_crm', state: 'disconnected' },
     { provider: 'meta_ads', state: 'demo_data' },
     { provider: 'google_analytics', state: 'demo_data' },
-    { provider: 'semrush', state: 'demo_data' },
     { provider: 'google_search_console', state: 'disconnected' },
     { provider: 'google_ads', state: 'disconnected' },
     { provider: 'linkedin_ads', state: 'disconnected' },
