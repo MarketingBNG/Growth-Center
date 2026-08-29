@@ -803,6 +803,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
         phone: str(m.phone),
         title: str(m.title),
         companyId: accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
+        ownerEmail: str(m.ownerEmail),
       };
 
       const clash = email ? byEmail.get(email) : undefined;
@@ -811,7 +812,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       if (clash && !alreadyOurs) {
         adopt.push({ id: clash.id, row, externalId, createdAt: createdAtOf(p) });
       } else {
-        fresh.push([row.firstName, row.lastName, row.email, row.phone, row.title, row.companyId, createdAtOf(p), providerId, externalId]);
+        fresh.push([row.firstName, row.lastName, row.email, row.phone, row.title, row.companyId, row.ownerEmail, createdAtOf(p), providerId, externalId]);
       }
     }
 
@@ -826,7 +827,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
     const touched = await bulkUpsert(
       'contact',
-      ['firstName', 'lastName', 'email', 'phone', 'title', 'companyId', 'createdAt', 'source', 'externalId'],
+      ['firstName', 'lastName', 'email', 'phone', 'title', 'companyId', 'ownerEmail', 'createdAt', 'source', 'externalId'],
       fresh,
       '"source", "externalId"',
       { createdAt: 'timestamp(3)' },
@@ -844,6 +845,17 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     const m = meta(p);
     const externalId = p.entityId as string;
     const name = splitName(str(m.firstName), str(m.lastName), p.entityLabel, externalId);
+    const status = leadStatus(str(m.status));
+
+    // The funnel counts qualified leads by qualifiedAt, not by current status, so that
+    // converting a lead cannot make the qualified count go down. An import that set the
+    // status and left the timestamp null therefore reported nought qualified out of 1,711
+    // — and a 0% qualification rate on a CRM full of qualified leads.
+    //
+    // The CRM records no date for the change, so the record's own date is the closest
+    // honest answer: it says the lead qualified, not when.
+    const reachedQualified = status === 'qualified' || status === 'converted';
+
     return [
       name.firstName,
       name.lastName,
@@ -852,8 +864,11 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       str(m.companyName),
       str(m.title),
       str(m.message),
-      leadStatus(str(m.status)),
+      status,
       leadSourceType(str(m.leadSource)),
+      str(m.ownerEmail),
+      reachedQualified ? createdAtOf(p) : null,
+      status === 'converted' ? createdAtOf(p) : null,
       createdAtOf(p),
       providerId,
       externalId,
@@ -861,10 +876,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   });
   const leadsTouched = await bulkUpsert(
     'lead',
-    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'createdAt', 'source', 'externalId'],
+    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'ownerEmail', 'qualifiedAt', 'convertedAt', 'createdAt', 'source', 'externalId'],
     leadRows,
     '"source", "externalId"',
-    { status: '"LeadStatus"', sourceType: '"SourceType"', createdAt: 'timestamp(3)' },
+    { status: '"LeadStatus"', sourceType: '"SourceType"', qualifiedAt: 'timestamp(3)', convertedAt: 'timestamp(3)', createdAt: 'timestamp(3)' },
   );
   written += leadsTouched.length;
 
@@ -919,6 +934,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           // lands in the first open stage and the import looks like it worked. With the
           // CRM's own wording stored beside the mapped stage, a mismatch is one query away.
           sourceStage ? JSON.stringify({ stage: sourceStage }) : null,
+          str(m.ownerEmail),
           createdAtOf(p),
           providerId,
           externalId,
@@ -927,7 +943,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
