@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, Search, TriangleAlert, TrendingUp, X } from 'lucide-react';
+import { Menu, TriangleAlert, TrendingUp, X } from 'lucide-react';
 import { Sidebar, SidebarNav, UserCard } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
 import { Notifications } from './Notifications';
@@ -60,16 +60,11 @@ export function AppShell({
             {mobileOpen ? <X /> : <Menu />}
           </Button>
 
-          <label className="hidden h-[38px] w-full max-w-[420px] items-center gap-2.5 rounded-[10px] border border-border bg-background px-3 text-muted-foreground sm:flex">
-            <Search className="size-[15px] shrink-0" />
-            <input
-              placeholder="Search leads, deals, campaigns…"
-              className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            <span className="hidden shrink-0 rounded-md border border-border bg-card px-1.5 py-0.5 text-[10.5px] font-semibold md:inline">
-              ⌘K
-            </span>
-          </label>
+          {/* No global search box here on purpose. There was one — an input with no
+              handler on it and a ⌘K badge bound to nothing — so every page appeared to
+              offer a search that silently ignored what you typed. Each list page has a
+              real one in its FilterBar, which is where the searching actually happens.
+              Build this properly or not at all; do not put the shape of it back. */}
 
           <div className="ml-auto flex items-center gap-2">
             {/* Load-bearing: some figures below are seeded, and this is the only thing on
