@@ -256,9 +256,15 @@ export async function channelPerformance(range: Range) {
         _sum: { amount: true, clicks: true, impressions: true },
       }),
       db().campaign.findMany({ select: { id: true, channelId: true } }),
+      // The deal's own channel as well as the lead's, in the same order revenue resolves
+      // them. Customers counted by the lead alone while the revenue beside them counted
+      // either put a channel's customers and its money on different rows: Direct read as
+      // five customers against ₹395,038, and every CAC built from the pair was wrong.
       db().customer.findMany({
         where: { wonAt: window },
-        select: { opportunity: { select: { lead: { select: { channelId: true } } } } },
+        select: {
+          opportunity: { select: { channelId: true, lead: { select: { channelId: true } } } },
+        },
       }),
     ]);
 
@@ -291,10 +297,10 @@ export async function channelPerformance(range: Range) {
   // every other lead count in the app.
   const customerCount = new Map<string, number>();
   for (const c of customersByChannel) {
-    customerCount.set(
-      c.opportunity?.lead?.channelId ?? '',
-      (customerCount.get(c.opportunity?.lead?.channelId ?? '') ?? 0) + 1,
-    );
+    // Lead first, deal second, unattributed last — the same COALESCE the revenue insert
+    // applies, so a customer and the money they brought land on the same row.
+    const key = c.opportunity?.lead?.channelId ?? c.opportunity?.channelId ?? '';
+    customerCount.set(key, (customerCount.get(key) ?? 0) + 1);
   }
 
   const leadCount = new Map(leadsByChannel.map((r) => [r.channelId ?? '', r._count._all]));

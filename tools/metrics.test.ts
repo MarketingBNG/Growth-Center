@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cac, ctr, delta, num, rate, roas } from '../lib/calc.ts';
+import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/calc.ts';
 import { rangeFor } from '../lib/metrics.ts';
 
 // Rates return null, not 0, when there is no denominator. A 0% CTR on a campaign that
@@ -18,6 +18,14 @@ test('rate computes a percentage', () => {
 test('cac is null when nothing was won', () => {
   assert.equal(cac(50000, 0), null);
   assert.equal(cac(50000, 5), 10000);
+});
+
+test('cac is null when nothing was spent, not zero', () => {
+  // Twelve customers from an organic channel divided to 0 and the table said acquiring
+  // them cost nothing. Only paid channels carry spend, so every organic row said it.
+  assert.equal(cac(0, 12), null);
+  assert.equal(costPer(0, 350), null);
+  assert.equal(costPer(70000, 350), 200);
 });
 
 test('roas is null when nothing was spent', () => {

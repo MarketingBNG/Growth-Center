@@ -31,9 +31,14 @@ export function ctr(clicks: number, impressions: number) {
 }
 
 /** Cost to acquire one customer. Null when nothing was won — spend with no customers
- *  has no CAC, it has a loss. */
+ *  has no CAC, it has a loss.
+ *
+ *  Also null when nothing was spent, which is the same rule roas already applies. Twelve
+ *  customers from Facebook against no tracked spend divides to zero, and the table then
+ *  states that acquiring them cost ₹0 — a claim, where the truth is that the cost is not
+ *  known. Only paid channels carry spend here, so every organic row was making it. */
 export function cac(spend: number, customers: number): number | null {
-  if (!customers) return null;
+  if (!customers || !spend) return null;
   return spend / customers;
 }
 
@@ -43,8 +48,9 @@ export function roas(revenue: number, spend: number): number | null {
   return revenue / spend;
 }
 
+/** Same rule, and for the same reason: an untracked cost is unknown, never zero. */
 export function costPer(spend: number, count: number): number | null {
-  if (!count) return null;
+  if (!count || !spend) return null;
   return spend / count;
 }
 
