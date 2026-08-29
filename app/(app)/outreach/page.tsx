@@ -8,7 +8,7 @@ import { hasDb } from '@/lib/prisma';
 import { sequences } from '@/lib/outreach';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { emailStatus } from '@/lib/email';
-import { fmtPercent, fmtRelative } from '@/lib/format';
+import { fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
 
 export const metadata = { title: 'Outreach · Growth Center' };
 
@@ -85,6 +85,19 @@ export default async function OutreachPage() {
               </CardHeader>
 
               <CardContent className="space-y-3">
+                {/* What the platform reports it actually did. Absent for a sequence this
+                    app owns, and for a campaign that has not started sending. */}
+                {s.sending ? (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    <Sent label="Sent" value={s.sending.sent} />
+                    <Sent label="Opened" value={s.sending.opened} note={fmtPercent(s.sending.openRate ?? 0)} />
+                    <Sent label="Clicked" value={s.sending.clicked} />
+                    <Sent label="Replied" value={s.sending.replied} />
+                    <Sent label="Bounced" value={s.sending.bounced} />
+                    <Sent label="Unsub" value={s.sending.unsubscribed} />
+                  </div>
+                ) : null}
+
                 <div className="flex flex-wrap gap-1.5">
                   {Object.entries(s.byStatus).map(([status, count]) => (
                     <Badge key={status} tone={STATUS_TONE[status as keyof typeof STATUS_TONE] ?? 'neutral'}>
@@ -117,5 +130,17 @@ export default async function OutreachPage() {
         </div>
       )}
     </>
+  );
+}
+
+/** One reported total. Deliberately plain — six of these sit in a row and a card each
+ *  would out-shout the sequence they describe. */
+function Sent({ label, value, note }: { label: string; value: number; note?: string }) {
+  return (
+    <div className="rounded-md border border-border px-2 py-1.5">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-sm font-semibold tabular-nums">{fmtNumber(value)}</p>
+      {note ? <p className="text-[11px] text-muted-foreground">{note}</p> : null}
+    </div>
   );
 }

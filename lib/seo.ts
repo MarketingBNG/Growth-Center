@@ -107,3 +107,66 @@ export async function keywordHistory(keywordId: string) {
   });
   return rows.map((r) => ({ date: r.date.toISOString().slice(0, 10), position: r.position }));
 }
+
+/**
+ * Daily search performance from Search Console, for the trend on the SEO page.
+ *
+ * The page's Clicks and Impressions tiles are a single all-time total taken from the page
+ * table, so nothing on the screen showed movement — while the sync had been storing
+ * clicks, impressions, CTR and average position per day all along.
+ *
+ * Clicks and impressions share a chart because they share a unit. CTR and position do
+ * not, and are returned as period figures rather than being forced onto the same axis:
+ * position is an average, never a sum, and lower is better.
+ */
+export async function searchTrend(days = 28) {
+  const to = new Date();
+  to.setUTCHours(23, 59, 59, 999);
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - (days - 1));
+  from.setUTCHours(0, 0, 0, 0);
+
+  const rows = await db().metricSnapshot.findMany({
+    where: {
+      entityType: 'site',
+      metricKey: { in: ['search_clicks', 'search_impressions', 'search_ctr', 'search_position'] },
+      date: { gte: from, lte: to },
+    },
+    select: { metricKey: true, value: true, date: true },
+    orderBy: { date: 'asc' },
+  });
+  if (!rows.length) return null;
+
+  const byDay = new Map<string, { date: string; clicks: number; impressions: number }>();
+  let ctrTotal = 0;
+  let ctrDays = 0;
+  let positionTotal = 0;
+  let positionDays = 0;
+
+  for (const r of rows) {
+    const key = r.date.toISOString().slice(0, 10);
+    const day = byDay.get(key) ?? { date: key, clicks: 0, impressions: 0 };
+    if (r.metricKey === 'search_clicks') day.clicks = Number(r.value);
+    if (r.metricKey === 'search_impressions') day.impressions = Number(r.value);
+    if (r.metricKey === 'search_ctr') {
+      ctrTotal += Number(r.value);
+      ctrDays += 1;
+    }
+    if (r.metricKey === 'search_position') {
+      positionTotal += Number(r.value);
+      positionDays += 1;
+    }
+    byDay.set(key, day);
+  }
+
+  const data = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    data,
+    clicks: data.reduce((t, d) => t + d.clicks, 0),
+    impressions: data.reduce((t, d) => t + d.impressions, 0),
+    ctr: ctrDays ? ctrTotal / ctrDays : null,
+    position: positionDays ? positionTotal / positionDays : null,
+    days: data.length,
+  };
+}

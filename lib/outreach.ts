@@ -25,6 +25,8 @@ export async function sequences() {
     },
   });
 
+  const reported = await reportedTotals(rows);
+
   return rows.map((s) => {
     const byStatus = s.prospects.reduce<Record<string, number>>((acc, p) => {
       acc[p.status] = (acc[p.status] ?? 0) + 1;
@@ -50,9 +52,78 @@ export async function sequences() {
       prospects: s._count.prospects,
       byStatus,
       replyRate: rate(replied, s._count.prospects),
+      /// What the sending platform says it did with this campaign. Null for a sequence
+      /// this app owns, which has no external totals to report.
+      sending: reported.get(s.id) ?? null,
       createdAt: s.createdAt,
     };
   });
+}
+
+export type SendingTotals = {
+  sent: number;
+  opened: number;
+  clicked: number;
+  replied: number;
+  bounced: number;
+  unsubscribed: number;
+  openRate: number | null;
+};
+
+/**
+ * The per-campaign totals the sending platform reported, for every imported sequence.
+ *
+ * An imported campaign was sent by Smartlead, not from here, so there are no
+ * OutreachMessage rows to count and the page could only ever say nothing was sent — while
+ * the sync had already stored what each campaign actually delivered. This is the only
+ * honest source of a send this app did not make.
+ *
+ * One query for every sequence rather than one each: fifty campaigns is fifty round trips
+ * against Neon, which is most of a page load.
+ */
+async function reportedTotals(
+  rows: { id: string; source: string | null; externalId: string | null }[],
+): Promise<Map<string, SendingTotals>> {
+  const imported = rows.filter((r) => r.source && r.externalId);
+  if (!imported.length) return new Map();
+
+  const snapshots = await db().metricSnapshot.findMany({
+    where: {
+      entityType: 'outreach_sequence',
+      entityId: { in: imported.map((r) => r.externalId as string) },
+      metricKey: { in: ['sent', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed'] },
+    },
+    select: { source: true, entityId: true, metricKey: true, value: true, date: true },
+    orderBy: { date: 'desc' },
+  });
+
+  // Newest wins. These are running campaign totals restated on every sync, not daily
+  // increments — summing them would multiply a campaign by the number of syncs it has
+  // seen, which after a week of nightly runs is a sevenfold overstatement.
+  const latest = new Map<string, number>();
+  for (const r of snapshots) {
+    const key = `${r.source}|${r.entityId}|${r.metricKey}`;
+    if (!latest.has(key)) latest.set(key, Number(r.value));
+  }
+
+  const out = new Map<string, SendingTotals>();
+  for (const r of imported) {
+    const at = (k: string) => latest.get(`${r.source}|${r.externalId}|${k}`) ?? 0;
+    const sent = at('sent');
+    // A campaign the platform has not started yet reports nothing, and a row of zeroes
+    // reads as a failure rather than as "not begun". Left off entirely instead.
+    if (!sent) continue;
+    out.set(r.id, {
+      sent,
+      opened: at('opened'),
+      clicked: at('clicked'),
+      replied: at('replied'),
+      bounced: at('bounced'),
+      unsubscribed: at('unsubscribed'),
+      openRate: rate(at('opened'), sent),
+    });
+  }
+  return out;
 }
 
 export async function sequenceDetail(id: string) {

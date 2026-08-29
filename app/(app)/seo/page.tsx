@@ -6,9 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
-import { seoOverview } from '@/lib/seo';
+import { searchTrend, seoOverview } from '@/lib/seo';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
+import { TrendChart } from '@/components/charts/TrendChart';
 
 export const metadata = { title: 'SEO · Growth Center' };
 
@@ -22,7 +23,7 @@ export default async function SeoPage() {
     );
   }
 
-  const [data, providers] = await Promise.all([seoOverview(), cards()]);
+  const [data, providers, search] = await Promise.all([seoOverview(), cards(), searchTrend()]);
   const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
   if (!data) {
@@ -81,6 +82,32 @@ export default async function SeoPage() {
           sub={`${totals.declined} down since last check`}
         />
       </div>
+
+      {/* Search Console reports these daily and nothing plotted them, so the page could
+          only ever show one all-time total and no movement at all. */}
+      {/* Two charts, not two series on one: impressions run two orders of magnitude above
+          clicks, so sharing an axis would flatten the clicks line onto zero. */}
+      {search ? (
+        <div className="grid gap-4 pb-4 lg:grid-cols-2">
+          <TrendChart
+            title="Search clicks"
+            subtitle={`Last ${search.days} days · Google Search Console`}
+            headline={fmtNumber(search.clicks)}
+            headlineNote={`${search.ctr === null ? '—' : fmtPercent(search.ctr, 2)} CTR`}
+            data={search.data}
+            series={[{ key: 'clicks', label: 'Clicks', kind: 'number' }]}
+          />
+          <TrendChart
+            title="Search impressions"
+            subtitle={`Last ${search.days} days · average position ${
+              search.position === null ? '—' : search.position.toFixed(1)
+            }`}
+            headline={fmtNumber(search.impressions)}
+            data={search.data}
+            series={[{ key: 'impressions', label: 'Impressions', kind: 'number' }]}
+          />
+        </div>
+      ) : null}
 
       <div className="grid gap-4 pb-4 lg:grid-cols-2">
         <Card>

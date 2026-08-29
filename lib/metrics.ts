@@ -53,15 +53,35 @@ export async function excludeDemo(metricKey: string): Promise<{ not: 'demo' } | 
 }
 
 async function sessions(range: Range): Promise<number> {
+  return siteMetric('sessions', range);
+}
+
+/** Any site-wide daily metric, summed over a range. GA4 and Search Console both report
+ *  several of these and only `sessions` was ever read. */
+export async function siteMetric(metricKey: string, range: Range): Promise<number> {
   const result = await db().metricSnapshot.aggregate({
     where: {
-      metricKey: 'sessions',
+      metricKey,
       date: { gte: range.from, lte: range.to },
-      source: await excludeDemo('sessions'),
+      source: await excludeDemo(metricKey),
     },
     _sum: { value: true },
   });
   return Math.round(num(result._sum.value));
+}
+
+/** The same, averaged rather than summed — a position or a rate cannot be added up. */
+export async function siteMetricAverage(metricKey: string, range: Range): Promise<number | null> {
+  const result = await db().metricSnapshot.aggregate({
+    where: {
+      metricKey,
+      date: { gte: range.from, lte: range.to },
+      source: await excludeDemo(metricKey),
+    },
+    _avg: { value: true },
+    _count: { _all: true },
+  });
+  return result._count._all ? num(result._avg.value) : null;
 }
 
 /**
@@ -594,8 +614,19 @@ export async function analyticsKpis(days: number) {
     leadsByWeekday(current),
   ]);
 
+  // Pageviews and users were synced daily from GA4 and never read — the band showed
+  // sessions alone while two of the three metrics the provider fetches sat unused.
+  const [views, viewsBefore, people, peopleBefore] = await Promise.all([
+    siteMetric('pageviews', current),
+    siteMetric('pageviews', previous),
+    siteMetric('users', current),
+    siteMetric('users', previous),
+  ]);
+
   const cards: Kpi[] = [
     { key: 'sessions', label: 'Sessions', value: now.visitors, previous: before.visitors, format: 'number', higherIsBetter: true },
+    { key: 'users', label: 'Users', value: people, previous: peopleBefore, format: 'number', higherIsBetter: true },
+    { key: 'pageviews', label: 'Pageviews', value: views, previous: viewsBefore, format: 'number', higherIsBetter: true },
     { key: 'visitorToLead', label: 'Visitor→lead', value: now.visitorToLead, previous: before.visitorToLead, format: 'percent', higherIsBetter: true },
     { key: 'leadToQualified', label: 'Lead→qualified', value: now.leadToQualified, previous: before.leadToQualified, format: 'percent', higherIsBetter: true },
     { key: 'oppToCustomer', label: 'Opp→customer', value: now.opportunityToCustomer, previous: before.opportunityToCustomer, format: 'percent', higherIsBetter: true },
