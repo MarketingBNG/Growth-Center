@@ -92,6 +92,11 @@ async function readPage(
     per_page: String(PER_PAGE),
   });
 
+  // Zoho's Leads endpoint returns UNCONVERTED leads unless told otherwise, so every lead
+  // that turned into a customer was silently absent — the successful outcomes, missing
+  // from the funnel, with no error to say so. `both` asks for the whole module.
+  if (moduleName === 'Leads') params.set('converted', 'both');
+
   // `page` alone stops working past 2,000 records — beyond that Zoho requires the token
   // it hands back in info.next_page_token. Paging by number would have silently returned
   // the first 2,000 leads and presented them as the whole CRM.
