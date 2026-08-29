@@ -580,25 +580,54 @@ async function writeSeoRows(
     byKeyword.set(keyword, rankings);
   }
 
-  for (const [keyword, rankings] of byKeyword) {
-    const row = await db().seoKeyword.upsert({
-      where: { websiteId_keyword_country: { websiteId: website.id, keyword, country: 'us' } },
-      // searchVolume, difficulty and cpc are deliberately left unset. Search Console does
-      // not report them, and a number invented to fill the column is exactly the kind of
-      // figure this app labels rather than fabricates.
-      create: { websiteId: website.id, keyword, country: 'us', source: provider.id },
-      update: { source: provider.id },
-      select: { id: true },
-    });
+  // Three statements rather than one per row. A loop of upserts here was 1,760 keyword
+  // round trips plus 5,000 ranking ones against Neon — the same shape of mistake
+  // writePoints was written to avoid, and it grows with the site.
+  //
+  // searchVolume, difficulty and cpc are deliberately left unset. Search Console does not
+  // report them, and a number invented to fill the column is exactly the kind of figure
+  // this app labels rather than fabricates.
+  const keywords = [...byKeyword.keys()];
+  if (keywords.length) {
+    await bulkUpsert(
+      'seo_keyword',
+      ['websiteId', 'keyword', 'country', 'source'],
+      keywords.map((keyword) => [website.id, keyword, 'us', provider.id]),
+      '"websiteId", "keyword", "country"',
+      {},
+      false,
+    );
 
-    for (const ranking of rankings) {
-      await db().seoKeywordRanking.upsert({
-        where: { keywordId_date: { keywordId: row.id, date: ranking.date } },
-        create: { keywordId: row.id, date: ranking.date, position: ranking.position, url: ranking.url },
-        update: { position: ranking.position, ...(ranking.url ? { url: ranking.url } : {}) },
+    // Read back rather than returned by the upsert: seo_keyword has no externalId, which
+    // is the only column bulkUpsert can hand back to identify a row.
+    const idByKeyword = new Map<string, string>();
+    const LOOKUP_CHUNK = 1000;
+    for (let i = 0; i < keywords.length; i += LOOKUP_CHUNK) {
+      const rows = await db().seoKeyword.findMany({
+        where: { websiteId: website.id, country: 'us', keyword: { in: keywords.slice(i, i + LOOKUP_CHUNK) } },
+        select: { id: true, keyword: true },
       });
-      written++;
+      for (const r of rows) idByKeyword.set(r.keyword, r.id);
     }
+
+    const rankingRows: unknown[][] = [];
+    for (const [keyword, rankings] of byKeyword) {
+      const keywordId = idByKeyword.get(keyword);
+      if (!keywordId) continue;
+      for (const ranking of rankings) {
+        rankingRows.push([keywordId, ranking.date, ranking.position, ranking.url]);
+      }
+    }
+
+    const touched = await bulkUpsert(
+      'seo_keyword_ranking',
+      ['keywordId', 'date', 'position', 'url'],
+      rankingRows,
+      '"keywordId", "date"',
+      { date: 'date', position: 'int' },
+      false,
+    );
+    written += touched.length;
   }
 
   // ── pages: one current row per URL ───────────────────────────────────────────────
@@ -610,20 +639,26 @@ async function writeSeoRows(
     byPage.set(url, entry);
   }
 
-  for (const [url, m] of byPage) {
-    const fields = {
-      clicks: Math.round(m.clicks ?? 0),
-      impressions: Math.round(m.impressions ?? 0),
-      ctr: m.ctr ?? 0,
-      avgPosition: m.position ?? 0,
-      source: provider.id,
-    };
-    await db().seoPage.upsert({
-      where: { websiteId_url: { websiteId: website.id, url } },
-      create: { websiteId: website.id, url, ...fields },
-      update: fields,
-    });
-    written++;
+  const pageRows = [...byPage].map(([url, m]) => [
+    website.id,
+    url,
+    Math.round(m.clicks ?? 0),
+    Math.round(m.impressions ?? 0),
+    m.ctr ?? 0,
+    m.position ?? 0,
+    provider.id,
+  ]);
+  if (pageRows.length) {
+    const touched = await bulkUpsert(
+      'seo_page',
+      ['websiteId', 'url', 'clicks', 'impressions', 'ctr', 'avgPosition', 'source'],
+      pageRows,
+      '"websiteId", "url"',
+      // Float columns, not Decimal — casting to numeric would rely on an implicit
+      // conversion on the way in.
+      { clicks: 'int', impressions: 'int', ctr: 'double precision', avgPosition: 'double precision' },
+    );
+    written += touched.length;
   }
 
   return written;

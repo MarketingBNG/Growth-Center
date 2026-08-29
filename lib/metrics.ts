@@ -172,7 +172,7 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', higherIsBetter: true, hint: 'All revenue booked, including recurring' },
     { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', higherIsBetter: true, hint: 'Deals won in this period' },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', higherIsBetter: false },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Spend per new customer' },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
   ];
 
@@ -537,7 +537,12 @@ export async function leadsKpis(days: number) {
     { key: 'leads', label: 'New leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'qualified', label: 'Qualified', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
     { key: 'converted', label: 'Converted', value: convNow, previous: convBefore, format: 'number', higherIsBetter: true, hint: 'Counted on the day the CRM converted them' },
-    { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false },
+    // Blended, and labelled as such. Spend is Meta's alone — the only paid channel
+    // connected — while the lead count is every lead however it arrived, most of them
+    // referrals and inbound. Dividing one by the other is a useful number only if the
+    // reader knows that is what it is; unlabelled it reads as the price of a Meta lead,
+    // which it is not.
+    { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over all leads, however they arrived' },
     { key: 'response', label: 'Median response', value: medianNow, previous: medianBefore, format: 'duration', higherIsBetter: false, hint: 'First outbound touch; untouched leads excluded' },
     { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },
   ];
@@ -610,7 +615,7 @@ export async function marketingKpis(days: number) {
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false },
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Spend per new customer' },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
   ];
 
   return { cards, current: now, budgetPacing: pacing, weekday };
