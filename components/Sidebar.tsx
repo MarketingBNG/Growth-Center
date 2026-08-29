@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as Icons from 'lucide-react';
-import { ChevronDown, ChevronUp, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
 import { signOut } from 'next-auth/react';
-import { NAV } from '@/lib/nav';
+import { ACCOUNT_NAV, NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import type { CurrentUser } from '@/lib/auth';
 
@@ -187,36 +187,102 @@ export function SidebarNav({
   );
 }
 
-export function UserCard({ user, collapsed = false }: { user: CurrentUser; collapsed?: boolean }) {
+export function UserCard({
+  user,
+  collapsed = false,
+  onNavigate,
+}: {
+  user: CurrentUser;
+  collapsed?: boolean;
+  /** Closes the mobile drawer the menu is sitting inside, which the route change alone
+   *  does not do. */
+  onNavigate?: () => void;
+}) {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+
+  // Closed by navigating: the menu's own links change the route without unmounting it,
+  // so it would otherwise stay open over the page it just opened.
+  useEffect(() => setOpen(false), [pathname]);
+
+  // Dismissed by clicking away or pressing Escape, both of which people try first. Bound
+  // only while open, so an idle sidebar carries no document-level listeners.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest('[data-account-menu]')) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
   return (
-    <div
-      className={cn(
-        'flex items-center gap-2.5 border-t border-line-soft p-3',
-        collapsed && 'justify-center',
-      )}
-    >
-      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[11.5px] font-bold text-info-strong">
-        {user.initials}
-      </span>
-      {collapsed ? null : (
-        <>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[12.5px] font-semibold">{user.name}</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {user.displayRole ?? user.role}
-            </p>
-          </div>
+    <div className="relative border-t border-line-soft p-3" data-account-menu>
+      {open ? (
+        // Above the button, not below: this sits at the foot of the sidebar and a menu
+        // opening downwards would go off the screen.
+        <div className="absolute bottom-[calc(100%-0.25rem)] left-3 right-3 z-30 overflow-hidden rounded-[10px] border border-border bg-card py-1 shadow-lg">
+          {ACCOUNT_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary',
+                pathname === item.href ? 'font-semibold text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              <Icon name={item.icon} className="size-[15px]" />
+              {item.label}
+            </Link>
+          ))}
+
+          <div className="my-1 border-t border-line-soft" />
+
           <button
             type="button"
-            title="Sign out"
-            aria-label="Sign out"
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             onClick={() => signOut({ callbackUrl: '/signin' })}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           >
             <LogOut className="size-[15px]" />
+            Log out
           </button>
-        </>
-      )}
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title={collapsed ? `${user.name} — account menu` : undefined}
+        className={cn(
+          'flex w-full items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-secondary',
+          collapsed && 'justify-center',
+        )}
+      >
+        <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[11.5px] font-bold text-info-strong">
+          {user.initials}
+        </span>
+        {collapsed ? null : (
+          <>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12.5px] font-semibold">{user.name}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {user.displayRole ?? user.role}
+              </span>
+            </span>
+            <ChevronsUpDown className="size-[15px] shrink-0 text-muted-foreground" />
+          </>
+        )}
+      </button>
     </div>
   );
 }

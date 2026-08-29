@@ -14,6 +14,16 @@ export type NavSection = {
   items: NavItem[];
 };
 
+// Settings and Integrations live in the account menu at the foot of the sidebar rather
+// than in the nav list. They are workspace configuration, opened occasionally, and mixing
+// them into the daily modules made the list longer without making anything easier to
+// find — the same reason every app of this shape puts them behind the account button.
+export const ACCOUNT_NAV: NavItem[] = [
+  { label: 'Settings', href: '/settings', icon: 'Settings' },
+  { label: 'Integrations', href: '/integrations', icon: 'Plug' },
+  { label: 'Team', href: '/team', icon: 'UserCog' },
+];
+
 // The shell renders from this array. Adding a module means adding a line here, not
 // editing the sidebar.
 //
@@ -38,17 +48,14 @@ export const NAV: NavSection[] = [
       { label: 'Analytics', href: '/analytics', icon: 'ChartLine' },
       { label: 'Reports', href: '/reports', icon: 'ClipboardList' },
       { label: 'AI Insights', href: '/ai', icon: 'Brain' },
-      { label: 'Integrations', href: '/integrations', icon: 'Plug' },
     ],
   },
   {
     title: 'Workspace',
-    items: [
-      { label: 'Tasks', href: '/tasks', icon: 'CircleCheck' },
-      { label: 'Team', href: '/team', icon: 'UserCog' },
-      { label: 'Settings', href: '/settings', icon: 'Settings' },
-    ],
+    items: [{ label: 'Tasks', href: '/tasks', icon: 'CircleCheck' }],
   },
 ];
 
-export const ALL_NAV_ITEMS = NAV.flatMap((s) => s.items);
+/** Everything reachable, including the account menu — so a future search or command
+ *  palette can still find Settings even though the sidebar no longer lists it. */
+export const ALL_NAV_ITEMS = [...NAV.flatMap((s) => s.items), ...ACCOUNT_NAV];

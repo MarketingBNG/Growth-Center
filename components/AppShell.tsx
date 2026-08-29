@@ -43,7 +43,7 @@ export function AppShell({
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2 pt-3">
               <SidebarNav onNavigate={() => setMobileOpen(false)} />
             </div>
-            <UserCard user={user} />
+            <UserCard user={user} onNavigate={() => setMobileOpen(false)} />
           </aside>
         </div>
       ) : null}
