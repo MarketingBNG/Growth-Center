@@ -8,5 +8,16 @@ import { defineConfig } from 'prisma/config';
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: { path: 'prisma/migrations' },
-  datasource: { url: process.env.DATABASE_URL ?? '' },
+  // DIRECT_URL first, and it matters: DATABASE_URL is Neon's -pooler endpoint, and
+  // migrations must not go through pgbouncer.
+  //
+  // `prisma migrate` guards itself with a session-level advisory lock. pgbouncer pools at
+  // transaction level, so when migrate exits the lock stays stranded on a pooled server
+  // connection that outlives it — and every later deploy fails with P1002, "Timed out
+  // trying to acquire a postgres advisory lock", against a connection sitting idle.
+  //
+  // DIRECT_URL is the same Neon host without the `-pooler` suffix. Only the CLI reads
+  // this; the running app still builds its client from DATABASE_URL in lib/prisma.ts,
+  // which is exactly where pooling belongs.
+  datasource: { url: process.env.DIRECT_URL || process.env.DATABASE_URL || '' },
 });
