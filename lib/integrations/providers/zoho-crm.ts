@@ -126,11 +126,28 @@ async function readPage(
 }
 
 /** Zoho lookup fields arrive as `{ id, name }`; plain values arrive bare. */
-function lookup(value: unknown): { id: string; name: string } | null {
+function lookup(value: unknown): { id: string; name: string; email: string | null } | null {
   if (!value || typeof value !== 'object') return null;
-  const v = value as { id?: unknown; name?: unknown };
+  const v = value as { id?: unknown; name?: unknown; email?: unknown };
   if (!v.id) return null;
-  return { id: String(v.id), name: String(v.name ?? v.id) };
+  const email = typeof v.email === 'string' && v.email.includes('@') ? v.email : null;
+  return { id: String(v.id), name: String(v.name ?? v.id), email };
+}
+
+/**
+ * The address for a person Zoho names, or their display name.
+ *
+ * Every `ownerEmail` and `assigneeEmail` column in this app was being filled with a
+ * display name — "Nidhi Jain" on 1,009 tasks — because a user lookup carries both and
+ * only the name was read. Nothing could then match those rows to the workspace roster,
+ * so the Owner and Assignee filters offered accounts nobody's records were under.
+ *
+ * The name stays as the fallback: a record owned by a deactivated user still says who,
+ * and a blank owner would be worse than an unmatchable one.
+ */
+function personEmail(value: unknown): string | null {
+  const person = lookup(value);
+  return person?.email ?? person?.name ?? null;
 }
 
 /**
@@ -189,6 +206,21 @@ function createdDate(row: Row): Date {
   return d;
 }
 
+/**
+ * The moment the record was created, to the second.
+ *
+ * `createdDate` above is truncated on purpose — a MetricPoint's date is a day, and
+ * metric_snapshot is keyed on it — but the record's own createdAt is not a metric. Every
+ * lead was landing on exactly midnight, which loses the ordering inside a day and makes
+ * time-to-first-response unmeasurable: the thing it subtracts from was always 00:00.
+ */
+function createdAtExact(row: Row): string | null {
+  const raw = text(row.Created_Time);
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 /** The modules pulled, in the order they are pulled. Accounts are not fetched directly —
  *  they arrive as the lookup on a contact or a deal, which is every account that matters
  *  to this app and none of the ones that matter to nobody. */
@@ -223,7 +255,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
   const id = text(row.id);
   if (!id) return null;
 
-  const owner = lookup(row.Owner);
+  const ownerAddress = personEmail(row.Owner);
+  const createdAt = createdAtExact(row);
   const account = lookup(row.Account_Name);
   const date = createdDate(row);
 
@@ -247,7 +280,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         message: text(row.Description),
         status: text(row.Lead_Status),
         leadSource: text(row.Lead_Source),
-        ownerEmail: owner?.name ?? null,
+        ownerEmail: ownerAddress,
+        createdAt,
         converted: row.Converted__s === true,
         convertedAt: text(row.Converted_Date_Time),
         // What the lead became. Without these a converted lead and the contact and deal
@@ -278,7 +312,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         // written rather than bucketed into ranges nobody chose.
         size: row.Employees == null ? null : String(row.Employees),
         notes: text(row.Description),
-        ownerEmail: owner?.name ?? null,
+        ownerEmail: ownerAddress,
+        createdAt,
       },
     };
   }
@@ -301,7 +336,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         title: text(row.Title),
         accountId: account?.id ?? null,
         accountName: account?.name ?? null,
-        ownerEmail: owner?.name ?? null,
+        ownerEmail: ownerAddress,
+        createdAt,
       },
     };
   }
@@ -327,10 +363,11 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         status: text(row.Status),
         priority: text(row.Priority),
         dueDate: text(row.Due_Date),
-        createdByEmail: lookup(row.Created_By)?.name ?? null,
+        createdByEmail: personEmail(row.Created_By),
         whatId: what?.id ?? null,
         whoId: who?.id ?? null,
-        ownerEmail: owner?.name ?? null,
+        ownerEmail: ownerAddress,
+        createdAt,
       },
     };
   }
@@ -360,7 +397,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         endsAt: isCall ? null : text(row.End_DateTime),
         whatId: what?.id ?? null,
         whoId: who?.id ?? null,
-        ownerEmail: owner?.name ?? null,
+        ownerEmail: ownerAddress,
+        createdAt,
       },
     };
   }
@@ -384,7 +422,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
       accountId: account?.id ?? null,
       accountName: account?.name ?? null,
       contactId: contact?.id ?? null,
-      ownerEmail: owner?.name ?? null,
+      ownerEmail: ownerAddress,
+      createdAt,
     },
   };
 }
