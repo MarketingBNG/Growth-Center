@@ -1,5 +1,7 @@
 import { db } from './prisma.ts';
 import { cac, num, rate, roas } from './calc.ts';
+import { convert } from './currency.ts';
+import { currencySettings } from './settings.ts';
 import type { Range } from './metrics.ts';
 
 /**
@@ -29,8 +31,11 @@ export async function campaignPerformance(range: Range, channelId?: string) {
   const ids = campaigns.map((c) => c.id);
 
   const [spend, leads, opportunities, revenue, customers] = await Promise.all([
+    // Grouped by currency as well: spend here is billed in rupees and most revenue is
+    // written in dollars, so a per-campaign ROAS that divides one by the other is wrong
+    // by the exchange rate and looks entirely plausible.
     db().marketingSpend.groupBy({
-      by: ['campaignId'],
+      by: ['campaignId', 'currency'],
       where: { campaignId: { in: ids }, date: window },
       _sum: { amount: true, clicks: true, impressions: true },
     }),
@@ -47,7 +52,7 @@ export async function campaignPerformance(range: Range, channelId?: string) {
     // one_time only: recurring income from a customer won last year is not a return on
     // this period's campaign spend.
     db().revenueEntry.groupBy({
-      by: ['campaignId'],
+      by: ['campaignId', 'currency'],
       where: { campaignId: { in: ids }, date: window, kind: 'one_time' },
       _sum: { amount: true },
     }),
@@ -57,10 +62,27 @@ export async function campaignPerformance(range: Range, channelId?: string) {
     }),
   ]);
 
-  const spendBy = new Map(spend.map((r) => [r.campaignId, r]));
+  const fx = await currencySettings();
+
+  // Folded back per campaign once every amount is in the reporting currency. A campaign
+  // billed in two currencies would otherwise appear twice.
+  const spendBy = new Map<string, { amount: number; clicks: number; impressions: number }>();
+  for (const r of spend) {
+    const acc = spendBy.get(r.campaignId) ?? { amount: 0, clicks: 0, impressions: 0 };
+    acc.amount += convert(num(r._sum.amount), r.currency, fx) ?? 0;
+    acc.clicks += r._sum.clicks ?? 0;
+    acc.impressions += r._sum.impressions ?? 0;
+    spendBy.set(r.campaignId, acc);
+  }
+
   const leadBy = new Map(leads.map((r) => [r.campaignId ?? '', r._count._all]));
   const oppBy = new Map(opportunities.map((r) => [r.campaignId ?? '', r._count._all]));
-  const revenueBy = new Map(revenue.map((r) => [r.campaignId ?? '', num(r._sum.amount)]));
+
+  const revenueBy = new Map<string, number>();
+  for (const r of revenue) {
+    const key = r.campaignId ?? '';
+    revenueBy.set(key, (revenueBy.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, fx) ?? 0));
+  }
 
   const customerBy = new Map<string, number>();
   for (const c of customers) {
@@ -72,9 +94,9 @@ export async function campaignPerformance(range: Range, channelId?: string) {
   return campaigns
     .map((c) => {
       const s = spendBy.get(c.id);
-      const amount = num(s?._sum.amount);
-      const clicks = s?._sum.clicks ?? 0;
-      const impressions = s?._sum.impressions ?? 0;
+      const amount = s?.amount ?? 0;
+      const clicks = s?.clicks ?? 0;
+      const impressions = s?.impressions ?? 0;
       const leadCount = leadBy.get(c.id) ?? 0;
       const customerCount = customerBy.get(c.id) ?? 0;
       const revenueSum = revenueBy.get(c.id) ?? 0;

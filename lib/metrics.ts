@@ -72,19 +72,6 @@ export async function siteMetric(metricKey: string, range: Range): Promise<numbe
   return Math.round(num(result._sum.value));
 }
 
-/** The same, averaged rather than summed — a position or a rate cannot be added up. */
-export async function siteMetricAverage(metricKey: string, range: Range): Promise<number | null> {
-  const result = await db().metricSnapshot.aggregate({
-    where: {
-      metricKey,
-      date: { gte: range.from, lte: range.to },
-      source: await excludeDemo(metricKey),
-    },
-    _avg: { value: true },
-    _count: { _all: true },
-  });
-  return result._count._all ? num(result._avg.value) : null;
-}
 
 /**
  * The funnel for one period.
@@ -520,8 +507,8 @@ export async function customerShare(): Promise<number | null> {
 export async function budgetPacing(range: Range): Promise<number | null> {
   const window = { gte: range.from, lte: range.to };
 
-  const [spendAgg, budgetRows] = await Promise.all([
-    db().marketingSpend.aggregate({ where: { date: window }, _sum: { amount: true } }),
+  const [spendRows, budgetRows] = await Promise.all([
+    db().marketingSpend.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
     db().campaign.findMany({
       where: {
         budget: { not: null },
@@ -531,12 +518,24 @@ export async function budgetPacing(range: Range): Promise<number | null> {
           { OR: [{ endDate: null }, { endDate: { gte: range.from } }] },
         ],
       },
-      select: { budget: true },
+      select: { budget: true, currency: true },
     }),
   ]);
 
-  const budget = budgetRows.reduce((sum, c) => sum + num(c.budget), 0);
-  return rate(num(spendAgg._sum.amount), budget);
+  // Both sides converted before the division. Spend is billed in the ad account's
+  // currency and a budget is quoted in the same one, so today they agree — but a second
+  // platform on another currency would silently make this ratio meaningless.
+  const money = await currencySettings();
+  const spend = sumInReporting(
+    spendRows.map((r) => ({ amount: num(r._sum.amount), currency: r.currency })),
+    money,
+  ).total;
+  const budget = sumInReporting(
+    budgetRows.map((c) => ({ amount: num(c.budget), currency: c.currency })),
+    money,
+  ).total;
+
+  return rate(spend, budget);
 }
 
 // ─── per-screen KPI sets ──────────────────────────────────────────────────────

@@ -53,6 +53,10 @@ export async function growthContext(days = 90) {
 
   return {
     periodDays: days,
+    // Every money figure below is in this currency. Without it the model reads bare
+    // numbers and assumes dollars, which is wrong by roughly ninety-five times here —
+    // and it would say so with complete confidence.
+    currency: now.currency,
     current: {
       visitors: now.visitors,
       leads: now.leads,
@@ -110,6 +114,8 @@ Rules:
 - Never invent a number. Every figure you cite must appear in the data given to you.
 - If the data cannot answer the question, say exactly what is missing instead of guessing.
 - Where a metric is null it means "not computable" (usually no denominator), not zero.
+- Every money figure is in the currency named by the snapshot's \`currency\` field. Use
+  that currency when you quote one, and never convert it.
 - Be specific and short. Name the channel or campaign and the figure that supports the point.
 - Do not recommend anything the data does not support.`;
 
