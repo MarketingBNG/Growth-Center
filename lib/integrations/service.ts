@@ -620,6 +620,17 @@ const STAGE_SELECT = {
  * `casts` carries the Postgres type for any column a text placeholder cannot satisfy on
  * its own — the enum columns and the numerics.
  */
+/**
+ * When the CRM says the record was created, for the row's own createdAt.
+ *
+ * Left to default(now()) every imported record is stamped with the moment of the import
+ * instead — 26,043 of 26,138 leads landed on one day, so every trend chart showed a
+ * single spike on import day and every period-over-period delta compared a full CRM
+ * against nothing. The provider already dates each point from the CRM's Created_Time;
+ * this is only carrying it through to the table the pages read.
+ */
+const createdAtOf = (p: MetricPoint): Date => p.date;
+
 /** A point's provider payload, and a trimmed string from it — every materialiser reads
  *  entityMeta the same defensive way, so they read it through these. */
 const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
@@ -768,7 +779,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     const claimedInBatch = new Set<string>();
     let deduped = 0;
 
-    const adopt: { id: string; row: Record<string, unknown>; externalId: string }[] = [];
+    const adopt: { id: string; row: Record<string, unknown>; externalId: string; createdAt: Date }[] = [];
     const fresh: unknown[][] = [];
 
     for (const p of contactPoints) {
@@ -798,16 +809,16 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       const alreadyOurs = clash?.source === providerId && clash?.externalId === externalId;
 
       if (clash && !alreadyOurs) {
-        adopt.push({ id: clash.id, row, externalId });
+        adopt.push({ id: clash.id, row, externalId, createdAt: createdAtOf(p) });
       } else {
-        fresh.push([row.firstName, row.lastName, row.email, row.phone, row.title, row.companyId, providerId, externalId]);
+        fresh.push([row.firstName, row.lastName, row.email, row.phone, row.title, row.companyId, createdAtOf(p), providerId, externalId]);
       }
     }
 
     for (const a of adopt) {
       await db().contact.update({
         where: { id: a.id },
-        data: { ...a.row, source: providerId, externalId: a.externalId },
+        data: { ...a.row, createdAt: a.createdAt, source: providerId, externalId: a.externalId },
       });
       contactIdByExternal.set(a.externalId, a.id);
       written++;
@@ -815,9 +826,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
     const touched = await bulkUpsert(
       'contact',
-      ['firstName', 'lastName', 'email', 'phone', 'title', 'companyId', 'source', 'externalId'],
+      ['firstName', 'lastName', 'email', 'phone', 'title', 'companyId', 'createdAt', 'source', 'externalId'],
       fresh,
       '"source", "externalId"',
+      { createdAt: 'timestamp(3)' },
     );
     for (const t of touched) if (t.externalId) contactIdByExternal.set(t.externalId, t.id);
     written += touched.length;
@@ -842,16 +854,17 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       str(m.message),
       leadStatus(str(m.status)),
       leadSourceType(str(m.leadSource)),
+      createdAtOf(p),
       providerId,
       externalId,
     ];
   });
   const leadsTouched = await bulkUpsert(
     'lead',
-    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'source', 'externalId'],
+    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'createdAt', 'source', 'externalId'],
     leadRows,
     '"source", "externalId"',
-    { status: '"LeadStatus"', sourceType: '"SourceType"' },
+    { status: '"LeadStatus"', sourceType: '"SourceType"', createdAt: 'timestamp(3)' },
   );
   written += leadsTouched.length;
 
@@ -906,6 +919,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           // lands in the first open stage and the import looks like it worked. With the
           // CRM's own wording stored beside the mapped stage, a mismatch is one query away.
           sourceStage ? JSON.stringify({ stage: sourceStage }) : null,
+          createdAtOf(p),
           providerId,
           externalId,
         ]);
@@ -913,10 +927,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
-        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb' },
+        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
       );
       written += dealsTouched.length;
     }
