@@ -272,19 +272,40 @@ async function campaignDetails(
 /**
  * The currency the ad account bills in.
  *
- * Falls back to USD rather than failing the sync: spend is the number every ROAS and CAC
- * figure depends on, and it has already been fetched by the time this runs. A wrong
- * currency label is visible and correctable; a lost sync is neither.
+ * Fails the sync rather than assuming USD, which is what this did before.
+ *
+ * The old comment argued a wrong label was "visible and correctable" and a lost sync was
+ * not. That was wrong, and the account proved it: the lookup failed, 221 days of rupee
+ * spend were stored as dollars, and the Marketing page rendered ₹498,000 of real spend as
+ * ₹40,391,906 — inflated by the exchange rate, in the workspace's own currency symbol,
+ * with nothing anywhere to say it was a guess. Nobody corrects a number that looks like a
+ * number. A sync that stops with a message naming the missing permission does get fixed.
  */
 async function accountCurrency(adAccountId: string, accessToken: string): Promise<string> {
+  let json: { currency?: string };
   try {
     const res = await fetch(
       `${GRAPH}/${adAccountId}?fields=currency&access_token=${encodeURIComponent(accessToken)}`,
     );
-    if (!res.ok) return 'USD';
-    const json = (await res.json()) as { currency?: string };
-    return json.currency?.toUpperCase() || 'USD';
-  } catch {
-    return 'USD';
+    if (!res.ok) {
+      throw new IntegrationError(
+        `Meta would not report the billing currency for ${adAccountId} (HTTP ${res.status}). ` +
+          'Spend cannot be stored without it. The token usually needs the ads_read permission.',
+      );
+    }
+    json = (await res.json()) as { currency?: string };
+  } catch (e) {
+    if (e instanceof IntegrationError) throw e;
+    throw new IntegrationError(
+      `Could not reach Meta to read the billing currency for ${adAccountId}. Spend cannot be stored without it.`,
+    );
   }
+
+  const currency = json.currency?.toUpperCase();
+  if (!currency || !/^[A-Z]{3}$/.test(currency)) {
+    throw new IntegrationError(
+      `Meta reported no billing currency for ${adAccountId}. Spend cannot be stored without it.`,
+    );
+  }
+  return currency;
 }
