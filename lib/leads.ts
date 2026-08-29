@@ -100,7 +100,7 @@ export async function getLead(id: string) {
       channel: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true, email: true } },
       company: { select: { id: true, name: true, domain: true } },
-      opportunities: { select: { id: true, name: true, value: true, stage: { select: { name: true } } } },
+      opportunities: { select: { id: true, name: true, value: true, currency: true, stage: { select: { name: true } } } },
       activities: { orderBy: { createdAt: 'desc' } },
       noteEntries: { orderBy: { createdAt: 'desc' } },
       tasks: { where: { status: { in: ['open', 'in_progress'] } }, orderBy: { dueDate: 'asc' } },
@@ -358,4 +358,23 @@ export async function setLeadOwner(id: string, ownerEmail: string | null, actorE
     },
   });
   return { ok: true };
+}
+
+/**
+ * Every owner that actually appears on a lead, however they got there.
+ *
+ * The Owner filter used to be built from the app's user roster alone, so an owner the CRM
+ * assigned — "Prateek Sharma", who holds 221 of August's leads and has no account here —
+ * could not be selected at all. The filter has to offer what the data contains, not what
+ * the roster does.
+ */
+export async function leadOwners(): Promise<string[]> {
+  const rows = await db().lead.groupBy({
+    by: ['ownerEmail'],
+    where: { ownerEmail: { not: null } },
+    _count: { _all: true },
+    orderBy: { _count: { ownerEmail: 'desc' } },
+    take: 100,
+  });
+  return rows.map((r) => r.ownerEmail as string);
 }

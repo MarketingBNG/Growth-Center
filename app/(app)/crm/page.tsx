@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
-import { RangePicker } from '@/components/patterns/range-picker';
+import { DateRangePicker } from '@/components/patterns/date-range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
@@ -13,12 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
-import { rangeParam } from '@/lib/range';
+import { customRange, rangeParam } from '@/lib/range';
 import { pageQuery } from '@/lib/query';
 import { listCompanies, listContacts } from '@/lib/crm';
 import { fmtDate } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { NewCrmRecordButton } from './NewCrmRecordButton';
+import { Overview } from './Overview';
+import { crmOverview } from '@/lib/crm-overview';
+import { rangeFor } from '@/lib/metrics';
 
 export const metadata = { title: 'CRM · Growth Center' };
 
@@ -43,9 +46,21 @@ export default async function CrmPage({
 
   const q = pageQuery(params);
   const { value, days, bucket } = rangeParam(params);
-  const [data, band] = await Promise.all([
+
+  // A hand-picked window wins over the preset when both are in the URL; the picker clears
+  // the other, so having both means someone edited the link.
+  const picked = customRange(params);
+  const window = picked ?? rangeFor(days).current;
+  const rangeLabel = picked
+    ? picked.label
+    : value === 'today'
+      ? 'Today'
+      : `Last ${days} days`;
+
+  const [data, band, overview] = await Promise.all([
     tab === 'companies' ? listCompanies(q) : listContacts(q),
     crmBand(days, bucket),
+    crmOverview(window),
   ]);
 
   return (
@@ -55,11 +70,18 @@ export default async function CrmPage({
         subtitle="Contacts and companies, populated automatically by inbound leads."
         actions={
           <>
-            <RangePicker current={value} />
+            <DateRangePicker
+              range={value}
+              from={typeof params.from === 'string' ? params.from : undefined}
+              to={typeof params.to === 'string' ? params.to : undefined}
+              label={rangeLabel}
+            />
             <NewCrmRecordButton kind={tab === 'companies' ? 'company' : 'contact'} />
           </>
         }
       />
+
+      <Overview data={overview} rangeLabel={rangeLabel} window={window} />
 
       <MetricsBand {...band} />
 

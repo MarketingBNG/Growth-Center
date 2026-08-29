@@ -18,12 +18,13 @@ import { leadFilters, listLeads } from '@/lib/leads';
 import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { listAssignable, type AppUser } from '@/lib/users';
+import { leadOwners } from '@/lib/leads';
 import { fmtRelative } from '@/lib/format';
 import { NewLeadButton } from './NewLeadButton';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
-const filtersFor = (people: AppUser[]) => [
+const filtersFor = (people: AppUser[], owners: string[]) => [
   { name: 'status', label: 'Status', options: LEAD_STATUSES.map((s) => ({ value: s, label: s })) },
   {
     name: 'sourceType',
@@ -33,12 +34,24 @@ const filtersFor = (people: AppUser[]) => [
   {
     name: 'ownerEmail',
     label: 'Owner',
+    // The roster AND whoever the CRM actually assigned. Most leads here are owned by
+    // people with no account in this app, and offering only the roster made the busiest
+    // owners unselectable.
     options: [
       { value: 'unassigned', label: 'Unassigned' },
-      ...people.map((a) => ({ value: a.email, label: a.name })),
+      ...dedupeOwners(people, owners),
     ],
   },
 ];
+
+/** Roster first, so a name the workspace knows wins over the raw CRM string, then anyone
+ *  else the data mentions. Keyed on the stored value, which is what the filter matches. */
+function dedupeOwners(people: AppUser[], owners: string[]) {
+  const out = new Map<string, { value: string; label: string }>();
+  for (const p of people) out.set(p.email, { value: p.email, label: p.name });
+  for (const o of owners) if (!out.has(o)) out.set(o, { value: o, label: o });
+  return [...out.values()];
+}
 
 export default async function LeadsPage({
   searchParams,
@@ -58,7 +71,7 @@ export default async function LeadsPage({
     );
   }
 
-  const people = await listAssignable();
+  const [people, owners] = await Promise.all([listAssignable(), leadOwners()]);
   const q = pageQuery(params);
   const { value, days, bucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
@@ -82,7 +95,7 @@ export default async function LeadsPage({
 
       <MetricsBand {...band} />
 
-      <FilterBar filters={filtersFor(people)} searchPlaceholder="Name, email or company…" />
+      <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email or company…" />
 
       <Card className="overflow-hidden">
         {rows.length === 0 ? (
