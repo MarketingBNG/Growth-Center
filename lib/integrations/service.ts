@@ -875,13 +875,19 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       for (const p of dealPoints) {
         const m = meta(p);
         const externalId = p.entityId as string;
-        const stage = matchStage(pipeline.stages, str(m.stage));
+        const sourceStage = str(m.stage);
+        const stage = matchStage(pipeline.stages, sourceStage);
         if (!stage) continue;
 
         const closing = str(m.closingDate);
         const closingDate = closing ? new Date(closing) : null;
         const accountId = str(m.accountId);
         const contactId = str(m.contactId);
+
+        // A deal in a won or lost stage is closed, and Closing_Date is the day it closed.
+        // Revenue is dated from this, so leaving it null would strand every sale.
+        const closed = stage.isWon || stage.isLost;
+        const validClosing = closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null;
 
         dealRows.push([
           p.entityLabel ?? externalId,
@@ -890,9 +896,14 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           Number(m.amount) || 0,
           str(m.currency) ?? 'USD',
           Number(m.probability) || stage.probability,
-          closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null,
+          validClosing,
+          closed ? (validClosing ?? new Date()) : null,
           accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
           contactId ? (contactIdByExternal.get(contactId) ?? null) : null,
+          // Kept because a stage that fails to match is otherwise invisible: every deal
+          // lands in the first open stage and the import looks like it worked. With the
+          // CRM's own wording stored beside the mapped stage, a mismatch is one query away.
+          sourceStage ? JSON.stringify({ stage: sourceStage }) : null,
           providerId,
           externalId,
         ]);
@@ -900,10 +911,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'companyId', 'contactId', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
-        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)' },
+        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb' },
       );
       written += dealsTouched.length;
     }
@@ -1243,7 +1254,7 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, outreachRows: 0 };
+  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, revenueRows: 0, outreachRows: 0 };
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
@@ -1287,8 +1298,70 @@ type Counts = {
   socialRows: number;
   seoRows: number;
   crmRows: number;
+  revenueRows: number;
   outreachRows: number;
 };
+
+/**
+ * Derives Customer and RevenueEntry rows from deals sitting in a won stage.
+ *
+ * There is no billing integration, so revenue has no other source. The CRM already knows
+ * what closed and for how much, and the Dashboard and Revenue pages read these two tables
+ * — without this step they stay empty however complete the CRM import is.
+ *
+ * Done in SQL rather than a read-modify-write loop because it runs over every won deal on
+ * every sync: 7,746 round trips would not finish inside a serverless function.
+ *
+ * Idempotent in both directions. A revenue entry is keyed on its opportunity, so a
+ * re-sync corrects the amount instead of adding a second row; and a deal dragged back out
+ * of a won stage has its derived revenue removed, which a pure upsert would have left
+ * behind as a sale that never happened.
+ */
+async function writeRevenueFromWonDeals(): Promise<number> {
+  // One customer per company — the schema allows only one — dated by that company's
+  // earliest win, so "customer since" means what it says.
+  await db().$executeRawUnsafe(`
+    INSERT INTO customer (id, "companyId", "opportunityId", "wonAt", "createdAt", "updatedAt")
+    SELECT gen_random_uuid()::text, d."companyId", d.id, d.won_at, now(), now()
+    FROM (
+      SELECT DISTINCT ON (o."companyId")
+             o."companyId", o.id, COALESCE(o."closedAt", o."updatedAt") AS won_at
+      FROM opportunity o
+      JOIN pipeline_stage s ON s.id = o."stageId"
+      WHERE s."isWon" AND o."companyId" IS NOT NULL
+      ORDER BY o."companyId", COALESCE(o."closedAt", o."updatedAt") ASC
+    ) d
+    ON CONFLICT ("companyId") DO UPDATE
+      SET "wonAt" = LEAST(customer."wonAt", EXCLUDED."wonAt"), "updatedAt" = now()
+  `);
+
+  // A deal that moved back out of a won stage, or lost its value, must not leave revenue
+  // behind. Only derived rows are touched — manual revenue carries no opportunity.
+  await db().$executeRawUnsafe(`
+    DELETE FROM revenue_entry r
+    WHERE r."opportunityId" IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM opportunity o
+        JOIN pipeline_stage s ON s.id = o."stageId"
+        WHERE o.id = r."opportunityId" AND s."isWon" AND o.value > 0
+      )
+  `);
+
+  // Zero-value deals are excluded on purpose: a won deal with no amount is a bookkeeping
+  // gap in the CRM, and importing it as £0 of revenue would drag the average down as if
+  // the work had been given away.
+  return db().$executeRawUnsafe(`
+    INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "createdAt")
+    SELECT gen_random_uuid()::text, c.id, COALESCE(o."closedAt", o."updatedAt")::date,
+           o.value, o.currency, 'one_time', o.id, o."campaignId", now()
+    FROM opportunity o
+    JOIN pipeline_stage s ON s.id = o."stageId"
+    JOIN customer c ON c."companyId" = o."companyId"
+    WHERE s."isWon" AND o."companyId" IS NOT NULL AND o.value > 0
+    ON CONFLICT ("opportunityId") DO UPDATE
+      SET amount = EXCLUDED.amount, date = EXCLUDED.date, currency = EXCLUDED.currency
+  `);
+}
 
 /** metric_snapshot first — the honest archive of what the provider reported — then the
  *  materialisers that populate the tables the pages actually read. */
@@ -1304,6 +1377,8 @@ async function persist(
     socialRows: await writeSocialActivity(integrationId, points),
     seoRows: await writeSeoRows(provider, config, points),
     crmRows: await writeCrmRecords(provider.id, points),
+    // After the CRM records, never before: it reads the deals that step just wrote.
+    revenueRows: await writeRevenueFromWonDeals(),
     outreachRows: await writeOutreach(provider.id, points),
   };
 }
@@ -1319,6 +1394,7 @@ function describe(c: Counts): string {
     c.socialRows ? `${c.socialRows} social rows` : null,
     c.seoRows ? `${c.seoRows} SEO rows` : null,
     c.crmRows ? `${c.crmRows} CRM records` : null,
+    c.revenueRows ? `${c.revenueRows} revenue entries` : null,
     c.outreachRows ? `${c.outreachRows} outreach rows` : null,
   ].filter(Boolean);
 

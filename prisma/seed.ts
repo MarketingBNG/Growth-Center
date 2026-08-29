@@ -76,13 +76,20 @@ const CAMPAIGNS = [
   { name: 'Monthly CFO Digest', channel: 'email', cpc: 0, dailyClicks: [30, 90], leadRate: 0.028, source: null },
 ];
 
+// The stage names Zoho actually uses, because that is what the deals carry. Generic
+// names (Discovery/Proposal/Won) matched nothing, so all 7,746 imported deals fell
+// through to the first open stage and the pipeline read as one column.
+//
+// Three stages are won: a deal that reaches Deal Complete is sold, and the two Project
+// stages are the work that follows it. Treating those as still-open would have hidden
+// every closed sale from revenue.
 const STAGES = [
-  { name: 'Discovery', probability: 15 },
-  { name: 'Scoping', probability: 35 },
-  { name: 'Proposal', probability: 60 },
-  { name: 'Negotiation', probability: 80 },
-  { name: 'Won', probability: 100, isWon: true },
-  { name: 'Lost', probability: 0, isLost: true },
+  { name: 'Open Deal Flow', probability: 10 },
+  { name: 'Qualified Deal', probability: 40 },
+  { name: 'Deal Complete', probability: 100, isWon: true },
+  { name: 'Project In Progress', probability: 100, isWon: true },
+  { name: 'Project Completed', probability: 100, isWon: true },
+  { name: 'Deal Lost', probability: 0, isLost: true },
 ];
 
 const COMPANY_NAMES = [

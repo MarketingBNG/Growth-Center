@@ -480,6 +480,10 @@ model RevenueEntry {
 
   createdAt DateTime @default(now())
 
+  /// Derived rows are keyed on the deal that produced them, so a re-sync corrects the
+  /// amount rather than adding a second entry. Manual revenue carries no opportunity and
+  /// is unaffected — Postgres does not collide on NULLs.
+  @@unique([opportunityId])
   @@index([date])
   @@index([campaignId])
   @@map("revenue_entry")
