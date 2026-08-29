@@ -631,6 +631,17 @@ async function bulkUpsert(
 ): Promise<{ id: string; externalId: string | null }[]> {
   if (!rows.length) return [];
 
+  // Same rule that forced dedupePoints: one statement may not update a row twice, so two
+  // rows sharing the conflict key abort the chunk. The key columns are named in
+  // `conflict`, so they can be read off it rather than passed again.
+  const keyColumns = conflict.split(',').map((c) => c.trim().replace(/"/g, ''));
+  const keyIndexes = keyColumns.map((c) => columns.indexOf(c)).filter((i) => i >= 0);
+  if (keyIndexes.length === keyColumns.length) {
+    const byKey = new Map<string, unknown[]>();
+    for (const r of rows) byKey.set(JSON.stringify(keyIndexes.map((i) => r[i])), r);
+    rows = [...byKey.values()];
+  }
+
   const cols = stamped ? [...columns, 'updatedAt'] : [...columns];
   const quoted = cols.map((c) => `"${c}"`).join(', ');
   const assignments = cols.map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ');
@@ -1037,12 +1048,20 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
       })
       .filter((v): v is { p: MetricPoint; sequenceId: string; email: string } => !!v);
 
-    const existing = wanted.length
-      ? await db().prospect.findMany({
-          where: { OR: wanted.map((w) => ({ sequenceId: w.sequenceId, email: w.email })) },
+    // One OR branch per prospect, and Postgres caps a statement at 65,535 bind
+    // parameters — a campaign of a few thousand leads blew straight past it. Looked up
+    // in slices so the batch size, not the campaign size, decides the parameter count.
+    const LOOKUP_CHUNK = 1000;
+    const existing: { id: string; sequenceId: string; email: string; source: string | null; externalId: string | null }[] = [];
+    for (let i = 0; i < wanted.length; i += LOOKUP_CHUNK) {
+      const slice = wanted.slice(i, i + LOOKUP_CHUNK);
+      existing.push(
+        ...(await db().prospect.findMany({
+          where: { OR: slice.map((w) => ({ sequenceId: w.sequenceId, email: w.email })) },
           select: { id: true, sequenceId: true, email: true, source: true, externalId: true },
-        })
-      : [];
+        })),
+      );
+    }
     const byPair = new Map(existing.map((r) => [`${r.sequenceId}|${r.email}`, r]));
 
     for (const { p, sequenceId, email } of wanted) {
