@@ -42,22 +42,83 @@ export function leadStatus(value: string | null | undefined): LeadStatus {
 /**
  * Maps Zoho's Lead_Source onto SourceType.
  *
- * `import` is the honest default: the lead did arrive by import, and claiming a channel
- * the CRM never named would put invented attribution into the funnel charts.
+ * Written first against Zoho's stock source list, which this CRM does not use: 22,887 of
+ * 26,151 leads landed in `import` and exactly one in `referral`, on an account whose
+ * largest single source is a partner referral. The vocabulary here is the org's own —
+ * "Ref by AN", "ig", "Canada Meta Ads", "Incorporation LinkdIn" — so the tests below are
+ * the real values, not invented ones.
+ *
+ * `import` stays the default rather than a guess: the lead did arrive by import, and
+ * naming a channel the CRM never named would put invented attribution into the funnel.
  */
 export function leadSourceType(value: string | null | undefined): SourceType {
-  const v = (value ?? '').toLowerCase();
-  if (v.includes('referr') || v.includes('partner')) return 'referral';
+  const v = (value ?? '').trim().toLowerCase();
+  if (!v) return 'import';
+
+  // Two-letter source names, matched whole. `includes('fb')` would also fire on any word
+  // containing those letters, and `includes('ig')` on "Landing Page".
+  if (v === 'ig' || v === 'fb') return 'social';
+
+  // Paid before landing: "Meta - Landing Page" is an ad that happens to point at one, and
+  // the money spent is the more useful fact about it.
+  if (
+    // Anything Meta-branded is paid here: the organic Facebook and Instagram sources are
+    // spelled "Facebook" and "ig", never "Meta".
+    v.startsWith('meta') ||
+    v.includes('meta ad') ||
+    v.includes('google ad') ||
+    v.includes('adwords') ||
+    v.includes('ppc') ||
+    v.includes('advertis') ||
+    v.includes('paid')
+  ) {
+    return 'paid_ads';
+  }
+
+  // "Ref by AN", "Ref by NG", "Personal Ref", "Reference" — none of which contain the
+  // double-r of "referral", which is why only one lead in the whole CRM was a referral.
+  // `ref` rather than a prefix test: the word turns up at either end — "Ref by AN"
+  // and "Personal Ref" are both referrals.
+  if (/\bref\b/.test(v) || v.includes('refer') || v.includes('partner')) {
+    return 'referral';
+  }
+
   if (v.includes('landing')) return 'landing_page';
-  if (v.includes('form')) return 'form';
-  if (v.includes('advertis') || v.includes('ppc') || v.includes('adwords')) return 'paid_ads';
-  if (v.includes('search') || v.includes('seo')) return 'organic_search';
-  if (v.includes('social') || v.includes('facebook') || v.includes('twitter') || v.includes('linkedin'))
+
+  // "Incorporation LinkdIn" is misspelled in the CRM and there are thousands of them.
+  if (
+    v.includes('instagram') ||
+    v.includes('facebook') ||
+    v.includes('linkedin') ||
+    v.includes('linkdin') ||
+    v.includes('twitter') ||
+    v.includes('whatsapp') ||
+    v.includes('social')
+  ) {
     return 'social';
-  if (v.includes('cold') || v.includes('outreach') || v.includes('call')) return 'outreach';
-  if (v.includes('seminar') || v.includes('trade show') || v.includes('event') || v.includes('conference'))
+  }
+
+  // A booked meeting is closer to an event than to a form: someone chose a time.
+  if (
+    v.includes('calendly') ||
+    v.includes('booking') ||
+    v.includes('seminar') ||
+    v.includes('trade show') ||
+    v.includes('event') ||
+    v.includes('conference')
+  ) {
     return 'event';
-  if (v.includes('web') || v.includes('chat')) return 'website';
+  }
+
+  // Before the organic-search test, which "Web Research" would otherwise satisfy. Someone
+  // going looking for a prospect is outreach; the prospect arriving via Google is not.
+  if (v.includes('research') || v.includes('cold') || v.includes('outreach') || v.includes('call')) {
+    return 'outreach';
+  }
+  if (v.includes('search') || v.includes('seo') || v.includes('organic')) return 'organic_search';
+  // Whole word: "Platform" contains "form" and is not one.
+  if (/\bform\b/.test(v)) return 'form';
+  if (v.includes('web') || v.includes('chat') || v.includes('desk')) return 'website';
   return 'import';
 }
 
@@ -109,7 +170,9 @@ export function taskStatus(value: string | null | undefined): TaskStatus {
   const v = (value ?? '').toLowerCase();
   if (v.includes('complet')) return 'done';
   if (v.includes('cancel')) return 'cancelled';
-  if (v.includes('progress')) return 'in_progress';
+  // "In Proress" is a real, misspelt status on nine tasks in this CRM. Matched rather
+  // than left to fall through to `open`, which would have said nobody had started them.
+  if (v.includes('progress') || v.includes('proress')) return 'in_progress';
   return 'open';
 }
 

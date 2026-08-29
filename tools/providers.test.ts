@@ -374,6 +374,8 @@ test('taskStatus keeps deferred and waiting work open', () => {
   assert.equal(taskStatus('Waiting for input'), 'open');
   assert.equal(taskStatus('Not Started'), 'open');
   assert.equal(taskStatus('In Progress'), 'in_progress');
+  // Misspelt in the CRM itself, on nine tasks.
+  assert.equal(taskStatus('In Proress'), 'in_progress');
   assert.equal(taskStatus('Completed'), 'done');
   assert.equal(taskStatus(null), 'open');
 });
@@ -422,4 +424,48 @@ test('leadStatus reads the wording this CRM actually uses, not Zoho defaults', (
 
 test('leadStatus still tests "not qualified" before "qualified"', () => {
   assert.equal(leadStatus('Not Qualified'), 'unqualified');
+});
+
+test('leadSourceType maps the source names this CRM actually writes', () => {
+  // Every value below is a real Lead_Source from the account. Before these, 22,887 of
+  // 26,151 leads sat in `import` and exactly one lead in the whole CRM was a referral.
+  assert.equal(leadSourceType('ig'), 'social');
+  assert.equal(leadSourceType('fb'), 'social');
+  assert.equal(leadSourceType('Facebook'), 'social');
+  assert.equal(leadSourceType('Whatsapp'), 'social');
+  assert.equal(leadSourceType('Old Incorp LinkedIn'), 'social');
+  // Misspelled in the CRM, and there are thousands of them.
+  assert.equal(leadSourceType('Incorporation LinkdIn'), 'social');
+
+  assert.equal(leadSourceType('Meta Ads'), 'paid_ads');
+  assert.equal(leadSourceType('Canada Meta Ads'), 'paid_ads');
+  // An ad pointing at a landing page is still the ad.
+  assert.equal(leadSourceType('Meta - Landing Page'), 'paid_ads');
+
+  assert.equal(leadSourceType('Ref by AN'), 'referral');
+  assert.equal(leadSourceType('Ref by NG'), 'referral');
+  assert.equal(leadSourceType('Personal Ref'), 'referral');
+  assert.equal(leadSourceType('Reference'), 'referral');
+
+  assert.equal(leadSourceType('Landing Page'), 'landing_page');
+  assert.equal(leadSourceType('Trademark - Landingpage'), 'landing_page');
+  assert.equal(leadSourceType('Calendly'), 'event');
+  assert.equal(leadSourceType('Zoho Bookings'), 'event');
+  assert.equal(leadSourceType('Call'), 'outreach');
+  // Someone went looking for this prospect; they did not arrive via Google.
+  assert.equal(leadSourceType('Web Research'), 'outreach');
+  assert.equal(leadSourceType('Zoho Desk'), 'website');
+});
+
+test('leadSourceType does not name a channel the CRM never named', () => {
+  assert.equal(leadSourceType('Excel CRM'), 'import');
+  assert.equal(leadSourceType(null), 'import');
+  assert.equal(leadSourceType(''), 'import');
+  assert.equal(leadSourceType('Platform'), 'import');
+});
+
+test('a two-letter source is matched whole, never as a substring', () => {
+  // includes("ig") would make every Landing Page lead social.
+  assert.equal(leadSourceType('Landing Page'), 'landing_page');
+  assert.notEqual(leadSourceType('Zoho Bookings'), 'social');
 });
