@@ -16,6 +16,9 @@ export type Kpi = {
   format: 'number' | 'money' | 'percent' | 'ratio' | 'duration' | 'days';
   /** False where a rise is bad, so the delta colour is not simply "up is green". */
   higherIsBetter: boolean;
+  /** ISO code for a `money` KPI. Carried on the card because the reporting currency is a
+   *  workspace setting, and a client component cannot read it for itself. */
+  currency?: string;
   hint?: string;
 };
 

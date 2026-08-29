@@ -26,7 +26,7 @@ function show(k: Kpi): string {
   if (k.value === null) return '—';
   switch (k.format) {
     case 'money':
-      return fmtMoney(k.value);
+      return fmtMoney(k.value, false, k.currency);
     case 'percent':
       return fmtPercent(k.value);
     case 'ratio':

@@ -2,6 +2,8 @@ import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
 import type { Kpi } from './kpi.ts';
 import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
+import { convert, sumInReporting } from './currency.ts';
+import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
@@ -101,20 +103,36 @@ export async function funnel(range: Range) {
       db().lead.count({ where: { createdAt: window, qualifiedAt: { not: null } } }),
       db().opportunity.count({ where: { createdAt: window } }),
       db().customer.count({ where: { wonAt: window } }),
-      db().revenueEntry.aggregate({ where: { date: window }, _sum: { amount: true } }),
+      // Grouped by currency rather than summed flat. This account's deals are written in
+      // both USD and INR and its ad spend is billed in INR, and adding those together
+      // produced a revenue figure roughly half of which was rupees counted as dollars.
+      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
       // New business only. Recurring income from customers won in earlier periods is
       // real revenue but it is NOT a return on this period's marketing spend — counting
       // it produced an 18x blended ROAS on a month where new business was a third of
       // the total.
-      db().revenueEntry.aggregate({ where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
-      db().marketingSpend.aggregate({ where: { date: window }, _sum: { amount: true } }),
+      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
+      db().marketingSpend.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
     ]);
 
-  const revenue = num(revenueAgg._sum.amount);
-  const newRevenue = num(newRevenueAgg._sum.amount);
-  const spend = num(spendAgg._sum.amount);
+  const money = await currencySettings();
+  const inReporting = (
+    rows: { currency: string | null; _sum: { amount: unknown } }[],
+  ) => sumInReporting(rows.map((r) => ({ amount: num(r._sum.amount), currency: r.currency })), money);
+
+  const revenueSum = inReporting(revenueAgg);
+  const newRevenueSum = inReporting(newRevenueAgg);
+  const spendSum = inReporting(spendAgg);
+
+  const revenue = revenueSum.total;
+  const newRevenue = newRevenueSum.total;
+  const spend = spendSum.total;
 
   return {
+    currency: money.reporting,
+    /** Amounts in a currency the workspace has no rate for, so the page can say what a
+     *  total leaves out rather than presenting it as complete. */
+    unconverted: [...revenueSum.unconverted, ...spendSum.unconverted],
     visitors,
     leads,
     qualified,
@@ -139,16 +157,21 @@ export type Funnel = Awaited<ReturnType<typeof funnel>>;
 export async function openPipeline() {
   const deals = await db().opportunity.findMany({
     where: { closedAt: null },
-    select: { value: true, probability: true },
+    select: { value: true, probability: true, currency: true },
   });
+
+  // Deals here are written in both USD and INR. Added flat, 143 rupee deals worth ₹5.2m
+  // doubled the pipeline.
+  const money = await currencySettings();
   let total = 0;
   let weighted = 0;
   for (const d of deals) {
-    const v = num(d.value);
+    const v = convert(num(d.value), d.currency, money);
+    if (v === null) continue;
     total += v;
     weighted += (v * d.probability) / 100;
   }
-  return { count: deals.length, total, weighted };
+  return { count: deals.length, total, weighted, currency: money.reporting };
 }
 
 
@@ -169,10 +192,10 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
     { key: 'opportunities', label: 'Opportunities', value: now.opportunities, previous: before.opportunities, format: 'number', higherIsBetter: true },
     { key: 'customers', label: 'New customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
-    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', higherIsBetter: true, hint: 'All revenue booked, including recurring' },
-    { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', higherIsBetter: true, hint: 'Deals won in this period' },
-    { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', higherIsBetter: false },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
+    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'All revenue booked, including recurring' },
+    { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Deals won in this period' },
+    { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
   ];
 
@@ -236,9 +259,12 @@ export async function channelPerformance(range: Range) {
     await Promise.all([
       db().channel.findMany({ select: { id: true, name: true, kind: true } }),
       db().lead.groupBy({ by: ['channelId'], where: { createdAt: window }, _count: { _all: true } }),
-      db().revenueEntry.groupBy({ by: ['channelId'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
+      db().revenueEntry.groupBy({ by: ['channelId', 'currency'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
       db().marketingSpend.groupBy({
-        by: ['campaignId'],
+        // By currency too: this account's spend is billed in rupees and its revenue is
+        // mostly written in dollars, and a per-channel ROAS that divides one by the other
+        // is wrong by the exchange rate.
+        by: ['campaignId', 'currency'],
         where: { date: window },
         _sum: { amount: true, clicks: true, impressions: true },
       }),
@@ -249,13 +275,16 @@ export async function channelPerformance(range: Range) {
       }),
     ]);
 
+  const money = await currencySettings();
   const campaignChannel = new Map(campaigns.map((c) => [c.id, c.channelId]));
   const spendByChannel = new Map<string, { spend: number; clicks: number; impressions: number }>();
   for (const row of spendByCampaign) {
     const channelId = campaignChannel.get(row.campaignId);
     if (!channelId) continue;
     const acc = spendByChannel.get(channelId) ?? { spend: 0, clicks: 0, impressions: 0 };
-    acc.spend += num(row._sum.amount);
+    // A currency with no rate is left out of the total rather than added as though it
+    // were already in the reporting one.
+    acc.spend += convert(num(row._sum.amount), row.currency, money) ?? 0;
     acc.clicks += row._sum.clicks ?? 0;
     acc.impressions += row._sum.impressions ?? 0;
     spendByChannel.set(channelId, acc);
@@ -269,7 +298,11 @@ export async function channelPerformance(range: Range) {
   }
 
   const leadCount = new Map(leadsByChannel.map((r) => [r.channelId ?? '', r._count._all]));
-  const revenueSum = new Map(revenueByChannel.map((r) => [r.channelId ?? '', num(r._sum.amount)]));
+  const revenueSum = new Map<string, number>();
+  for (const r of revenueByChannel) {
+    const key = r.channelId ?? '';
+    revenueSum.set(key, (revenueSum.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, money) ?? 0));
+  }
 
   return channels
     .map((ch) => {
@@ -443,22 +476,25 @@ export async function accountMetrics(range: Range) {
     db().customer.count({ where: { wonAt: window } }),
     db().revenueEntry.findMany({
       where: { date: window },
-      select: { customerId: true, amount: true },
+      select: { customerId: true, amount: true, currency: true },
     }),
   ]);
 
   // Averaged over accounts that actually billed in the period, not over every customer
   // on the books — dividing by dormant accounts understates what an active one is worth.
+  const money = await currencySettings();
   const perCustomer = new Map<string, number>();
   for (const r of revenueRows) {
-    perCustomer.set(r.customerId, (perCustomer.get(r.customerId) ?? 0) + num(r.amount));
+    const amount = convert(num(r.amount), r.currency, money);
+    if (amount === null) continue;
+    perCustomer.set(r.customerId, (perCustomer.get(r.customerId) ?? 0) + amount);
   }
   const totals = [...perCustomer.values()];
   const avgAccountValue = totals.length
     ? totals.reduce((a, b) => a + b, 0) / totals.length
     : null;
 
-  return { companies, contacts, customers, avgAccountValue, payingAccounts: totals.length };
+  return { companies, contacts, customers, avgAccountValue, payingAccounts: totals.length, currency: money.reporting };
 }
 
 /** Share of all companies on the books that are customers. A snapshot, so it ignores the
@@ -542,7 +578,7 @@ export async function leadsKpis(days: number) {
     // referrals and inbound. Dividing one by the other is a useful number only if the
     // reader knows that is what it is; unlabelled it reads as the price of a Meta lead,
     // which it is not.
-    { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over all leads, however they arrived' },
+    { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over all leads, however they arrived' },
     { key: 'response', label: 'Median response', value: medianNow, previous: medianBefore, format: 'duration', higherIsBetter: false, hint: 'First outbound touch; untouched leads excluded' },
     { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },
   ];
@@ -566,7 +602,7 @@ export async function crmKpis(days: number) {
     { key: 'companies', label: 'Companies', value: now.companies, previous: before.companies, format: 'number', higherIsBetter: true },
     { key: 'contacts', label: 'Contacts', value: now.contacts, previous: before.contacts, format: 'number', higherIsBetter: true },
     { key: 'customers', label: 'Customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
-    { key: 'avgAccount', label: 'Avg account value', value: now.avgAccountValue, previous: before.avgAccountValue, format: 'money', higherIsBetter: true, hint: 'Averaged over accounts that billed this period' },
+    { key: 'avgAccount', label: 'Avg account value', value: now.avgAccountValue, previous: before.avgAccountValue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Averaged over accounts that billed this period' },
     { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded into an existing lead' },
   ];
 
@@ -591,8 +627,8 @@ export async function pipelineKpis(days: number) {
 
   const cards: Kpi[] = [
     { key: 'openDeals', label: 'Open deals', value: open.count, previous: null, format: 'number', higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
-    { key: 'totalValue', label: 'Total value', value: open.total, previous: null, format: 'money', higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
-    { key: 'weighted', label: 'Weighted', value: open.weighted, previous: null, format: 'money', higherIsBetter: true, hint: 'Value × probability' },
+    { key: 'totalValue', label: 'Total value', value: open.total, previous: null, format: 'money', currency: open.currency, higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
+    { key: 'weighted', label: 'Weighted', value: open.weighted, previous: null, format: 'money', currency: open.currency, higherIsBetter: true, hint: 'Value × probability' },
     { key: 'winRate', label: 'Win rate', value: rateNow, previous: ratePrev, format: 'percent', higherIsBetter: true, hint: 'Won ÷ decided, over deals closed this period' },
     { key: 'cycle', label: 'Avg cycle', value: cycleNow, previous: cyclePrev, format: 'days', higherIsBetter: false, hint: 'Created to won, for deals won this period' },
   ];
@@ -611,11 +647,11 @@ export async function marketingKpis(days: number) {
   ]);
 
   const cards: Kpi[] = [
-    { key: 'spend', label: 'Spend', value: now.spend, previous: before.spend, format: 'money', higherIsBetter: false },
+    { key: 'spend', label: 'Spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
-    { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false },
+    { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
   ];
 
   return { cards, current: now, budgetPacing: pacing, weekday };
@@ -646,7 +682,7 @@ export async function analyticsKpis(days: number) {
     { key: 'visitorToLead', label: 'Visitor→lead', value: now.visitorToLead, previous: before.visitorToLead, format: 'percent', higherIsBetter: true },
     { key: 'leadToQualified', label: 'Lead→qualified', value: now.leadToQualified, previous: before.leadToQualified, format: 'percent', higherIsBetter: true },
     { key: 'oppToCustomer', label: 'Opp→customer', value: now.opportunityToCustomer, previous: before.opportunityToCustomer, format: 'percent', higherIsBetter: true },
-    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', higherIsBetter: true },
+    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true },
   ];
 
   return { cards, current: now, weekday };

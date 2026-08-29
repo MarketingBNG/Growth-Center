@@ -177,6 +177,11 @@ export const metaAds: IntegrationProvider = {
     // One extra request for the whole account, not one per campaign.
     const details = await campaignDetails(adAccountId, accessToken);
 
+    // The account's billing currency. Spend arrives as a bare number, and this account
+    // bills in INR while most of the revenue it is compared against is in USD — without
+    // this every rupee was stored and rendered as a dollar.
+    const currency = await accountCurrency(adAccountId, accessToken);
+
     const points: MetricPoint[] = [];
     for (const row of rows) {
       const date = new Date(`${row.date_start}T00:00:00Z`);
@@ -194,7 +199,7 @@ export const metaAds: IntegrationProvider = {
           metricKey,
           date,
           value: Number(value) || 0,
-          entityMeta: details.get(row.campaign_id),
+          entityMeta: { ...details.get(row.campaign_id), currency },
         });
       }
     }
@@ -262,4 +267,24 @@ async function campaignDetails(
     return out;
   }
   return out;
+}
+
+/**
+ * The currency the ad account bills in.
+ *
+ * Falls back to USD rather than failing the sync: spend is the number every ROAS and CAC
+ * figure depends on, and it has already been fetched by the time this runs. A wrong
+ * currency label is visible and correctable; a lost sync is neither.
+ */
+async function accountCurrency(adAccountId: string, accessToken: string): Promise<string> {
+  try {
+    const res = await fetch(
+      `${GRAPH}/${adAccountId}?fields=currency&access_token=${encodeURIComponent(accessToken)}`,
+    );
+    if (!res.ok) return 'USD';
+    const json = (await res.json()) as { currency?: string };
+    return json.currency?.toUpperCase() || 'USD';
+  } catch {
+    return 'USD';
+  }
 }

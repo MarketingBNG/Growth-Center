@@ -188,12 +188,28 @@ model Campaign {
 
 /// One day of spend for one campaign. Daily granularity because that is what the ad
 /// platforms report and what a date-range filter needs.
+/// Workspace preferences, read as a block. JSON per key so adding a preference is not a
+/// migration; the shapes are validated in lib/settings.ts where they are read.
+model AppSetting {
+  key   String @id
+  value Json
+
+  updatedAt DateTime @updatedAt
+
+  @@map("app_setting")
+}
+
 model MarketingSpend {
   id         String   @id @default(cuid())
   campaignId String
   date       DateTime @db.Date
 
   amount      Decimal @db.Decimal(14, 2)
+
+  /// The currency the ad platform billed in, which is not necessarily the one the
+  /// workspace reports in. Without it a rupee of spend was indistinguishable from a
+  /// dollar of it.
+  currency    String  @default("USD")
   impressions Int     @default(0)
   clicks      Int     @default(0)
 

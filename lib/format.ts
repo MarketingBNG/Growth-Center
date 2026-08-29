@@ -1,19 +1,37 @@
-const money = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
+// Formatters are cached per currency: constructing an Intl.NumberFormat is not free and
+// a table of money renders hundreds of cells.
+const moneyFormats = new Map<string, Intl.NumberFormat>();
 
-const moneyPrecise = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+function moneyFormat(currency: string, precise: boolean): Intl.NumberFormat {
+  const key = `${currency}|${precise}`;
+  let f = moneyFormats.get(key);
+  if (!f) {
+    f = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: precise ? 2 : 0,
+      maximumFractionDigits: precise ? 2 : 0,
+    });
+    moneyFormats.set(key, f);
+  }
+  return f;
+}
 
-export function fmtMoney(n: number | null | undefined, precise = false): string {
+/**
+ * Money, in the workspace's reporting currency.
+ *
+ * The currency is a parameter rather than a constant because it is not always dollars:
+ * this workspace bills its ads in rupees, and rendering those with a dollar sign made a
+ * ₹292 cost per lead read as $292. Callers that have no currency to hand still get USD,
+ * which is the default reporting currency.
+ */
+export function fmtMoney(
+  n: number | null | undefined,
+  precise = false,
+  currency = 'USD',
+): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  return precise ? moneyPrecise.format(n) : money.format(n);
+  return moneyFormat(currency, precise).format(n);
 }
 
 export function fmtCompact(n: number | null | undefined): string {
@@ -94,12 +112,12 @@ export function fmtDays(days: number | null | undefined): string {
 /** Money for an axis tick: "$450K", not "$450,000". The long form overflowed a 46px
  *  axis gutter and was clipped mid-number, which read as a wrong value rather than a
  *  truncated one. */
-export function fmtMoneyCompact(n: number | null | undefined): string {
+export function fmtMoneyCompact(n: number | null | undefined, currency = 'USD'): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  if (n === 0) return '$0';
+  if (n === 0) return fmtMoney(0, false, currency);
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency,
     notation: 'compact',
     maximumFractionDigits: Math.abs(n) < 10_000 ? 1 : 0,
   }).format(n);

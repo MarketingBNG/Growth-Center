@@ -10,9 +10,11 @@ import { can } from '@/lib/roles';
 import { db, hasDb } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { aiStatus } from '@/lib/ai';
+import { currencySettings } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
 import { ApiKeys } from './ApiKeys';
+import { CurrencySettings } from './CurrencySettings';
 import { RevokeKey } from './RevokeKey';
 
 export const metadata = { title: 'Settings · Growth Center' };
@@ -31,7 +33,8 @@ export default async function SettingsPage() {
   }
 
   const manageKeys = can(user.role, 'apikeys:manage');
-  const [keys, channels, pipelines] = await Promise.all([
+  const manageSettings = can(user.role, 'settings:manage');
+  const [keys, channels, pipelines, currency] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -44,6 +47,7 @@ export default async function SettingsPage() {
       orderBy: { createdAt: 'asc' },
       include: { stages: { orderBy: { position: 'asc' } } },
     }),
+    currencySettings(),
   ]);
 
   const ai = aiStatus();
@@ -70,6 +74,29 @@ export default async function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" subtitle="Workspace configuration and connection health." />
+
+      {/* First on the page because it changes every money figure in the app, and because
+          getting it wrong is not obvious from the numbers — a rupee rendered with a
+          dollar sign looks entirely plausible. */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Currency</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Deals and ad spend arrive in the currency each system bills in. Everything is
+            converted to the reporting currency below before it is added up.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {manageSettings ? (
+            <CurrencySettings initial={currency} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Reporting in <span className="font-medium text-foreground">{currency.reporting}</span>.
+              Only a partner or controller can change this.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

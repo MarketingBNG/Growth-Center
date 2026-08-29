@@ -358,7 +358,7 @@ async function writeCampaignSpend(
   }
 
   // One row per campaign-day, carrying whichever of the three metrics arrived.
-  type Day = { campaignId: string; date: Date; amount: number; impressions: number; clicks: number };
+  type Day = { campaignId: string; date: Date; amount: number; impressions: number; clicks: number; currency: string };
   const days = new Map<string, Day>();
 
   for (const p of relevant) {
@@ -369,9 +369,14 @@ async function writeCampaignSpend(
     const key = `${campaignId}|${iso}`;
     let day = days.get(key);
     if (!day) {
-      day = { campaignId, date: p.date, amount: 0, impressions: 0, clicks: 0 };
+      day = { campaignId, date: p.date, amount: 0, impressions: 0, clicks: 0, currency: 'USD' };
       days.set(key, day);
     }
+
+    // The platform's billing currency, not the workspace's. A provider that does not
+    // report one leaves the column at its USD default rather than inventing an answer.
+    const reported = str(meta(p).currency);
+    if (reported) day.currency = reported.toUpperCase();
 
     if (p.metricKey === 'spend') day.amount = p.value;
     else if (p.metricKey === 'impressions') day.impressions = Math.round(p.value);
@@ -381,21 +386,22 @@ async function writeCampaignSpend(
   const rows = [...days.values()];
   for (let i = 0; i < rows.length; i += WRITE_CHUNK) {
     const chunk = rows.slice(i, i + WRITE_CHUNK);
-    const values = chunk.map((d) => [d.campaignId, d.date, d.amount, d.impressions, d.clicks]);
+    const values = chunk.map((d) => [d.campaignId, d.date, d.amount, d.impressions, d.clicks, d.currency]);
     const placeholders = values
       .map(
         (_, r) =>
-          `(gen_random_uuid()::text, $${r * 5 + 1}, $${r * 5 + 2}::date, $${r * 5 + 3}::numeric, $${r * 5 + 4}::int, $${r * 5 + 5}::int)`,
+          `(gen_random_uuid()::text, $${r * 6 + 1}, $${r * 6 + 2}::date, $${r * 6 + 3}::numeric, $${r * 6 + 4}::int, $${r * 6 + 5}::int, $${r * 6 + 6})`,
       )
       .join(', ');
 
     await db().$executeRawUnsafe(
-      `INSERT INTO marketing_spend (id, "campaignId", date, amount, impressions, clicks)
+      `INSERT INTO marketing_spend (id, "campaignId", date, amount, impressions, clicks, currency)
        VALUES ${placeholders}
        ON CONFLICT ("campaignId", date)
        DO UPDATE SET amount = EXCLUDED.amount,
                      impressions = EXCLUDED.impressions,
-                     clicks = EXCLUDED.clicks`,
+                     clicks = EXCLUDED.clicks,
+                     currency = EXCLUDED.currency`,
       ...values.flat(),
     );
   }
