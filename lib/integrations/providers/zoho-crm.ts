@@ -52,10 +52,10 @@ const FIELDS: Record<Module, string> = {
   // convertedAt stayed null on all 26,151 leads and the app could not answer "which leads
   // converted in August" even though the CRM knew.
   Leads:
-    'id,First_Name,Last_Name,Email,Phone,Company,Designation,Lead_Status,Lead_Source,Description,Owner,Created_Time,Converted__s,Converted_Date_Time',
+    'id,First_Name,Last_Name,Email,Phone,Company,Designation,Lead_Status,Lead_Source,Description,Owner,Created_Time,Converted__s,Converted_Date_Time,Converted_Contact,Converted_Account,Converted_Deal',
   Contacts: 'id,First_Name,Last_Name,Email,Phone,Title,Account_Name,Owner,Created_Time',
   Deals:
-    'id,Deal_Name,Amount,Stage,Closing_Date,Probability,Currency,Account_Name,Contact_Name,Owner,Created_Time',
+    'id,Deal_Name,Amount,Stage,Closing_Date,Probability,Currency,Account_Name,Contact_Name,Owner,Created_Time,Reason_For_Loss__s,Lead_Source',
   // What_Id is the record the activity is about (a lead or a deal); Who_Id is the person
   // on it. Both are needed or an imported call hangs off nothing and never reaches a page.
   // Companies used to be invented from the account name a contact or deal happened to
@@ -63,7 +63,7 @@ const FIELDS: Record<Module, string> = {
   // module carries the details that make a company record worth having.
   Accounts:
     'id,Account_Name,Website,Phone,Industry,Employees,Billing_Country,Description,Owner,Created_Time',
-  Tasks: 'id,Subject,Status,Priority,Due_Date,Description,Owner,What_Id,Who_Id,Created_Time',
+  Tasks: 'id,Subject,Status,Priority,Due_Date,Description,Owner,Created_By,What_Id,Who_Id,Created_Time',
   Calls: 'id,Subject,Call_Type,Call_Start_Time,Call_Duration,Description,Owner,What_Id,Who_Id,Created_Time',
   Events: 'id,Event_Title,Start_DateTime,End_DateTime,Description,Owner,What_Id,Who_Id,Created_Time',
 };
@@ -250,6 +250,12 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         ownerEmail: owner?.name ?? null,
         converted: row.Converted__s === true,
         convertedAt: text(row.Converted_Date_Time),
+        // What the lead became. Without these a converted lead and the contact and deal
+        // it produced are three unrelated rows, and nothing can say which lead earned
+        // which revenue.
+        convertedContactId: lookup(row.Converted_Contact)?.id ?? null,
+        convertedAccountId: lookup(row.Converted_Account)?.id ?? null,
+        convertedDealId: lookup(row.Converted_Deal)?.id ?? null,
       },
     };
   }
@@ -321,6 +327,7 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
         status: text(row.Status),
         priority: text(row.Priority),
         dueDate: text(row.Due_Date),
+        createdByEmail: lookup(row.Created_By)?.name ?? null,
         whatId: what?.id ?? null,
         whoId: who?.id ?? null,
         ownerEmail: owner?.name ?? null,
@@ -372,6 +379,8 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
       stage: text(row.Stage),
       probability: Number(row.Probability) || 0,
       closingDate: text(row.Closing_Date),
+      lostReason: text(row.Reason_For_Loss__s),
+      leadSource: text(row.Lead_Source),
       accountId: account?.id ?? null,
       accountName: account?.name ?? null,
       contactId: contact?.id ?? null,

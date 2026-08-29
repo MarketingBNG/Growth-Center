@@ -191,3 +191,53 @@ export function taskPriority(value: string | null | undefined): Priority {
   if (v.includes('low')) return 'low';
   return 'normal';
 }
+
+/**
+ * The channel slug a lead's source belongs to, or null.
+ *
+ * Matched on the CRM's own wording first, because SourceType cannot tell Instagram from
+ * Facebook — it calls all of them `social`, which is 17,789 of this account's leads and
+ * the single thing the Marketing page most needs to break apart.
+ *
+ * Null is a real answer and stays one: a lead the CRM recorded no source for is
+ * unattributed, and naming a channel for it would put invented attribution into every
+ * ROAS and cost-per-lead figure on the page.
+ */
+export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | null): string | null {
+  const v = (sourceDetail ?? '').trim().toLowerCase();
+
+  if (v) {
+    // Paid first: "Meta Ads" is an ad, not organic Facebook.
+    if (v.startsWith('meta') || v.includes('meta ad')) return 'meta-ads';
+    if (v.includes('google ad') || v.includes('adwords')) return 'google-ads';
+
+    if (v === 'ig' || v.includes('instagram')) return 'instagram';
+    if (v === 'fb' || v.includes('facebook')) return 'facebook';
+    if (v.includes('whatsapp')) return 'whatsapp';
+    // Misspelt as "LinkdIn" on thousands of leads in this account.
+    if (v.includes('linkedin') || v.includes('linkdin')) return 'linkedin';
+
+    if (v.includes('calendly') || v.includes('booking')) return 'events';
+    if (v.includes('call') || v.includes('research')) return 'outreach';
+    if (v.includes('email')) return 'email';
+  }
+
+  switch (sourceType) {
+    case 'paid_ads':
+      return 'meta-ads';
+    case 'organic_search':
+      return 'organic-search';
+    case 'referral':
+      return 'referral';
+    case 'event':
+      return 'events';
+    case 'outreach':
+      return 'outreach';
+    case 'website':
+    case 'landing_page':
+    case 'form':
+      return 'direct';
+    default:
+      return null;
+  }
+}

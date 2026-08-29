@@ -58,6 +58,13 @@ const CHANNELS = [
   { name: 'Google Ads', slug: 'google-ads', kind: 'paid' },
   { name: 'Meta Ads', slug: 'meta-ads', kind: 'paid' },
   { name: 'LinkedIn', slug: 'linkedin', kind: 'social' },
+  // The platforms this account actually uses. Organic social is its largest lead source
+  // and had nowhere to sit.
+  { name: 'Instagram', slug: 'instagram', kind: 'social' },
+  { name: 'Facebook', slug: 'facebook', kind: 'social' },
+  { name: 'WhatsApp', slug: 'whatsapp', kind: 'social' },
+  { name: 'Events', slug: 'events', kind: 'other' },
+  { name: 'Outreach', slug: 'outreach', kind: 'other' },
   { name: 'Referral', slug: 'referral', kind: 'referral' },
   { name: 'Email', slug: 'email', kind: 'email' },
   { name: 'Direct', slug: 'direct', kind: 'direct' },

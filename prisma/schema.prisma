@@ -314,6 +314,16 @@ model Lead {
   message   String?
 
   status     LeadStatus @default(new)
+
+  /// The lead source exactly as the CRM wrote it. `sourceType` collapses "ig", "fb" and
+  /// "Whatsapp" into one value; which platform it actually was is the question the
+  /// Marketing page exists to answer.
+  sourceDetail String?
+
+  /// The status exactly as the source CRM wrote it. `status` above is a shared vocabulary
+  /// and has to collapse this org's wording — Dead Lead, Follow-up, Not Reachable — into
+  /// `lost` and `contacted`, and those distinctions are the ones the team works to.
+  sourceStatus String?
   sourceType SourceType @default(manual)
   ownerEmail String?
 
@@ -363,6 +373,8 @@ model Lead {
 
   @@unique([source, externalId])
   @@index([status])
+  @@index([sourceStatus])
+  @@index([sourceDetail])
   @@index([email])
   @@index([createdAt])
   @@index([campaignId])

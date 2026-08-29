@@ -2,7 +2,7 @@ import { db } from '../prisma.ts';
 import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
-import { leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
+import { channelSlugFor, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
@@ -958,11 +958,20 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   }
 
   // ── leads ───────────────────────────────────────────────────────────────────
+  // Channels are looked up once. Without a channel on the lead, every figure on the
+  // Marketing page groups by a column that is null on all 27,181 rows.
+  const channelIdBySlug = new Map(
+    (await db().channel.findMany({ select: { id: true, slug: true } })).map((c) => [c.slug, c.id]),
+  );
+
   const leadRows = leadPoints.map((p) => {
     const m = meta(p);
     const externalId = p.entityId as string;
     const name = splitName(str(m.firstName), str(m.lastName), p.entityLabel, externalId);
     const status = leadStatus(str(m.status));
+    const sourceDetail = str(m.leadSource);
+    const sourceType = leadSourceType(sourceDetail);
+    const channelSlug = channelSlugFor(sourceType, sourceDetail);
 
     // The funnel counts qualified leads by qualifiedAt, not by current status, so that
     // converting a lead cannot make the qualified count go down. An import that set the
@@ -988,7 +997,12 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       str(m.title),
       str(m.message),
       m.converted ? 'converted' : status,
-      leadSourceType(str(m.leadSource)),
+      // Kept beside the mapped status, not instead of it: the CRM page groups by this
+      // team's own wording and the shared vocabulary cannot express it.
+      str(m.status),
+      sourceDetail,
+      sourceType,
+      channelSlug ? (channelIdBySlug.get(channelSlug) ?? null) : null,
       str(m.ownerEmail),
       // A converted lead was qualified on the way through, whatever its status says.
       reachedQualified || converted ? (converted ?? createdAtOf(p)) : null,
@@ -1000,7 +1014,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   });
   const leadsTouched = await bulkUpsert(
     'lead',
-    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceType', 'ownerEmail', 'qualifiedAt', 'convertedAt', 'createdAt', 'source', 'externalId'],
+    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceStatus', 'sourceDetail', 'sourceType', 'channelId', 'ownerEmail', 'qualifiedAt', 'convertedAt', 'createdAt', 'source', 'externalId'],
     leadRows,
     '"source", "externalId"',
     { status: '"LeadStatus"', sourceType: '"SourceType"', qualifiedAt: 'timestamp(3)', convertedAt: 'timestamp(3)', createdAt: 'timestamp(3)' },
@@ -1053,6 +1067,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           Number(m.amount) || 0,
           str(m.currency) ?? 'USD',
           Number(m.probability) || stage.probability,
+          stage.isLost ? str(m.lostReason) : null,
           validClosing,
           closed ? validClosing : null,
           accountId ? (companyIdByExternal.get(accountId) ?? null) : null,
@@ -1070,7 +1085,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
@@ -1463,7 +1478,7 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
+  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, linkedRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
@@ -1507,6 +1522,7 @@ type Counts = {
   socialRows: number;
   seoRows: number;
   crmRows: number;
+  linkedRows: number;
   activityRows: number;
   revenueRows: number;
   outreachRows: number;
@@ -1592,6 +1608,7 @@ async function writeCrmActivity(providerId: string, points: MetricPoint[]): Prom
         taskPriority(str(m.priority)),
         dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : null,
         str(m.ownerEmail),
+        str(m.createdByEmail),
         // Zoho records no completion time, so a done task is dated by the day it was last
         // touched rather than left null, which the task list reads as still open.
         status === 'done' ? p.date : null,
@@ -1606,7 +1623,7 @@ async function writeCrmActivity(providerId: string, points: MetricPoint[]): Prom
 
     const touched = await bulkUpsert(
       'task',
-      ['title', 'detail', 'status', 'priority', 'dueDate', 'assigneeEmail', 'completedAt', 'leadId', 'contactId', 'companyId', 'opportunityId', 'source', 'externalId'],
+      ['title', 'detail', 'status', 'priority', 'dueDate', 'assigneeEmail', 'createdByEmail', 'completedAt', 'leadId', 'contactId', 'companyId', 'opportunityId', 'source', 'externalId'],
       rows,
       '"source", "externalId"',
       { status: '"TaskStatus"', priority: '"Priority"', dueDate: 'timestamp(3)', completedAt: 'timestamp(3)' },
@@ -1655,6 +1672,80 @@ async function writeCrmActivity(providerId: string, points: MetricPoint[]): Prom
   }
 
   return written;
+}
+
+/**
+ * Joins a converted lead to what it became.
+ *
+ * Zoho records the contact, account and deal a lead converted into, and without them the
+ * three are unrelated rows: nothing can say which lead earned which revenue, and the
+ * funnel's last step is an assertion rather than a join.
+ *
+ * Run as its own pass, after the records exist. The lead may be fetched pages before the
+ * deal it points at — the modules are pulled one after another — so resolving the links
+ * inline would drop every reference that pointed forwards.
+ *
+ * Set once and left alone: a link corrected by hand here should survive the next sync.
+ */
+async function linkConvertedLeads(providerId: string, points: MetricPoint[]): Promise<number> {
+  const rows = points
+    .filter((p) => p.entityType === 'crm_lead' && p.entityId && meta(p).converted)
+    .map((p) => {
+      const m = meta(p);
+      return {
+        externalId: p.entityId as string,
+        contactId: str(m.convertedContactId),
+        accountId: str(m.convertedAccountId),
+        dealId: str(m.convertedDealId),
+      };
+    })
+    .filter((r) => r.contactId || r.accountId || r.dealId);
+
+  if (!rows.length) return 0;
+
+  let linked = 0;
+  const CHUNK = 500;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const values = chunk.map((r) => [providerId, r.externalId, r.contactId, r.accountId, r.dealId]);
+    const placeholders = values
+      .map((_, n) => `($${n * 5 + 1}, $${n * 5 + 2}, $${n * 5 + 3}, $${n * 5 + 4}, $${n * 5 + 5})`)
+      .join(', ');
+
+    // A single statement per chunk, joining through the external ids both sides already
+    // carry. COALESCE keeps a link that is already set, including one set by hand.
+    linked += await db().$executeRawUnsafe(
+      `WITH ref (source, lead_external, contact_external, account_external, deal_external)
+         AS (VALUES ${placeholders})
+       UPDATE lead l
+          SET "contactId"  = COALESCE(l."contactId", c.id),
+              "companyId"  = COALESCE(l."companyId", co.id)
+         FROM ref
+         LEFT JOIN contact c  ON c.source = ref.source  AND c."externalId" = ref.contact_external
+         LEFT JOIN company co ON co.source = ref.source AND co."externalId" = ref.account_external
+        WHERE l.source = ref.source
+          AND l."externalId" = ref.lead_external
+          AND (c.id IS NOT NULL OR co.id IS NOT NULL)`,
+      ...values.flat(),
+    );
+
+    // The deal points back at the lead rather than the other way round: a lead produces
+    // at most one deal here, but the column lives on Opportunity.
+    await db().$executeRawUnsafe(
+      `WITH ref (source, lead_external, contact_external, account_external, deal_external)
+         AS (VALUES ${placeholders})
+       UPDATE opportunity o
+          SET "leadId" = l.id
+         FROM ref
+         JOIN lead l ON l.source = ref.source AND l."externalId" = ref.lead_external
+        WHERE o.source = ref.source
+          AND o."externalId" = ref.deal_external
+          AND o."leadId" IS NULL`,
+      ...values.flat(),
+    );
+  }
+
+  return linked;
 }
 
 /**
@@ -1721,10 +1812,14 @@ async function writeRevenueFromWonDeals(): Promise<number> {
   // month the sync ran in and move it again on the next re-import. Left out until the CRM
   // says when the deal closed.
   return db().$executeRawUnsafe(`
-    INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "createdAt")
+    INSERT INTO revenue_entry (id, "customerId", date, amount, currency, kind, "opportunityId", "campaignId", "channelId", "createdAt")
     SELECT gen_random_uuid()::text, c.id, o."closedAt"::date,
-           o.value, o.currency, 'one_time', o.id, o."campaignId", now()
+           o.value, o.currency, 'one_time', o.id, o."campaignId", l."channelId", now()
     FROM opportunity o
+    -- The channel the originating lead arrived through, so revenue can be attributed to
+    -- the thing that produced it. Left join: a deal created directly has no lead, and
+    -- that is unattributed revenue rather than a missing row.
+    LEFT JOIN lead l ON l.id = o."leadId"
     JOIN pipeline_stage s ON s.id = o."stageId"
     JOIN customer c ON c."companyId" = o."companyId"
     WHERE s."isWon"
@@ -1733,7 +1828,10 @@ async function writeRevenueFromWonDeals(): Promise<number> {
       AND o."closedAt" IS NOT NULL
       AND o."closedAt"::date <= current_date
     ON CONFLICT ("opportunityId") DO UPDATE
-      SET amount = EXCLUDED.amount, date = EXCLUDED.date, currency = EXCLUDED.currency
+      SET amount = EXCLUDED.amount,
+          date = EXCLUDED.date,
+          currency = EXCLUDED.currency,
+          "channelId" = COALESCE(EXCLUDED."channelId", revenue_entry."channelId")
   `);
 }
 
@@ -1751,6 +1849,8 @@ async function persist(
     socialRows: await writeSocialActivity(integrationId, points),
     seoRows: await writeSeoRows(provider, config, points),
     crmRows: await writeCrmRecords(provider.id, points),
+    // After the records, and before revenue: revenue is attributed through these links.
+    linkedRows: await linkConvertedLeads(provider.id, points),
     // After the CRM records too: activities are attached to the leads and deals above.
     activityRows: await writeCrmActivity(provider.id, points),
     // After the CRM records, never before: it reads the deals that step just wrote.
@@ -1770,6 +1870,7 @@ function describe(c: Counts): string {
     c.socialRows ? `${c.socialRows} social rows` : null,
     c.seoRows ? `${c.seoRows} SEO rows` : null,
     c.crmRows ? `${c.crmRows} CRM records` : null,
+    c.linkedRows ? `${c.linkedRows} conversions linked` : null,
     c.activityRows ? `${c.activityRows} activities and tasks` : null,
     c.revenueRows ? `${c.revenueRows} revenue entries` : null,
     c.outreachRows ? `${c.outreachRows} outreach rows` : null,

@@ -17,7 +17,14 @@ import {
 import { seoLiveness } from '../lib/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { splitName } from '../lib/integrations/service.ts';
-import { leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from '../lib/integrations/crm-mapping.ts';
+import {
+  channelSlugFor,
+  leadSourceType,
+  leadStatus,
+  matchStage,
+  taskPriority,
+  taskStatus,
+} from '../lib/integrations/crm-mapping.ts';
 
 // The parts of the new providers that can be tested without a live API: the parsing of
 // what the platform sends back, and the normalising of what a person types in.
@@ -468,4 +475,41 @@ test('a two-letter source is matched whole, never as a substring', () => {
   // includes("ig") would make every Landing Page lead social.
   assert.equal(leadSourceType('Landing Page'), 'landing_page');
   assert.notEqual(leadSourceType('Zoho Bookings'), 'social');
+});
+
+test('channelSlugFor tells the platforms apart, which SourceType cannot', () => {
+  // All four are `social` to SourceType, and they are 17,789 of this account's leads.
+  assert.equal(channelSlugFor('social', 'ig'), 'instagram');
+  assert.equal(channelSlugFor('social', 'fb'), 'facebook');
+  assert.equal(channelSlugFor('social', 'Facebook'), 'facebook');
+  assert.equal(channelSlugFor('social', 'Whatsapp'), 'whatsapp');
+  assert.equal(channelSlugFor('social', 'Old Incorp LinkedIn'), 'linkedin');
+  // Misspelt in the CRM on thousands of leads.
+  assert.equal(channelSlugFor('social', 'Incorporation LinkdIn'), 'linkedin');
+});
+
+test('a paid source is an ad, not the organic platform it runs on', () => {
+  assert.equal(channelSlugFor('paid_ads', 'Meta Ads'), 'meta-ads');
+  assert.equal(channelSlugFor('paid_ads', 'Canada Meta Ads'), 'meta-ads');
+  assert.equal(channelSlugFor('paid_ads', 'Meta - Landing Page'), 'meta-ads');
+});
+
+test('channelSlugFor covers the remaining sources this account uses', () => {
+  assert.equal(channelSlugFor('event', 'Calendly'), 'events');
+  assert.equal(channelSlugFor('event', 'Zoho Bookings'), 'events');
+  assert.equal(channelSlugFor('outreach', 'Call'), 'outreach');
+  assert.equal(channelSlugFor('outreach', 'Web Research'), 'outreach');
+  assert.equal(channelSlugFor('referral', 'Ref by AN'), 'referral');
+  assert.equal(channelSlugFor('landing_page', 'Landing Page'), 'direct');
+  assert.equal(channelSlugFor('organic_search', null), 'organic-search');
+});
+
+test('channelSlugFor refuses to invent attribution', () => {
+  // The CRM recorded no source for these; naming a channel would put invented
+  // attribution into every ROAS figure on the Marketing page.
+  assert.equal(channelSlugFor('import', 'Excel CRM'), null);
+  assert.equal(channelSlugFor('import', null), null);
+  assert.equal(channelSlugFor('manual', ''), null);
+  // Unrecognised social with no detail still has nowhere honest to go.
+  assert.equal(channelSlugFor('social', null), null);
 });
