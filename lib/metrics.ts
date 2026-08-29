@@ -509,10 +509,18 @@ export async function budgetPacing(range: Range): Promise<number | null> {
 // assembled in a page. Each returns the cards plus whatever the page also needs, to
 // avoid a second round of the same queries.
 
-/** Leads: New leads · Qualified · Cost per lead · Median response · Unassigned. */
+/**
+ * Leads converted in a period, counted by when they converted rather than when they
+ * arrived — a lead created in June and converted in August belongs to August.
+ */
+async function convertedLeads(range: Range): Promise<number> {
+  return db().lead.count({ where: { convertedAt: { gte: range.from, lte: range.to } } });
+}
+
+/** Leads: New · Converted · Qualified · Cost per lead · Median response · Unassigned. */
 export async function leadsKpis(days: number) {
   const { current, previous } = rangeFor(days);
-  const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday] =
+  const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday, convNow, convBefore] =
     await Promise.all([
       funnel(current),
       funnel(previous),
@@ -521,11 +529,14 @@ export async function leadsKpis(days: number) {
       unassignedLeads(current),
       unassignedLeads(previous),
       leadsByWeekday(current),
+      convertedLeads(current),
+      convertedLeads(previous),
     ]);
 
   const cards: Kpi[] = [
     { key: 'leads', label: 'New leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'qualified', label: 'Qualified', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
+    { key: 'converted', label: 'Converted', value: convNow, previous: convBefore, format: 'number', higherIsBetter: true, hint: 'Counted on the day the CRM converted them' },
     { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', higherIsBetter: false },
     { key: 'response', label: 'Median response', value: medianNow, previous: medianBefore, format: 'duration', higherIsBetter: false, hint: 'First outbound touch; untouched leads excluded' },
     { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },

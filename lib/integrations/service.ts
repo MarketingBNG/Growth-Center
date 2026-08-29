@@ -932,6 +932,12 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     // honest answer: it says the lead qualified, not when.
     const reachedQualified = status === 'qualified' || status === 'converted';
 
+    // Zoho keeps a converted lead in the module with a flag and a date rather than a
+    // status, so conversion has to be read from those and not inferred from the status
+    // text — which still says whatever it said the day the lead was converted.
+    const convertedAt = m.converted ? new Date(String(m.convertedAt ?? '')) : null;
+    const converted = convertedAt && !Number.isNaN(convertedAt.getTime()) ? convertedAt : null;
+
     return [
       name.firstName,
       name.lastName,
@@ -940,11 +946,12 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       str(m.companyName),
       str(m.title),
       str(m.message),
-      status,
+      m.converted ? 'converted' : status,
       leadSourceType(str(m.leadSource)),
       str(m.ownerEmail),
-      reachedQualified ? createdAtOf(p) : null,
-      status === 'converted' ? createdAtOf(p) : null,
+      // A converted lead was qualified on the way through, whatever its status says.
+      reachedQualified || converted ? (converted ?? createdAtOf(p)) : null,
+      converted,
       createdAtOf(p),
       providerId,
       externalId,

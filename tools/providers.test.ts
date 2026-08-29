@@ -406,3 +406,20 @@ test('the pipeline stages match the ones the CRM actually sends', () => {
   assert.equal(matchStage(stages, 'Deal Lost')?.isLost, true);
 });
 
+
+test('leadStatus reads the wording this CRM actually uses, not Zoho defaults', () => {
+  // Every one of these fell through to `new` before, which is how 22,554 of 26,151 leads
+  // came to read as untouched: "Dead Lead" alone is most of the CRM.
+  assert.equal(leadStatus('Dead Lead'), 'lost');
+  assert.equal(leadStatus('Lead Lost'), 'lost');
+  assert.equal(leadStatus('Follow-up'), 'contacted');
+  assert.equal(leadStatus('Not Reachable'), 'contacted');
+  assert.equal(leadStatus('Looking For Job'), 'unqualified');
+  assert.equal(leadStatus('Untouched Lead'), 'new');
+  assert.equal(leadStatus('Qualified'), 'qualified');
+  assert.equal(leadStatus('Semi-Qualified Lead'), 'qualified');
+});
+
+test('leadStatus still tests "not qualified" before "qualified"', () => {
+  assert.equal(leadStatus('Not Qualified'), 'unqualified');
+});

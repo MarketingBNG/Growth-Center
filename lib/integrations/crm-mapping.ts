@@ -16,10 +16,26 @@ import type { LeadStatus, Priority, SourceType, TaskStatus } from '../generated/
 export function leadStatus(value: string | null | undefined): LeadStatus {
   const v = (value ?? '').toLowerCase();
   if (v.includes('convert')) return 'converted';
-  if (v.includes('lost') || v.includes('junk')) return 'lost';
-  if (v.includes('not qualified') || v.includes('unqualified')) return 'unqualified';
+  // "Dead Lead" is this org's wording for a lead that went nowhere, and it is the single
+  // most common status here — 22,554 leads read as untouched because nothing matched it.
+  if (v.includes('lost') || v.includes('junk') || v.includes('dead')) return 'lost';
+  // A job seeker is not a prospect. Unqualified rather than lost: nothing was lost.
+  if (v.includes('not qualified') || v.includes('unqualified') || v.includes('looking for job')) {
+    return 'unqualified';
+  }
   if (v.includes('qualified')) return 'qualified';
-  if (v.includes('contact') || v.includes('attempted')) return 'contacted';
+  // "Follow-up" and "Not Reachable" both describe an attempt that has already been made,
+  // which is what `contacted` means. Left as `new` they made the funnel's first stage
+  // look untouched.
+  if (
+    v.includes('contact') ||
+    v.includes('attempted') ||
+    v.includes('follow') ||
+    v.includes('not reachable') ||
+    v.includes('unreachable')
+  ) {
+    return 'contacted';
+  }
   return 'new';
 }
 
