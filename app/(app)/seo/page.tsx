@@ -11,6 +11,7 @@ import { currencySettings } from '@/lib/settings';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
 import { TrendChart } from '@/components/charts/TrendChart';
+import { Sparkline } from '@/components/charts/Sparkline';
 
 export const metadata = { title: 'SEO · Growth Center' };
 
@@ -40,7 +41,7 @@ export default async function SeoPage() {
           <EmptyState
             icon={<Search className="size-6" />}
             title="No website configured"
-            hint="Run npm run db:seed for demo data, or connect Google Search Console to pull real keyword data."
+            hint="Connect Google Search Console on the Integrations page to pull real keyword data."
           />
         </Card>
       </>
@@ -48,6 +49,15 @@ export default async function SeoPage() {
   }
 
   const { totals, keywords, pages, issues, website, liveness } = data;
+
+  // Capped: 1,760 rows in one table is a page nobody scrolls and a DOM nobody needs.
+  // Ordered by impressions upstream, so the cap keeps the keywords that matter.
+  const KEYWORD_ROWS = 100;
+  const shown = keywords.slice(0, KEYWORD_ROWS);
+
+  // Search Console reports no volume, difficulty, CPC or intent. The columns stay in the
+  // markup for whenever something that does report them is connected.
+  const hasKeywordTool = keywords.some((k) => k.searchVolume !== null || k.difficulty !== null);
   const movers = keywords.filter((k) => k.move !== null && k.move !== 0);
   const improved = [...movers].sort((a, b) => (b.move ?? 0) - (a.move ?? 0)).slice(0, 5);
   const declined = [...movers].sort((a, b) => (a.move ?? 0) - (b.move ?? 0)).slice(0, 5);
@@ -152,7 +162,14 @@ export default async function SeoPage() {
       </div>
 
       <Card className="mb-4 overflow-hidden">
-        <CardHeader><CardTitle>Tracked keywords</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Tracked keywords</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            {shown.length === keywords.length
+              ? `${fmtNumber(keywords.length)} keywords, most impressions first`
+              : `Top ${fmtNumber(shown.length)} of ${fmtNumber(keywords.length)} by impressions`}
+          </p>
+        </CardHeader>
         <TableWrap>
           <Table>
             <THead>
@@ -160,15 +177,24 @@ export default async function SeoPage() {
                 <TH>Keyword</TH>
                 <TH className="text-right">Position</TH>
                 <TH className="text-right">Change</TH>
-                <TH className="text-right">Volume</TH>
-                <TH className="text-right">Difficulty</TH>
-                <TH className="text-right">CPC</TH>
-                <TH>Intent</TH>
+                <TH>Trend</TH>
+                <TH className="text-right">Clicks</TH>
+                <TH className="text-right">Impressions</TH>
+                {/* Only when something can fill them. Search Console reports none of
+                    these, and four columns of em dashes took half the table. */}
+                {hasKeywordTool ? (
+                  <>
+                    <TH className="text-right">Volume</TH>
+                    <TH className="text-right">Difficulty</TH>
+                    <TH className="text-right">CPC</TH>
+                    <TH>Intent</TH>
+                  </>
+                ) : null}
                 <TH className="text-right">Checked</TH>
               </TR>
             </THead>
             <TBody>
-              {keywords.map((k) => (
+              {shown.map((k) => (
                 <TR key={k.id}>
                   <TD className="font-medium">{k.keyword}</TD>
                   <TD className="text-right tnum">{k.position === null ? '—' : `#${k.position}`}</TD>
@@ -181,10 +207,19 @@ export default async function SeoPage() {
                       </span>
                     )}
                   </TD>
-                  <TD className="text-right tnum text-muted-foreground">{fmtNumber(k.searchVolume)}</TD>
-                  <TD className="text-right tnum text-muted-foreground">{k.difficulty ?? '—'}</TD>
-                  <TD className="text-right tnum text-muted-foreground">{k.cpc === null ? '—' : fmtMoney(k.cpc, true, fx.reporting)}</TD>
-                  <TD className="text-muted-foreground">{k.intent ?? '—'}</TD>
+                  <TD>
+                    <Sparkline values={k.history} lowerIsBetter />
+                  </TD>
+                  <TD className="text-right tnum">{fmtNumber(k.clicks)}</TD>
+                  <TD className="text-right tnum text-muted-foreground">{fmtNumber(k.impressions)}</TD>
+                  {hasKeywordTool ? (
+                    <>
+                      <TD className="text-right tnum text-muted-foreground">{fmtNumber(k.searchVolume)}</TD>
+                      <TD className="text-right tnum text-muted-foreground">{k.difficulty ?? '—'}</TD>
+                      <TD className="text-right tnum text-muted-foreground">{k.cpc === null ? '—' : fmtMoney(k.cpc, true, fx.reporting)}</TD>
+                      <TD className="text-muted-foreground">{k.intent ?? '—'}</TD>
+                    </>
+                  ) : null}
                   <TD className="text-right text-muted-foreground">{fmtDate(k.lastChecked)}</TD>
                 </TR>
               ))}

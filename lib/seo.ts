@@ -20,26 +20,47 @@ export function seoLiveness(rows: { source: string | null }[]) {
   return { live, seeded: rows.length - live, hasLive: live > 0, allLive: rows.length > 0 && live === rows.length };
 }
 
+/** Readings kept per keyword for the trend line. A month of daily positions is enough to
+ *  show a direction and small enough to load for every keyword at once. */
+const HISTORY_POINTS = 30;
+
 export async function seoOverview() {
   const website = await db().website.findFirst({ select: { id: true, domain: true, name: true } });
   if (!website) return null;
 
-  const [keywords, pages] = await Promise.all([
+  const [keywords, pages, traffic] = await Promise.all([
     db().seoKeyword.findMany({
       where: { websiteId: website.id },
       include: {
-        // Two most recent readings: the latest position, and the one before it, which is
-        // what makes "moved up 3" answerable without loading the whole history.
-        rankings: { orderBy: { date: 'desc' }, take: 2 },
+        // Enough readings to draw the line, newest first. Two was enough to answer
+        // "moved up 3" and nothing more, so the trend column had no history to plot.
+        rankings: { orderBy: { date: 'desc' }, take: HISTORY_POINTS },
       },
-      orderBy: { searchVolume: 'desc' },
     }),
     db().seoPage.findMany({ where: { websiteId: website.id }, orderBy: { clicks: 'desc' } }),
+    // What each keyword actually earned. Search Console reports it per query and the
+    // table showed none of it, while four columns it cannot report — volume, difficulty,
+    // CPC, intent — took up half the width printing an em dash on every row.
+    db().metricSnapshot.groupBy({
+      by: ['entityId', 'metricKey'],
+      where: { entityType: 'seo_keyword', metricKey: { in: ['clicks', 'impressions'] } },
+      _sum: { value: true },
+    }),
   ]);
+
+  const earned = new Map<string, { clicks: number; impressions: number }>();
+  for (const row of traffic) {
+    const key = row.entityId ?? '';
+    const entry = earned.get(key) ?? { clicks: 0, impressions: 0 };
+    if (row.metricKey === 'clicks') entry.clicks = num(row._sum.value);
+    if (row.metricKey === 'impressions') entry.impressions = num(row._sum.value);
+    earned.set(key, entry);
+  }
 
   const tracked = keywords.map((k) => {
     const latest = k.rankings[0] ?? null;
     const prior = k.rankings[1] ?? null;
+    const seen = earned.get(k.keyword) ?? { clicks: 0, impressions: 0 };
     // Lower is better, so a fall in position number is an improvement.
     const move = latest && prior ? prior.position - latest.position : null;
     return {
@@ -53,9 +74,18 @@ export async function seoOverview() {
       intent: k.intent,
       position: latest?.position ?? null,
       move,
+      clicks: seen.clicks,
+      impressions: seen.impressions,
+      /// Oldest first, which is the direction a line is read.
+      history: [...k.rankings].reverse().map((r) => r.position),
       lastChecked: latest?.date ?? null,
     };
   });
+
+  // Ordered by what the keyword actually earned. The previous order was `searchVolume`
+  // descending — a column Search Console never fills, so every row sorted equal and the
+  // list opened on whichever 1,760 rows the database happened to return first.
+  tracked.sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks);
 
   const ranked = tracked.filter((k) => k.position !== null);
   const totals = {
@@ -98,15 +128,6 @@ export async function seoOverview() {
   };
 }
 
-/** Position history for one keyword, oldest first, for the sparkline. */
-export async function keywordHistory(keywordId: string) {
-  const rows = await db().seoKeywordRanking.findMany({
-    where: { keywordId },
-    orderBy: { date: 'asc' },
-    select: { date: true, position: true },
-  });
-  return rows.map((r) => ({ date: r.date.toISOString().slice(0, 10), position: r.position }));
-}
 
 /**
  * Daily search performance from Search Console, for the trend on the SEO page.
