@@ -60,6 +60,11 @@ function targetNote(value: number | null, target: number | null, subject: string
     : `On track for ${target}% target`;
 }
 
+/** The chart's own unit, which follows the bucket `rangeFor` picked. Hard-coded "By day"
+ *  labelled a monthly-bucketed series as daily on every range over 120 days. */
+const by = (bucket: 'day' | 'month', rest = '') =>
+  `By ${bucket === 'month' ? 'month' : 'day'}${rest}`;
+
 export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
   const { current } = rangeFor(days);
   const [{ cards, current: f, weekday, qualificationRate }, series] = await Promise.all([
@@ -74,7 +79,7 @@ export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<
     currency: fx,
     trend: {
       title: 'Leads created',
-      subtitle: 'By day',
+      subtitle: by(bucket),
       headline: fmtNumber(f.leads),
       note: `${fmtNumber(f.qualified)} reached qualified`,
       data: series,
@@ -106,7 +111,7 @@ export async function crmBand(days: number, bucket: 'day' | 'month'): Promise<Ba
     currency: fx,
     trend: {
       title: 'Accounts added',
-      subtitle: 'Companies and contacts, by day',
+      subtitle: `Companies and contacts, ${by(bucket).toLowerCase()}`,
       headline: fmtNumber(added),
       note: share === null ? 'No companies on the books yet' : `${fmtPercent(share)} of accounts are customers`,
       data: series,
@@ -170,7 +175,7 @@ export async function marketingBand(days: number, bucket: 'day' | 'month'): Prom
     currency: fx,
     trend: {
       title: 'Revenue and spend',
-      subtitle: 'By day · they share a unit, so they share a chart',
+      subtitle: by(bucket, ' · they share a unit, so they share a chart'),
       headline: money(f.revenue),
       note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
       data: series,
@@ -210,7 +215,7 @@ export async function analyticsBand(days: number, bucket: 'day' | 'month'): Prom
     currency: fx,
     trend: {
       title: 'Revenue and spend',
-      subtitle: 'By day · never a second y-axis',
+      subtitle: by(bucket, ' · never a second y-axis'),
       headline: money(f.revenue),
       note: 'Sessions and leads sit on their own charts',
       data: series,
@@ -265,10 +270,7 @@ export async function dashboardBand(
       currency: f.currency,
       trend: {
         title: 'Revenue and spend',
-        subtitle:
-          bucket === 'month'
-            ? 'By month · they share a unit, so they share a chart'
-            : 'By day · they share a unit, so they share a chart',
+        subtitle: by(bucket, ' · they share a unit, so they share a chart'),
         headline: money(f.revenue),
         note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
         data: series,

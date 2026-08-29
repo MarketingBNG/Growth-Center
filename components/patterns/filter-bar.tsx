@@ -42,6 +42,10 @@ export function FilterBar({
       <div className="relative min-w-52 flex-1 sm:max-w-[220px]">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
+          // Keyed on the term in the URL so Clear — or any navigation that drops `q` —
+          // remounts the field. Uncontrolled, it kept showing the old text over results
+          // that were no longer filtered by it.
+          key={params.get('q') ?? ''}
           defaultValue={params.get('q') ?? ''}
           placeholder={searchPlaceholder}
           className="pl-9"

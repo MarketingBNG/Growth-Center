@@ -225,38 +225,6 @@ export function UserCard({
 
   return (
     <div className="relative border-t border-line-soft p-3" data-account-menu>
-      {open ? (
-        // Above the button, not below: this sits at the foot of the sidebar and a menu
-        // opening downwards would go off the screen.
-        <div className="absolute bottom-[calc(100%-0.25rem)] left-3 right-3 z-30 overflow-hidden rounded-[10px] border border-border bg-card py-1 shadow-lg">
-          {ACCOUNT_NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                'flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary',
-                pathname === item.href ? 'font-semibold text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              <Icon name={item.icon} className="size-[15px]" />
-              {item.label}
-            </Link>
-          ))}
-
-          <div className="my-1 border-t border-line-soft" />
-
-          <button
-            type="button"
-            onClick={() => signOut({ callbackUrl: '/signin' })}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <LogOut className="size-[15px]" />
-            Log out
-          </button>
-        </div>
-      ) : null}
-
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -283,6 +251,53 @@ export function UserCard({
           </>
         )}
       </button>
+
+      {open ? (
+        // Above the button, not below: this sits at the foot of the sidebar and a menu
+        // opening downwards would go off the screen. It keeps a readable width of its own
+        // so the collapsed 72px rail does not squeeze the labels away.
+        <div
+          role="menu"
+          aria-label="Account"
+          className={cn(
+            'absolute bottom-[calc(100%-0.25rem)] left-3 z-30 min-w-[190px] overflow-hidden rounded-[10px] border border-border bg-card py-1 shadow-lg',
+            collapsed ? 'w-[190px]' : 'right-3',
+          )}
+        >
+          {ACCOUNT_NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              role="menuitem"
+              // Closed here as well as on route change: picking the page you are already
+              // on changes no route, and the menu would sit there open.
+              onClick={() => {
+                setOpen(false);
+                onNavigate?.();
+              }}
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-secondary',
+                pathname === item.href ? 'font-semibold text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              <Icon name={item.icon} className="size-[15px]" />
+              {item.label}
+            </Link>
+          ))}
+
+          <div className="my-1 border-t border-line-soft" />
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => signOut({ callbackUrl: '/signin' })}
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <LogOut className="size-[15px]" />
+            Log out
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
