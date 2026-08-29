@@ -229,7 +229,23 @@ export async function disconnect(id: string, actorEmail: string) {
  *  function limit long before it finished. One statement per chunk instead. */
 const WRITE_CHUNK = 500;
 
-async function writePoints(source: string, points: MetricPoint[]): Promise<number> {
+/** Postgres refuses an ON CONFLICT DO UPDATE that would touch the same row twice within
+ *  one statement ("cannot affect row a second time"), so a batch carrying two points with
+ *  the same natural key aborts the whole chunk. Providers legitimately emit those: an
+ *  account whose campaigns report the same metric on the same day, or a paged pull whose
+ *  last page overlaps the next one's first. Collapse them here, last value winning, which
+ *  is the same outcome the upsert would have produced row by row. */
+function dedupePoints(points: MetricPoint[]): MetricPoint[] {
+  const byKey = new Map<string, MetricPoint>();
+  for (const p of points) {
+    const day = p.date instanceof Date ? p.date.toISOString().slice(0, 10) : String(p.date);
+    byKey.set(JSON.stringify([p.entityType, p.entityId ?? '', p.metricKey, day]), p);
+  }
+  return [...byKey.values()];
+}
+
+async function writePoints(source: string, rawPoints: MetricPoint[]): Promise<number> {
+  const points = dedupePoints(rawPoints);
   if (!points.length) return 0;
 
   let written = 0;
@@ -488,9 +504,9 @@ async function writeSocialActivity(
  * Turns `seo_keyword` and `seo_page` points into the SEO tables.
  *
  * Until this existed nothing but the seeder wrote SeoKeyword, SeoKeywordRanking or
- * SeoPage — which is why connecting Semrush was always going to leave the SEO page fully
- * seeded. Rows written here carry `source`, so the page can tell a reported ranking from
- * an invented one sitting in the same table.
+ * SeoPage, so the SEO page stayed fully seeded no matter what was connected. Rows written
+ * here carry `source`, so the page can tell a reported ranking from an invented one
+ * sitting in the same table.
  */
 async function writeSeoRows(
   provider: ReturnType<typeof requireProvider>,
