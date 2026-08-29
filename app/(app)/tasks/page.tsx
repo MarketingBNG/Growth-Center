@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { pageQuery } from '@/lib/query';
-import { listAssignable } from '@/lib/users';
+import { listAssignable, peopleOn, personOptions } from '@/lib/users';
 import { TASK_STATUSES } from '@/lib/enums';
 import { fmtDate } from '@/lib/format';
 import { CompleteButton } from './CompleteButton';
@@ -32,7 +32,7 @@ export default async function TasksPage({
   }
 
   const params = await searchParams;
-  const people = await listAssignable();
+  const [people, assignees] = await Promise.all([listAssignable(), peopleOn('task', 'assigneeEmail')]);
   const q = pageQuery(params);
   const status = typeof params.status === 'string' ? params.status : '';
   const assignee = typeof params.assigneeEmail === 'string' ? params.assigneeEmail : '';
@@ -75,10 +75,9 @@ export default async function TasksPage({
           {
             name: 'assigneeEmail',
             label: 'Assignee',
-            options: [
-              { value: 'unassigned', label: 'Unassigned' },
-              ...people.map((a) => ({ value: a.email, label: a.name })),
-            ],
+            // The roster AND whoever the records are actually assigned to. Almost every
+            // task here belongs to someone with no account in this app.
+            options: [{ value: 'unassigned', label: 'Unassigned' }, ...personOptions(people, assignees)],
           },
         ]}
       />

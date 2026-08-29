@@ -16,22 +16,31 @@ export const stepInput = z.object({
 });
 
 export async function sequences() {
-  const rows = await db().sequence.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      steps: { orderBy: { position: 'asc' } },
-      prospects: { select: { status: true } },
-      _count: { select: { prospects: true } },
-    },
-  });
+  // Counted in the database, not in memory. Including the prospects to tally them by
+  // status pulled all 23,687 rows into the page on every view, to produce five numbers
+  // per sequence.
+  const [rows, statusCounts] = await Promise.all([
+    db().sequence.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        steps: { orderBy: { position: 'asc' } },
+        _count: { select: { prospects: true } },
+      },
+    }),
+    db().prospect.groupBy({ by: ['sequenceId', 'status'], _count: { _all: true } }),
+  ]);
+
+  const statusBySequence = new Map<string, Record<string, number>>();
+  for (const row of statusCounts) {
+    const entry = statusBySequence.get(row.sequenceId) ?? {};
+    entry[row.status] = row._count._all;
+    statusBySequence.set(row.sequenceId, entry);
+  }
 
   const reported = await reportedTotals(rows);
 
   return rows.map((s) => {
-    const byStatus = s.prospects.reduce<Record<string, number>>((acc, p) => {
-      acc[p.status] = (acc[p.status] ?? 0) + 1;
-      return acc;
-    }, {});
+    const byStatus = statusBySequence.get(s.id) ?? {};
     const replied = byStatus.replied ?? 0;
     return {
       id: s.id,
@@ -126,39 +135,3 @@ async function reportedTotals(
   return out;
 }
 
-export async function sequenceDetail(id: string) {
-  const sequence = await db().sequence.findUnique({
-    where: { id },
-    include: {
-      steps: { orderBy: { position: 'asc' } },
-      prospects: {
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          messages: { orderBy: { sentAt: 'desc' }, take: 1 },
-          contact: { select: { id: true } },
-        },
-      },
-    },
-  });
-  if (!sequence) return null;
-
-  const messages = await db().outreachMessage.findMany({
-    where: { prospect: { sequenceId: id } },
-    select: { status: true, openedAt: true, repliedAt: true, providerId: true },
-  });
-
-  const sent = messages.length;
-  return {
-    sequence,
-    stats: {
-      sent,
-      opened: messages.filter((m) => m.openedAt).length,
-      replied: messages.filter((m) => m.repliedAt).length,
-      openRate: rate(messages.filter((m) => m.openedAt).length, sent),
-      replyRate: rate(messages.filter((m) => m.repliedAt).length, sent),
-      // Whether anything actually left the building. The console provider records a
-      // send without sending, and the card must say so.
-      providers: [...new Set(messages.map((m) => m.providerId).filter(Boolean))] as string[],
-    },
-  };
-}

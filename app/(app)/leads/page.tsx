@@ -17,8 +17,7 @@ import { pageQuery, pick } from '@/lib/query';
 import { leadFilters, listLeads } from '@/lib/leads';
 import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
 import { DEMO_SOURCE } from '@/lib/sources';
-import { listAssignable, type AppUser } from '@/lib/users';
-import { leadOwners } from '@/lib/leads';
+import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
 import { NewLeadButton } from './NewLeadButton';
 
@@ -39,19 +38,10 @@ const filtersFor = (people: AppUser[], owners: string[]) => [
     // owners unselectable.
     options: [
       { value: 'unassigned', label: 'Unassigned' },
-      ...dedupeOwners(people, owners),
+      ...personOptions(people, owners),
     ],
   },
 ];
-
-/** Roster first, so a name the workspace knows wins over the raw CRM string, then anyone
- *  else the data mentions. Keyed on the stored value, which is what the filter matches. */
-function dedupeOwners(people: AppUser[], owners: string[]) {
-  const out = new Map<string, { value: string; label: string }>();
-  for (const p of people) out.set(p.email, { value: p.email, label: p.name });
-  for (const o of owners) if (!out.has(o)) out.set(o, { value: o, label: o });
-  return [...out.values()];
-}
 
 export default async function LeadsPage({
   searchParams,
@@ -71,7 +61,7 @@ export default async function LeadsPage({
     );
   }
 
-  const [people, owners] = await Promise.all([listAssignable(), leadOwners()]);
+  const [people, owners] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
   const q = pageQuery(params);
   const { value, days, bucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));

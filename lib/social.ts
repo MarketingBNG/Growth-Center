@@ -12,11 +12,25 @@ function engagementsOf(p: { likes: number; comments: number; shares: number; sav
   return p.likes + p.comments + p.shares + p.saves;
 }
 
+/** Posts listed under the accounts. Twelve is what the page renders. */
+const RECENT_POSTS = 12;
+
 export async function socialOverview() {
-  const accounts = await db().socialAccount.findMany({
-    orderBy: { followers: 'desc' },
-    include: { posts: { orderBy: { publishedAt: 'desc' } } },
-  });
+  // Totals from the database, and only the posts the page actually lists. Including
+  // every post to add them up loaded an account's whole history on each view — fine at
+  // zero posts, and the same shape of mistake that pulled 23,687 prospects into the
+  // Outreach page.
+  const [accounts, totalsByAccount, latest] = await Promise.all([
+    db().socialAccount.findMany({ orderBy: { followers: 'desc' } }),
+    db().socialPost.groupBy({
+      by: ['accountId'],
+      _count: { _all: true },
+      _sum: { reach: true, impressions: true, clicks: true, likes: true, comments: true, shares: true, saves: true },
+    }),
+    db().socialPost.findMany({ orderBy: { publishedAt: 'desc' }, take: RECENT_POSTS }),
+  ]);
+
+  const sums = new Map(totalsByAccount.map((t) => [t.accountId, t]));
 
   // Whether an account's figures are arriving from a live connection. The schema keeps
   // `integrationId` for exactly this, but a stored id is not enough — an integration can
@@ -35,10 +49,13 @@ export async function socialOverview() {
   const isLive = (integrationId: string | null) => integrationId !== null && liveIds.has(integrationId);
 
   const rows = accounts.map((a) => {
-    const reach = a.posts.reduce((t, p) => t + p.reach, 0);
-    const impressions = a.posts.reduce((t, p) => t + p.impressions, 0);
-    const engagements = a.posts.reduce((t, p) => t + engagementsOf(p), 0);
-    const clicks = a.posts.reduce((t, p) => t + p.clicks, 0);
+    const t = sums.get(a.id);
+    const sum = t?._sum;
+    const n = (v: number | null | undefined) => v ?? 0;
+    const reach = n(sum?.reach);
+    const impressions = n(sum?.impressions);
+    const engagements = n(sum?.likes) + n(sum?.comments) + n(sum?.shares) + n(sum?.saves);
+    const clicks = n(sum?.clicks);
     return {
       id: a.id,
       network: a.network,
@@ -46,7 +63,7 @@ export async function socialOverview() {
       name: a.name,
       followers: a.followers,
       live: isLive(a.integrationId),
-      posts: a.posts.length,
+      posts: t?._count._all ?? 0,
       reach,
       impressions,
       engagements,
@@ -57,14 +74,14 @@ export async function socialOverview() {
     };
   });
 
-  const recent = accounts
-    .flatMap((a) => a.posts.map((p) => ({ ...p, network: a.network, handle: a.handle })))
-    .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime())
-    .slice(0, 12)
-    .map((p) => ({
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const recent = latest
+    .map((p) => ({ post: p, account: accountById.get(p.accountId) }))
+    .filter((r): r is { post: (typeof latest)[number]; account: NonNullable<typeof r.account> } => !!r.account)
+    .map(({ post: p, account }) => ({
       id: p.id,
-      network: p.network,
-      handle: p.handle,
+      network: account.network,
+      handle: account.handle,
       publishedAt: p.publishedAt,
       caption: p.caption,
       permalink: p.permalink,

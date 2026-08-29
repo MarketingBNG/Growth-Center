@@ -185,3 +185,52 @@ export async function setActive(inputEmail: string, active: boolean) {
   if (isAdmin(email) && !active) throw new Error('An admin account cannot be revoked.');
   return db().appUser.update({ where: { email }, data: { active } });
 }
+
+/**
+ * Everyone a column of that name is actually set to, whether or not they have an account.
+ *
+ * The Owner and Assignee filters were built from the workspace roster alone. Almost every
+ * record here is owned by someone in the source CRM with no account in this app — 1,009
+ * tasks under one such name — so the filters offered a list nobody's records were under,
+ * and the busiest people could not be selected at all.
+ *
+ * Named for the column rather than generic, so the caller cannot pass a table name into a
+ * raw query. Prisma's groupBy validates the field for the model.
+ */
+export async function peopleOn(
+  model: 'lead' | 'task',
+  column: 'ownerEmail' | 'assigneeEmail',
+): Promise<string[]> {
+  const client = prisma();
+  if (!client) return [];
+
+  const rows =
+    model === 'lead'
+      ? await client.lead.groupBy({
+          by: ['ownerEmail'],
+          where: { ownerEmail: { not: null } },
+          _count: { _all: true },
+          orderBy: { _count: { ownerEmail: 'desc' } },
+          take: 100,
+        })
+      : await client.task.groupBy({
+          by: ['assigneeEmail'],
+          where: { assigneeEmail: { not: null } },
+          _count: { _all: true },
+          orderBy: { _count: { assigneeEmail: 'desc' } },
+          take: 100,
+        });
+
+  return rows
+    .map((r) => (column === 'ownerEmail' ? (r as { ownerEmail: string | null }).ownerEmail : (r as { assigneeEmail: string | null }).assigneeEmail))
+    .filter((v): v is string => !!v);
+}
+
+/** Roster first, so a name the workspace knows wins over the raw CRM string, then anyone
+ *  else the data mentions. Keyed on the stored value, which is what a filter matches. */
+export function personOptions(roster: AppUser[], seen: string[]) {
+  const out = new Map<string, { value: string; label: string }>();
+  for (const p of roster) out.set(p.email, { value: p.email, label: p.name });
+  for (const s of seen) if (!out.has(s)) out.set(s, { value: s, label: s });
+  return [...out.values()];
+}
