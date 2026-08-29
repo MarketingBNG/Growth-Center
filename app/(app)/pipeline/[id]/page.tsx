@@ -48,7 +48,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             </Badge>
           </div>
           <p className="mt-1 text-[13.5px] text-muted-foreground">
-            {fmtMoney(Number(deal.value))} · {deal.probability}% ·{' '}
+            {fmtMoney(Number(deal.value), false, deal.currency)} · {deal.probability}% ·{' '}
             {deal.company?.name ?? 'No company'}
           </p>
         </div>
@@ -66,7 +66,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               <CardTitle>Details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="Value" value={fmtMoney(Number(deal.value), true)} />
+              <Detail label="Value" value={fmtMoney(Number(deal.value), true, deal.currency)} />
               <Detail label="Probability" value={`${deal.probability}%`} />
               <Detail label="Owner" value={deal.ownerEmail ?? 'Unassigned'} />
               <Detail label="Expected close" value={fmtDate(deal.expectedCloseDate)} />

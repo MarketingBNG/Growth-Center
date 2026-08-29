@@ -10,6 +10,8 @@ import { rangeParam } from '@/lib/range';
 import { board, BOARD_LIMIT } from '@/lib/pipeline';
 import { pipelineValue } from '@/lib/calc';
 import { fmtMoney, fmtNumber } from '@/lib/format';
+import { convert } from '@/lib/currency';
+import { currencySettings } from '@/lib/settings';
 import { PipelineViews } from './PipelineViews';
 
 export const metadata = { title: 'Pipeline · Growth Center' };
@@ -32,7 +34,15 @@ export default async function PipelinePage({
 
   const params = await searchParams;
   const { value, days, bucket } = rangeParam(params);
-  const [data, band] = await Promise.all([board(), pipelineBand(days, bucket)]);
+  const [data, band, fx] = await Promise.all([
+    board(),
+    pipelineBand(days, bucket),
+    currencySettings(),
+  ]);
+  // Money renders in the workspace's reporting currency. Aliased so a call site cannot
+  // silently fall back to dollars, which is how rupees came to be printed with a $.
+  const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
+
 
   if (!data) {
     return (
@@ -63,7 +73,9 @@ export default async function PipelinePage({
     cards: c.cards.map((o) => ({
       id: o.id,
       name: o.name,
-      value: Number(o.value),
+      // Converted here rather than shown as written: the board sums each column, and a
+      // column adding rupees to dollars is the figure people act on.
+      value: convert(Number(o.value), o.currency, fx) ?? 0,
       probability: o.probability,
       ownerEmail: o.ownerEmail,
       source: o.source,
@@ -79,7 +91,7 @@ export default async function PipelinePage({
     <>
       <PageHeader
         title="Pipeline"
-        subtitle={`${open.length} open · ${fmtMoney(total)} total · ${fmtMoney(weighted)} weighted`}
+        subtitle={`${open.length} open · ${money(total)} total · ${money(weighted)} weighted`}
         actions={<RangePicker current={value} />}
       />
       <MetricsBand {...band} />
@@ -91,7 +103,7 @@ export default async function PipelinePage({
         </p>
       ) : null}
 
-      <PipelineViews columns={columns} />
+      <PipelineViews columns={columns} currency={fx.reporting} />
     </>
   );
 }

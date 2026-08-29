@@ -24,6 +24,9 @@ export type BandSeries = { key: string; label: string; kind: 'number' | 'money' 
 
 export type BandData = {
   kpis: Kpi[];
+  /** The workspace's reporting currency, carried so the chart a band feeds can label its
+   *  axis with the right symbol. The band's own headlines are already formatted. */
+  currency: string;
   trend: {
     title: string;
     subtitle?: string;
@@ -35,6 +38,17 @@ export type BandData = {
   weekday: { data: { label: string; value: number }[] };
   gauge: { title: string; value: number | null; note?: string; target?: number | null };
 };
+
+/**
+ * The reporting currency, taken from the cards the band is built from.
+ *
+ * Read off the KPIs rather than fetched again: the money cards already carry it, having
+ * been built from a funnel that converted with it, and a second read could disagree with
+ * the figures beside it if the setting changed mid-request.
+ */
+function currencyOf(cards: Kpi[]): string {
+  return cards.find((c) => c.format === 'money' && c.currency)?.currency ?? 'USD';
+}
 
 /** "On track for 40% target", or the honest alternative. Never claims a target is met
  *  when there is no number to compare against it. */
@@ -53,8 +67,11 @@ export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<
     trend(current, bucket),
   ]);
 
+  const fx = currencyOf(cards);
+
   return {
     kpis: cards,
+    currency: fx,
     trend: {
       title: 'Leads created',
       subtitle: 'By day',
@@ -82,8 +99,11 @@ export async function crmBand(days: number, bucket: 'day' | 'month'): Promise<Ba
 
   const added = series.reduce((sum, r) => sum + r.accounts, 0);
 
+  const fx = currencyOf(cards);
+
   return {
     kpis: cards,
+    currency: fx,
     trend: {
       title: 'Accounts added',
       subtitle: 'Companies and contacts, by day',
@@ -111,13 +131,17 @@ export async function pipelineBand(days: number, bucket: 'day' | 'month'): Promi
 
   const created = series.reduce((sum, r) => sum + r.created, 0);
 
+  const fx = currencyOf(cards);
+  const money = (n: number | null | undefined) => fmtMoney(n, false, fx);
+
   return {
     kpis: cards,
+    currency: fx,
     trend: {
       title: 'Pipeline created',
       subtitle: 'Deal value by the day it opened',
-      headline: fmtMoney(created),
-      note: `${fmtMoney(open.weighted)} of the open pipeline, weighted by probability`,
+      headline: money(created),
+      note: `${money(open.weighted)} of the open pipeline, weighted by probability`,
       data: series,
       series: [{ key: 'created', label: 'Pipeline created', kind: 'money' }],
     },
@@ -138,13 +162,17 @@ export async function marketingBand(days: number, bucket: 'day' | 'month'): Prom
     trend(current, bucket),
   ]);
 
+  const fx = currencyOf(cards);
+  const money = (n: number | null | undefined) => fmtMoney(n, false, fx);
+
   return {
     kpis: cards,
+    currency: fx,
     trend: {
       title: 'Revenue and spend',
       subtitle: 'By day · they share a unit, so they share a chart',
-      headline: fmtMoney(f.revenue),
-      note: `${fmtMoney(f.spend)} spent · ${fmtRatio(f.roas)} return`,
+      headline: money(f.revenue),
+      note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
       data: series,
       series: [
         { key: 'revenue', label: 'Revenue', kind: 'money' },
@@ -174,12 +202,16 @@ export async function analyticsBand(days: number, bucket: 'day' | 'month'): Prom
     repeatCustomerRate(),
   ]);
 
+  const fx = currencyOf(cards);
+  const money = (n: number | null | undefined) => fmtMoney(n, false, fx);
+
   return {
     kpis: cards,
+    currency: fx,
     trend: {
       title: 'Revenue and spend',
       subtitle: 'By day · never a second y-axis',
-      headline: fmtMoney(f.revenue),
+      headline: money(f.revenue),
       note: 'Sessions and leads sit on their own charts',
       data: series,
       series: [
@@ -218,20 +250,27 @@ export async function dashboardBand(
     (c): c is Kpi => c !== undefined,
   );
 
+  // Taken from the funnel rather than the picked cards: the dashboard shows a subset, and
+  // a selection that happened to exclude every money card would lose the currency.
+  const money = (n: number | null | undefined) => fmtMoney(n, false, f.currency);
+
   return {
     // The funnel comes back too: the dashboard draws it and its conversion footer from
     // the same period, and recomputing it would be another seven queries.
     funnel: f,
     band: {
       kpis: picked,
+      // From the funnel rather than the picked cards: the dashboard shows a subset, and a
+      // selection that happened to exclude every money card would lose the currency.
+      currency: f.currency,
       trend: {
         title: 'Revenue and spend',
         subtitle:
           bucket === 'month'
             ? 'By month · they share a unit, so they share a chart'
             : 'By day · they share a unit, so they share a chart',
-        headline: fmtMoney(f.revenue),
-        note: `${fmtMoney(f.spend)} spent · ${fmtRatio(f.roas)} return`,
+        headline: money(f.revenue),
+        note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
         data: series,
         series: [
           { key: 'revenue', label: 'Revenue', kind: 'money' },

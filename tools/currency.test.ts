@@ -14,10 +14,20 @@ import {
 // lead reading as $292, and ROAS off by roughly ninety times while looking plausible.
 
 test('an amount already in the reporting currency is untouched', () => {
+  // Written against the configured reporting currency rather than a literal, so changing
+  // the default cannot quietly turn this into a test of the conversion path instead.
   const s = defaultCurrencySettings();
-  assert.equal(convert(100, 'USD', s), 100);
+  assert.equal(convert(100, s.reporting, s), 100);
   // A missing currency means the reporting one; nothing else can be assumed about it.
   assert.equal(convert(100, null, s), 100);
+});
+
+test('the default reports in rupees, because that is what the business bills in', () => {
+  const s = defaultCurrencySettings();
+  assert.equal(s.reporting, 'INR');
+  assert.equal(s.rates.INR, 1);
+  // Dollars per rupee — the reciprocal of the familiar quote.
+  assert.ok(s.rates.USD > 0 && s.rates.USD < 1);
 });
 
 test('converting divides, because rates are quoted per reporting unit', () => {
@@ -74,7 +84,11 @@ test('mode defaults to live, and only the exact word turns it off', () => {
 test('a malformed settings row degrades to the defaults', () => {
   assert.deepEqual(parseCurrencySettings(null), defaultCurrencySettings());
   assert.deepEqual(parseCurrencySettings('nonsense'), defaultCurrencySettings());
-  assert.equal(parseCurrencySettings({ reporting: 'GBP' }).reporting, 'USD');
+  // An unsupported code falls back to the configured default rather than throwing.
+  assert.equal(
+    parseCurrencySettings({ reporting: 'GBP' }).reporting,
+    defaultCurrencySettings().reporting,
+  );
 });
 
 test('a sum reports what it could not convert instead of hiding it', () => {

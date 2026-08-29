@@ -114,7 +114,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                     <span>{o.name}</span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Badge tone="info">{o.stage.name}</Badge>
-                      {fmtMoney(Number(o.value))}
+                      {fmtMoney(Number(o.value), false, o.currency)}
                     </span>
                   </Link>
                 ))}

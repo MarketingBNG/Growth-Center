@@ -32,6 +32,7 @@ export function TrendChart({
   height = 220,
   headline,
   headlineNote,
+  currency,
 }: {
   title: string;
   subtitle?: string;
@@ -41,10 +42,13 @@ export function TrendChart({
   /** Pre-formatted figure shown above the plot. */
   headline?: string;
   headlineNote?: string;
+  /** The workspace's reporting currency, for `money` series. Server-set: a client
+   *  component cannot read a workspace setting for itself. */
+  currency?: string;
 }) {
   const colored = series.map((s, i) => ({ ...s, color: SERIES[i % SERIES.length] }));
   const fmt = (v: number, kind: TrendSeries['kind']) =>
-    kind === 'money' ? fmtMoneyCompact(v) : fmtCompact(v);
+    kind === 'money' ? fmtMoneyCompact(v, currency) : fmtCompact(v);
 
   const label = (raw: string) => (raw.length === 7 ? monthLabel(raw) : fmtDay(raw));
 

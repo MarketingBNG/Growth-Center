@@ -48,6 +48,10 @@ export default async function MarketingPage({
     provenance(current),
   ]);
 
+  // Money renders in the workspace's reporting currency. Aliased so a call site cannot
+  // silently fall back to dollars, which is how rupees came to be printed with a $.
+  const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
+
   // Which sources actually appear in this period, so the filter never offers an option
   // that would return nothing.
   const presentSources = [...new Set(rows.map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
@@ -133,7 +137,7 @@ export default async function MarketingPage({
                       <SourceBadge source={c.source} className="ml-1.5" />
                     </TD>
                     <TD className="text-muted-foreground">{c.channelName}</TD>
-                    <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
+                    <TD className="text-right tnum">{money(c.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.impressions)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.clicks)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
@@ -141,13 +145,13 @@ export default async function MarketingPage({
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {c.costPerLead === null ? '—' : fmtMoney(c.costPerLead)}
+                      {c.costPerLead === null ? '—' : money(c.costPerLead)}
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(c.opportunities)}</TD>
                     <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
-                    <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
+                    <TD className="text-right tnum">{money(c.revenue)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {c.cac === null ? '—' : fmtMoney(c.cac)}
+                      {c.cac === null ? '—' : money(c.cac)}
                     </TD>
                     <TD className="text-right tnum">
                       {c.roas === null ? (
@@ -165,18 +169,18 @@ export default async function MarketingPage({
                     columns. */}
                 <TR className="border-t-2 border-border font-semibold hover:bg-transparent">
                   <TD colSpan={2}>Total</TD>
-                  <TD className="text-right tnum">{fmtMoney(totals.spend)}</TD>
+                  <TD className="text-right tnum">{money(totals.spend)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.impressions)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.clicks)}</TD>
                   <TD className="text-right tnum">{totals.ctr === null ? '—' : fmtPercent(totals.ctr, 2)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.leads)}</TD>
                   <TD className="text-right tnum">
-                    {totals.costPerLead === null ? '—' : fmtMoney(totals.costPerLead)}
+                    {totals.costPerLead === null ? '—' : money(totals.costPerLead)}
                   </TD>
                   <TD className="text-right tnum">{fmtNumber(totals.opportunities)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.customers)}</TD>
-                  <TD className="text-right tnum">{fmtMoney(totals.revenue)}</TD>
-                  <TD className="text-right tnum">{totals.cac === null ? '—' : fmtMoney(totals.cac)}</TD>
+                  <TD className="text-right tnum">{money(totals.revenue)}</TD>
+                  <TD className="text-right tnum">{totals.cac === null ? '—' : money(totals.cac)}</TD>
                   <TD className="text-right tnum">{totals.roas === null ? '—' : fmtRatio(totals.roas)}</TD>
                 </TR>
               </TBody>

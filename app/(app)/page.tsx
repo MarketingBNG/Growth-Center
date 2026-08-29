@@ -79,6 +79,11 @@ export default async function DashboardPage({
     ]);
 
   const { band, funnel: f } = dash;
+
+  // Money renders in the workspace's reporting currency, which the band already carries.
+  // Aliased rather than passed at every call site: nine of them, and one missed would
+  // print rupees with a dollar sign — the failure this whole change is about.
+  const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
   const ai = aiStatus();
   const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
 
@@ -154,12 +159,12 @@ export default async function DashboardPage({
                         <span className="font-medium">{c.name}</span>
                         <span className="ml-1.5 text-[11px] text-muted-foreground">{c.kind}</span>
                       </TD>
-                      <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
+                      <TD className="text-right tnum">{money(c.spend)}</TD>
                       <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
                       <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
-                      <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
+                      <TD className="text-right tnum">{money(c.revenue)}</TD>
                       <TD className="text-right tnum text-muted-foreground">
-                        {c.cac === null ? '—' : fmtMoney(c.cac)}
+                        {c.cac === null ? '—' : money(c.cac)}
                       </TD>
                       <TD className="text-right tnum">
                         {c.roas === null ? (
@@ -205,12 +210,12 @@ export default async function DashboardPage({
                           <span className="font-medium">{c.name}</span>
                           <p className="text-[11px] text-muted-foreground">{c.channelName}</p>
                         </TD>
-                        <TD className="text-right tnum">{fmtMoney(c.spend)}</TD>
+                        <TD className="text-right tnum">{money(c.spend)}</TD>
                         <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
                         <TD className="text-right tnum text-muted-foreground">
-                          {c.costPerLead === null ? '—' : fmtMoney(c.costPerLead)}
+                          {c.costPerLead === null ? '—' : money(c.costPerLead)}
                         </TD>
-                        <TD className="text-right tnum">{fmtMoney(c.revenue)}</TD>
+                        <TD className="text-right tnum">{money(c.revenue)}</TD>
                         <TD className="text-right tnum">
                           {c.roas === null ? (
                             <span className="text-muted-foreground">—</span>
@@ -247,8 +252,8 @@ export default async function DashboardPage({
             </CardHeader>
             <CardContent className="space-y-1.5">
               <Row label="Deals" value={fmtNumber(pipeline.count)} />
-              <Row label="Total value" value={fmtMoney(pipeline.total)} />
-              <Row label="Weighted" value={fmtMoney(pipeline.weighted)} hint="By each deal's probability" />
+              <Row label="Total value" value={money(pipeline.total)} />
+              <Row label="Weighted" value={money(pipeline.weighted)} hint="By each deal's probability" />
               <Link
                 href="/pipeline"
                 className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"

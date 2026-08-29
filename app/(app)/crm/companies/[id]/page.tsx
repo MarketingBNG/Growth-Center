@@ -9,6 +9,8 @@ import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getCompany } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
 import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
+import { convert } from '@/lib/currency';
+import { currencySettings } from '@/lib/settings';
 
 export const metadata = { title: 'Company · Growth Center' };
 
@@ -17,7 +19,14 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   const company = await getCompany((await params).id);
   if (!company) notFound();
 
-  const revenue = company.customer?.revenue.reduce((t, r) => t + Number(r.amount), 0) ?? 0;
+  // The individual entries below are shown in the currency each was billed in; this
+  // total adds them up, so it has to convert first or it is rupees plus dollars.
+  const fx = await currencySettings();
+  const revenue =
+    company.customer?.revenue.reduce(
+      (t, r) => t + (convert(Number(r.amount), r.currency, fx) ?? 0),
+      0,
+    ) ?? 0;
 
   return (
     <>
@@ -42,7 +51,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         {revenue > 0 ? (
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Revenue</p>
-            <p className="text-lg font-semibold tnum">{fmtMoney(revenue)}</p>
+            <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
           </div>
         ) : null}
       </div>
@@ -95,7 +104,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                       <Badge tone={o.stage.isWon ? 'success' : o.stage.isLost ? 'danger' : 'info'}>
                         {o.stage.name}
                       </Badge>
-                      <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value))}</span>
+                      <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value), false, o.currency)}</span>
                     </span>
                   </Link>
                 ))
@@ -159,7 +168,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 {company.customer.revenue.map((r) => (
                   <div key={r.id} className="flex justify-between text-sm">
                     <span className="text-muted-foreground">{fmtDate(r.date)}</span>
-                    <span className="tnum">{fmtMoney(Number(r.amount))}</span>
+                    <span className="tnum">{fmtMoney(Number(r.amount), false, r.currency)}</span>
                   </div>
                 ))}
               </CardContent>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { searchTrend, seoOverview } from '@/lib/seo';
+import { currencySettings } from '@/lib/settings';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
 import { TrendChart } from '@/components/charts/TrendChart';
@@ -23,7 +24,12 @@ export default async function SeoPage() {
     );
   }
 
-  const [data, providers, search] = await Promise.all([seoOverview(), cards(), searchTrend()]);
+  const [data, providers, search, fx] = await Promise.all([
+    seoOverview(),
+    cards(),
+    searchTrend(),
+    currencySettings(),
+  ]);
   const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
   if (!data) {
@@ -177,7 +183,7 @@ export default async function SeoPage() {
                   </TD>
                   <TD className="text-right tnum text-muted-foreground">{fmtNumber(k.searchVolume)}</TD>
                   <TD className="text-right tnum text-muted-foreground">{k.difficulty ?? '—'}</TD>
-                  <TD className="text-right tnum text-muted-foreground">{k.cpc === null ? '—' : fmtMoney(k.cpc, true)}</TD>
+                  <TD className="text-right tnum text-muted-foreground">{k.cpc === null ? '—' : fmtMoney(k.cpc, true, fx.reporting)}</TD>
                   <TD className="text-muted-foreground">{k.intent ?? '—'}</TD>
                   <TD className="text-right text-muted-foreground">{fmtDate(k.lastChecked)}</TD>
                 </TR>

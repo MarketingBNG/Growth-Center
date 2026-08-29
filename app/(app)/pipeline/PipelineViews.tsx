@@ -44,7 +44,15 @@ export type Column = {
   cards: Deal[];
 };
 
-export function PipelineViews({ columns }: { columns: Column[] }) {
+export function PipelineViews({
+  columns,
+  currency,
+}: {
+  columns: Column[];
+  /** Reporting currency. Card values arrive already converted into it, because the board
+   *  totals each column and a column cannot mix units. */
+  currency?: string;
+}) {
   const [view, setView] = useState<'board' | 'table'>('board');
 
   return (
@@ -66,12 +74,16 @@ export function PipelineViews({ columns }: { columns: Column[] }) {
         </Button>
       </div>
 
-      {view === 'board' ? <Board columns={columns} /> : <DealTable columns={columns} />}
+      {view === 'board' ? (
+        <Board columns={columns} currency={currency} />
+      ) : (
+        <DealTable columns={columns} currency={currency} />
+      )}
     </>
   );
 }
 
-function Board({ columns }: { columns: Column[] }) {
+function Board({ columns, currency }: { columns: Column[]; currency?: string }) {
   const router = useRouter();
   // Local copy so a dropped card moves immediately; the server is the authority and
   // router.refresh() reconciles, but a card that visibly snaps back on every drop
@@ -149,7 +161,7 @@ function Board({ columns }: { columns: Column[] }) {
                   {col.stage.isLost ? <Badge tone="danger">lost</Badge> : null}
                 </div>
                 <p className="shrink-0 text-[11.5px] text-muted-foreground tnum">
-                  {sum > 0 ? fmtMoney(sum) : col.cards.length}
+                  {sum > 0 ? fmtMoney(sum, false, currency) : col.cards.length}
                 </p>
               </div>
 
@@ -185,7 +197,7 @@ function Board({ columns }: { columns: Column[] }) {
                         </p>
                       ) : null}
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-bold tnum">{fmtMoney(deal.value)}</span>
+                        <span className="text-[13px] font-bold tnum">{fmtMoney(deal.value, false, currency)}</span>
                         <span className="flex shrink-0 items-center gap-1.5">
                           <SourceBadge source={deal.source ?? DEMO_SOURCE} />
                           <span className="rounded-full bg-track px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground tnum">
@@ -212,7 +224,7 @@ function Board({ columns }: { columns: Column[] }) {
   );
 }
 
-function DealTable({ columns }: { columns: Column[] }) {
+function DealTable({ columns, currency }: { columns: Column[]; currency?: string }) {
   const rows = columns.flatMap((c) => c.cards.map((d) => ({ ...d, stageName: c.stage.name })));
 
   if (rows.length === 0) {
@@ -256,7 +268,7 @@ function DealTable({ columns }: { columns: Column[] }) {
                 <TD>
                   <Badge tone="info">{d.stageName}</Badge>
                 </TD>
-                <TD className="text-right tnum">{fmtMoney(d.value)}</TD>
+                <TD className="text-right tnum">{fmtMoney(d.value, false, currency)}</TD>
                 <TD className="text-right text-muted-foreground tnum">{d.probability}%</TD>
                 <TD className="text-muted-foreground">
                   {d.ownerEmail ? d.ownerEmail.split('@')[0] : '—'}

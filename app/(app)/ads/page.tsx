@@ -11,6 +11,7 @@ import { provenance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { cards } from '@/lib/integrations/service';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/format';
+import { currencySettings } from '@/lib/settings';
 import { SourceBadge, SourceLine } from '@/components/patterns/source-badge';
 
 export const metadata = { title: 'Paid Ads · Growth Center' };
@@ -47,6 +48,13 @@ export default async function AdsPage({
   const rows = all.filter((r) => r.channelKind === 'paid' || r.channelKind === 'social');
   const active = rows.filter((r) => r.spend > 0);
   const totals = campaignTotals(active);
+
+  // No metrics band on this page, so the reporting currency is read directly. Spend here
+  // is billed in the ad account's currency and converted upstream; the symbol has to
+  // match what the figure now is.
+  const fx = await currencySettings();
+  const money = (n: number | null | undefined) => fmtMoney(n, false, fx.reporting);
+
 
   const adProviders = providers.filter((p) => p.category === 'ads' || p.category === 'social');
   const live = adProviders.filter((p) => p.state === 'connected' || p.state === 'syncing');
@@ -107,7 +115,7 @@ export default async function AdsPage({
       ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Spend" value={fmtMoney(totals.spend)} />
+        <Stat label="Spend" value={money(totals.spend)} />
         <Stat label="Impressions" value={fmtNumber(totals.impressions)} />
         <Stat
           label="Clicks"
@@ -116,7 +124,7 @@ export default async function AdsPage({
         />
         <Stat
           label="Cost per lead"
-          value={totals.costPerLead === null ? '—' : fmtMoney(totals.costPerLead)}
+          value={totals.costPerLead === null ? '—' : money(totals.costPerLead)}
           sub={`${fmtNumber(totals.leads)} leads`}
         />
         <Stat label="ROAS" value={totals.roas === null ? '—' : fmtRatio(totals.roas)} />
@@ -161,7 +169,7 @@ export default async function AdsPage({
                       <SourceBadge source={r.source} className="ml-1.5" />
                     </TD>
                     <TD className="text-muted-foreground">{r.channelName}</TD>
-                    <TD className="text-right tnum">{fmtMoney(r.spend)}</TD>
+                    <TD className="text-right tnum">{money(r.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
                       {fmtNumber(r.impressions)}
                     </TD>
@@ -171,7 +179,7 @@ export default async function AdsPage({
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(r.leads)}</TD>
                     <TD className="text-right tnum">
-                      {r.costPerLead === null ? '—' : fmtMoney(r.costPerLead)}
+                      {r.costPerLead === null ? '—' : money(r.costPerLead)}
                     </TD>
                     <TD className="text-right tnum">{r.roas === null ? '—' : fmtRatio(r.roas)}</TD>
                   </TR>

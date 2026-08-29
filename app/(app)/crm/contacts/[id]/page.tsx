@@ -92,7 +92,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <span>{o.name}</span>
                     <span className="flex items-center gap-2">
                       <Badge tone="info">{o.stage.name}</Badge>
-                      <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value))}</span>
+                      <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value), false, o.currency)}</span>
                     </span>
                   </Link>
                 ))}

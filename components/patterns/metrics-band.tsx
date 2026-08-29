@@ -23,6 +23,8 @@ export type MetricsBandProps = {
   };
   weekday?: { data: WeekdayPoint[]; caption?: string };
   gauge?: { title: string; value: number | null; note?: string; target?: number | null };
+  /** Reporting currency for the trend's money axis. */
+  currency?: string;
   defaultOpen?: boolean;
 };
 
@@ -38,6 +40,7 @@ export function MetricsBand({
   trend,
   weekday,
   gauge,
+  currency,
   defaultOpen = true,
 }: MetricsBandProps) {
   const pathname = usePathname();
@@ -96,6 +99,7 @@ export function MetricsBand({
               headlineNote={trend.note}
               data={trend.data}
               series={trend.series}
+              currency={currency}
             />
 
             {weekday || gauge ? (

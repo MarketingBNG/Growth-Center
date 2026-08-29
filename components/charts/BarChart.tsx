@@ -14,14 +14,17 @@ export function BarChart({
   data,
   kind = 'number',
   height,
+  currency,
 }: {
   title: string;
   subtitle?: string;
   data: BarDatum[];
   kind?: 'number' | 'money';
+  /** Reporting currency for a `money` chart, passed down from the server. */
+  currency?: string;
   height?: number;
 }) {
-  const fmt = (v: number) => (kind === 'money' ? fmtMoney(v) : fmtCompact(v));
+  const fmt = (v: number) => (kind === 'money' ? fmtMoney(v, false, currency) : fmtCompact(v));
   const h = height ?? Math.max(140, data.length * 34 + 24);
 
   return (

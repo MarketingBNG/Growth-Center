@@ -34,10 +34,15 @@ export type CurrencySettings = {
 };
 
 export const defaultCurrencySettings = (): CurrencySettings => ({
-  reporting: 'USD',
+  // The business runs from India and its ad spend is billed in rupees; the dollar deals
+  // are the ones being converted, not the other way round.
+  reporting: 'INR',
   // A starting point only. Live mode replaces it on the first refresh; a stale constant
-  // is exactly what a fixed rate becomes, and this one was already 9% out.
-  rates: { USD: 1, INR: 95.4 },
+  // is exactly what a fixed rate becomes, and the last one was already 9% out.
+  //
+  // Quoted as units per one reporting unit, so with INR reporting this is dollars per
+  // rupee — the reciprocal of the familiar 95.4 rupees to the dollar.
+  rates: { INR: 1, USD: 1 / 95.4 },
   mode: 'live',
   fetchedAt: null,
   source: null,
@@ -98,6 +103,15 @@ export const RATE_STALE_HOURS = 36;
 
 export const symbolOf = (code: string): string =>
   CURRENCIES.find((c) => c.code === code)?.symbol ?? `${code} `;
+
+/**
+ * The rate the other way round, for display.
+ *
+ * Rates are stored as units-per-reporting-unit because that is what the arithmetic wants,
+ * but "0.0105 dollars per rupee" is not how anyone says it. The settings form shows both.
+ */
+export const inverseRate = (rate: number): number | null =>
+  Number.isFinite(rate) && rate > 0 ? 1 / rate : null;
 
 /**
  * An amount in `from`, expressed in the reporting currency.
