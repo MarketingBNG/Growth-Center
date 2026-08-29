@@ -4,6 +4,7 @@ import { dispatch } from './events.ts';
 import { companyDomainFromEmail, normalizeCompanyName, normalizeEmail } from './dedupe.ts';
 import type { ListQuery } from './api.ts';
 import { LEAD_STATUSES, SOURCE_TYPES } from './enums.ts';
+import { channelSlugFor } from './integrations/crm-mapping.ts';
 
 
 export const leadInput = z.object({
@@ -201,6 +202,15 @@ export async function resolveCampaign(input: {
   return {};
 }
 
+/** The channel a source type belongs to, resolved to an id. Null when the source has no
+ *  channel of its own — naming one would be invented attribution. */
+async function channelIdForSource(sourceType: LeadInput['sourceType']): Promise<string | null> {
+  const slug = channelSlugFor(sourceType);
+  if (!slug) return null;
+  const channel = await db().channel.findUnique({ where: { slug }, select: { id: true } });
+  return channel?.id ?? null;
+}
+
 export async function createLead(
   input: LeadInput,
   actorEmail: string | null,
@@ -225,13 +235,20 @@ export async function createLead(
   // form, the UI and an import are all credited the same way.
   const attribution = await resolveCampaign(input);
 
+  // Falling back to the channel the source type implies, which is what the CRM import
+  // does. Without it a website form submission — the one path that is unambiguously the
+  // site's own — arrived with no channel unless it happened to carry a utm_campaign that
+  // matched a stored campaign by name.
+  const channelId =
+    attribution.channelId ?? input.channelId ?? (await channelIdForSource(input.sourceType));
+
   const lead = await db().lead.create({
     data: {
       ...input,
       email: normalizeEmail(input.email),
       ownerEmail: input.ownerEmail ?? null,
       campaignId: attribution.campaignId ?? input.campaignId ?? null,
-      channelId: attribution.channelId ?? input.channelId ?? null,
+      channelId,
     },
     select: { id: true },
   });
@@ -270,22 +287,30 @@ async function linkToCrm(leadId: string, input: LeadInput) {
   if (domain) {
     const company = await db().company.upsert({
       where: { domain },
-      create: { name: input.companyName?.trim() || domain, domain },
+      create: {
+        name: input.companyName?.trim() || domain,
+        nameKey: normalizeCompanyName(input.companyName?.trim() || domain),
+        domain,
+      },
       update: {},
       select: { id: true },
     });
     companyId = company.id;
   } else if (input.companyName) {
-    const normalized = normalizeCompanyName(input.companyName);
-    const existing = normalized
-      ? await db().company.findFirst({
-          where: { name: { equals: input.companyName.trim(), mode: 'insensitive' } },
-          select: { id: true },
-        })
+    // Matched on the normalised form, which is what normalizeCompanyName is for. The
+    // lookup used to compare the raw name case-insensitively and discard the normalised
+    // value, so "Acme, Inc." and "Acme Inc" became two accounts — the exact duplicate
+    // the function exists to prevent.
+    const name = input.companyName.trim();
+    const nameKey = normalizeCompanyName(name);
+
+    const existing = nameKey
+      ? await db().company.findFirst({ where: { nameKey }, select: { id: true } })
       : null;
+
     companyId =
       existing?.id ??
-      (await db().company.create({ data: { name: input.companyName.trim() }, select: { id: true } })).id;
+      (await db().company.create({ data: { name, nameKey }, select: { id: true } })).id;
   }
 
   let contactId: string | null = null;
@@ -358,23 +383,4 @@ export async function setLeadOwner(id: string, ownerEmail: string | null, actorE
     },
   });
   return { ok: true };
-}
-
-/**
- * Every owner that actually appears on a lead, however they got there.
- *
- * The Owner filter used to be built from the app's user roster alone, so an owner the CRM
- * assigned — "Prateek Sharma", who holds 221 of August's leads and has no account here —
- * could not be selected at all. The filter has to offer what the data contains, not what
- * the roster does.
- */
-export async function leadOwners(): Promise<string[]> {
-  const rows = await db().lead.groupBy({
-    by: ['ownerEmail'],
-    where: { ownerEmail: { not: null } },
-    _count: { _all: true },
-    orderBy: { _count: { ownerEmail: 'desc' } },
-    take: 100,
-  });
-  return rows.map((r) => r.ownerEmail as string);
 }

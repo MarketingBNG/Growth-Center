@@ -164,6 +164,9 @@ model Campaign {
   /// every ROAS/CAC figure uses — a budget is an intention, not a cost.
   budget Decimal? @db.Decimal(14, 2)
 
+  /// The currency the budget is stated in — the ad account's, not the workspace's.
+  currency String @default("USD")
+
   /// The provider's own id for this campaign, when it came from one. Lets a sync
   /// update in place instead of duplicating.
   externalId String?
@@ -225,6 +228,11 @@ model MarketingSpend {
 model Company {
   id       String  @id @default(cuid())
   name     String
+
+  /// `name` reduced by normalizeCompanyName, so "Acme, Inc." and "acme inc" match. Not
+  /// unique: two genuinely different accounts can normalise alike, and refusing the
+  /// second would lose it.
+  nameKey  String?
   domain   String? @unique
   industry String?
   size     String?
@@ -259,6 +267,7 @@ model Company {
 
   @@unique([source, externalId])
   @@index([name])
+  @@index([nameKey])
   @@map("company")
 }
 

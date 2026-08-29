@@ -1,10 +1,24 @@
 // Lead/contact matching rules. Pure and framework-free so tools/dedupe.test.ts can
 // exercise them without a database.
 
+// A consumer mailbox, not a company. An address here says nothing about who someone
+// works for, so no Company is created from it — otherwise every Gmail enquirer is filed
+// under an account called "gmail.com" alongside every other one.
+//
+// The regional variants matter more than the list's original US-centric set suggested:
+// this business is Indian and its leads use yahoo.in, live.in, outlook.in, zohomail.in
+// and rediff.com in numbers. Each was creating an account named after a mail provider
+// and merging unrelated people into it.
 const FREE_EMAIL_DOMAINS = new Set([
-  'gmail.com', 'googlemail.com', 'yahoo.com', 'yahoo.co.in', 'hotmail.com', 'outlook.com',
-  'live.com', 'aol.com', 'icloud.com', 'me.com', 'proton.me', 'protonmail.com', 'gmx.com',
-  'mail.com', 'yandex.com', 'zoho.com', 'rediffmail.com',
+  'gmail.com', 'googlemail.com', 'ymail.com', 'rocketmail.com',
+  'yahoo.com', 'yahoo.co.in', 'yahoo.in', 'yahoo.co.uk', 'yahoo.com.au', 'myyahoo.com',
+  'hotmail.com', 'hotmail.co.uk', 'hotmail.in',
+  'outlook.com', 'outlook.in', 'live.com', 'live.in', 'live.co.uk', 'msn.com',
+  'aol.com', 'icloud.com', 'me.com', 'mac.com',
+  'proton.me', 'protonmail.com', 'pm.me',
+  'gmx.com', 'gmx.net', 'mail.com', 'email.com', 'yandex.com', 'yandex.ru',
+  'zoho.com', 'zohomail.com', 'zohomail.in',
+  'rediffmail.com', 'rediff.com', 'sify.com', 'indiatimes.com',
 ]);
 
 /**

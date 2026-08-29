@@ -3,6 +3,7 @@ import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { channelSlugFor, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
+import { normalizeCompanyName } from '../dedupe.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
@@ -342,6 +343,9 @@ async function writeCampaignSpend(
     const extra = d
       ? {
           status: str(d.status) ?? undefined,
+          // The budget is quoted in the ad account's currency, which is not necessarily
+          // the workspace's; pacing divides it by spend and both must agree.
+          currency: str(d.currency) ?? undefined,
           startDate: date(d.startDate) ?? undefined,
           endDate: date(d.endDate) ?? undefined,
           budget: typeof d.budget === 'number' ? d.budget : undefined,
@@ -690,6 +694,15 @@ const STAGE_SELECT = {
  * `casts` carries the Postgres type for any column a text placeholder cannot satisfy on
  * its own — the enum columns and the numerics.
  */
+
+/** A point's provider payload, and a trimmed string from it — every materialiser reads
+ *  entityMeta the same defensive way, so they read it through these. */
+const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
+const str = (v: unknown): string | null => {
+  const t = v == null ? '' : String(v).trim();
+  return t === '' ? null : t;
+};
+
 /**
  * When the CRM says the record was created, for the row's own createdAt.
  *
@@ -699,14 +712,33 @@ const STAGE_SELECT = {
  * against nothing. The provider already dates each point from the CRM's Created_Time;
  * this is only carrying it through to the table the pages read.
  */
-const createdAtOf = (p: MetricPoint): Date => p.date;
+/**
+ * An imported address, lower-cased.
+ *
+ * The CRM stores whatever was typed — 1,411 leads here begin with a capital — and the
+ * duplicate check matches on exact equality against an index, so a returning enquirer
+ * whose stored address reads `Sam@gmail.com` was never matched to `sam@gmail.com` and
+ * arrived as a second lead.
+ *
+ * Case only. `normalizeEmail` also strips gmail dots and +tags, which is right for
+ * comparison and wrong for storage: the address on the record has to stay the one you
+ * could actually write to.
+ */
+const importedEmail = (value: unknown): string | null => {
+  const email = str(value);
+  return email ? email.toLowerCase() : null;
+};
 
-/** A point's provider payload, and a trimmed string from it — every materialiser reads
- *  entityMeta the same defensive way, so they read it through these. */
-const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
-const str = (v: unknown): string | null => {
-  const t = v == null ? '' : String(v).trim();
-  return t === '' ? null : t;
+const createdAtOf = (p: MetricPoint): Date => {
+  // The provider's own timestamp when it sent one. A point's `date` is a day — metric
+  // rows are keyed on it — so using it here put every record on exactly midnight, losing
+  // the order of arrivals within a day and any measure that subtracts from them.
+  const exact = str(meta(p).createdAt);
+  if (exact) {
+    const d = new Date(exact);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  return p.date;
 };
 
 async function bulkUpsert(
@@ -836,8 +868,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     const rows = accountPoints.map((p) => {
       const m = meta(p);
       const externalId = p.entityId as string;
+      const name = str(m.name) ?? p.entityLabel ?? externalId;
       return [
-        str(m.name) ?? p.entityLabel ?? externalId,
+        name,
+        normalizeCompanyName(name),
         str(m.website),
         str(m.phone),
         str(m.industry),
@@ -852,7 +886,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     });
     const detailed = await bulkUpsert(
       'company',
-      ['name', 'website', 'phone', 'industry', 'country', 'size', 'notes', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+      ['name', 'nameKey', 'website', 'phone', 'industry', 'country', 'size', 'notes', 'ownerEmail', 'createdAt', 'source', 'externalId'],
       rows,
       '"source", "externalId"',
       { createdAt: 'timestamp(3)' },
@@ -869,8 +903,18 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
   }
 
   if (accounts.size) {
-    const companyRows = [...accounts].map(([externalId, name]) => [name, providerId, externalId]);
-    const companies = await bulkUpsert('company', ['name', 'source', 'externalId'], companyRows, '"source", "externalId"');
+    const companyRows = [...accounts].map(([externalId, name]) => [
+      name,
+      normalizeCompanyName(name),
+      providerId,
+      externalId,
+    ]);
+    const companies = await bulkUpsert(
+      'company',
+      ['name', 'nameKey', 'source', 'externalId'],
+      companyRows,
+      '"source", "externalId"',
+    );
     for (const r of companies) if (r.externalId) companyIdByExternal.set(r.externalId, r.id);
     written += companies.length;
   }
@@ -882,7 +926,12 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     // address already exists would abort the whole batch on the wrong index. So the
     // colliding addresses are resolved up front — rows already here are adopted (stamped
     // with this provider's id) one by one, and everything else goes out in batches.
-    const emails = [...new Set(contactPoints.map((p) => str(meta(p).email)).filter((e): e is string => !!e))];
+    // Lower-cased, matching what is written: the stored address is now case-normalised,
+    // so looking a clash up in the CRM's own casing would miss it — and the row would go
+    // out in a batch that then aborts on the unique index, taking the whole chunk with it.
+    const emails = [
+      ...new Set(contactPoints.map((p) => importedEmail(meta(p).email)).filter((e): e is string => !!e)),
+    ];
     const existing = emails.length
       ? await db().contact.findMany({
           where: { email: { in: emails } },
@@ -902,7 +951,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     for (const p of contactPoints) {
       const m = meta(p);
       const externalId = p.entityId as string;
-      let email = str(m.email);
+      let email = importedEmail(m.email);
 
       if (email && claimedInBatch.has(email)) {
         email = null;
@@ -991,7 +1040,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     return [
       name.firstName,
       name.lastName,
-      str(m.email),
+      importedEmail(m.email),
       str(m.phone),
       str(m.companyName),
       str(m.title),
@@ -1222,7 +1271,10 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
     const wanted = prospectPoints
       .map((p) => {
         const sequenceId = sequenceIdByExternal.get(str(meta(p).sequenceExternalId) ?? '');
-        const email = str(meta(p).email);
+        // Lower-cased for the same reason contacts are, and it has to match: replies and
+        // bounces arrive from a separate endpoint keyed on the address, so a prospect
+        // stored in the CRM's casing would never be matched to its own engagement.
+        const email = importedEmail(meta(p).email);
         return sequenceId && email ? { p, sequenceId, email } : null;
       })
       .filter((v): v is { p: MetricPoint; sequenceId: string; email: string } => !!v);
@@ -1313,7 +1365,7 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
   for (const p of engagementPoints) {
     const m = meta(p);
     const sequenceId = sequenceIdByExternal.get(str(m.sequenceExternalId) ?? '');
-    const email = str(m.email);
+    const email = importedEmail(m.email);
     if (!sequenceId || !email) continue;
 
     const status = prospectStatusOf(null, {

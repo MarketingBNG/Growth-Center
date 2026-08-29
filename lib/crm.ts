@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { db } from './prisma.ts';
-import { normalizeDomain, normalizeEmail } from './dedupe.ts';
+import { normalizeCompanyName, normalizeDomain, normalizeEmail } from './dedupe.ts';
 import type { ListQuery } from './api.ts';
 
 export const companyInput = z.object({
@@ -169,7 +169,9 @@ export async function createCompany(input: CompanyInput) {
     if (existing) return { created: false as const, id: existing.id };
   }
   const company = await db().company.create({
-    data: { ...input, domain },
+    // The matching key, kept in step with the name on every write — a company created
+    // here and one created from a lead have to be findable as the same account.
+    data: { ...input, domain, nameKey: normalizeCompanyName(input.name) },
     select: { id: true },
   });
   return { created: true as const, id: company.id };
