@@ -1854,6 +1854,31 @@ async function linkConvertedLeads(providerId: string, points: MetricPoint[]): Pr
  * behind as a sale that never happened.
  */
 async function writeRevenueFromWonDeals(): Promise<number> {
+  // Customers whose deal stopped qualifying, removed before the rest runs.
+  //
+  // The claim above that this is "idempotent in both directions" held for revenue and not
+  // for customers: the insert below only ever adds or lowers a date, so a customer derived
+  // from a deal that is no longer won — or that lost its close date — was left standing
+  // with whatever wonAt it was first given.
+  //
+  // It went wrong exactly that way. An earlier import stamped won deals that had no
+  // Closing_Date with the date of the import; fixing that left those deals with a null
+  // closedAt, which drops them out of the SELECT entirely, so 490 customer rows kept a
+  // wonAt of the day the import ran. The CRM page then read 490 new customers on a day
+  // that had four, and showed it as a 48,900% rise.
+  //
+  // Only rows this materialiser owns are touched — a customer with no opportunityId was
+  // made by hand and is nobody's derived row.
+  await db().$executeRawUnsafe(`
+    DELETE FROM customer c
+    WHERE c."opportunityId" IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM opportunity o
+        JOIN pipeline_stage s ON s.id = o."stageId"
+        WHERE o.id = c."opportunityId" AND s."isWon" AND o."closedAt" IS NOT NULL
+      )
+  `);
+
   // One customer per company — the schema allows only one — dated by that company's
   // earliest win, so "customer since" means what it says.
   await db().$executeRawUnsafe(`

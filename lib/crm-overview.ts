@@ -24,6 +24,11 @@ export const LEAD_STATES = [
     match: (v: string) => v.includes('reachable') || v.includes('cnr'),
   },
   { key: 'dead', label: 'Dead', hint: 'Gone nowhere', match: (v: string) => v.includes('dead') || v.includes('lost') },
+  // 2,910 leads sit here, and 41 of the 45 that arrived today. Without a column of its
+  // own "Untouched Lead" fell into Other, so the panel reported nine tenths of a day's
+  // leads as unclassified when the CRM had classified them precisely: nobody has picked
+  // them up yet. That is the most actionable state on the board, not the leftover one.
+  { key: 'untouched', label: 'Untouched', hint: 'Not picked up yet', match: (v: string) => v.includes('untouched') || v.includes('not contacted') },
 ] as const;
 
 export type LeadStateKey = (typeof LEAD_STATES)[number]['key'] | 'other';
@@ -43,6 +48,7 @@ const emptyCounts = (): Record<LeadStateKey, number> => ({
   followup: 0,
   cnr: 0,
   dead: 0,
+  untouched: 0,
   other: 0,
 });
 
@@ -84,7 +90,20 @@ export async function crmOverview(range: Range) {
   }
 
   const fx = await currencySettings();
-  const revenue = wonRows.reduce((t, o) => t + (convert(Number(o.value), o.currency, fx) ?? 0), 0);
+
+  // A deal in a currency with no rate is left out rather than counted as though it were
+  // already in the reporting one — the same rule channel spend follows, and said out loud
+  // for the same reason: a total that quietly omits part of the money looks exactly like
+  // a total that does not.
+  let unrated = 0;
+  const revenue = wonRows.reduce((t, o) => {
+    const converted = convert(Number(o.value), o.currency, fx);
+    if (converted === null) unrated++;
+    return t + (converted ?? 0);
+  }, 0);
+  if (unrated) {
+    console.warn(`[crm] ${unrated} won deals have a currency with no exchange rate and are missing from revenue.`);
+  }
 
   return {
     leads: leadTotal,

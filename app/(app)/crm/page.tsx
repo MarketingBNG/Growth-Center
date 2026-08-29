@@ -44,6 +44,25 @@ export default async function CrmPage({
     );
   }
 
+  // Switching tab keeps the rest of the URL. These were plain links to /crm and
+  // /crm?tab=contacts, so moving between Companies and Contacts silently discarded the
+  // search term and the date range — you would filter a view, switch tab to check
+  // something, and come back to an unfiltered page with the box empty.
+  //
+  // `page` is the one thing deliberately dropped: the tabs hold different numbers of
+  // records, and arriving on page 5 of a shorter list shows nothing at all.
+  const tabHref = (next: 'companies' | 'contacts') => {
+    const carried = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) {
+      if (k === 'tab' || k === 'page') continue;
+      const value = Array.isArray(v) ? v[0] : v;
+      if (value) carried.set(k, value);
+    }
+    if (next === 'contacts') carried.set('tab', 'contacts');
+    const query = carried.toString();
+    return query ? `/crm?${query}` : '/crm';
+  };
+
   const q = pageQuery(params);
   const { value, days, bucket } = rangeParam(params);
 
@@ -87,10 +106,10 @@ export default async function CrmPage({
 
       <div className="flex items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">
-          <Link href="/crm">Companies</Link>
+          <Link href={tabHref('companies')}>Companies</Link>
         </Button>
         <Button asChild variant={tab === 'contacts' ? 'secondary' : 'ghost'} size="sm">
-          <Link href="/crm?tab=contacts">Contacts</Link>
+          <Link href={tabHref('contacts')}>Contacts</Link>
         </Button>
       </div>
 

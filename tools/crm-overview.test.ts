@@ -20,8 +20,14 @@ test('"Not Qualified" is not a qualified lead', () => {
   assert.equal(stateOf('Not Qualified'), 'other');
 });
 
+test('a lead nobody has picked up is its own state, not the leftover bucket', () => {
+  // 2,910 leads carry this, and it used to land in Other — which reported the CRM's
+  // clearest signal, that nobody has touched these yet, as "unclassified".
+  assert.equal(stateOf('Untouched Lead'), 'untouched');
+  assert.equal(stateOf('Not Contacted'), 'untouched');
+});
+
 test('an unrecognised or missing status is counted, not dropped', () => {
-  assert.equal(stateOf('Untouched Lead'), 'other');
   assert.equal(stateOf('Looking For Job'), 'other');
   assert.equal(stateOf(null), 'other');
   assert.equal(stateOf(''), 'other');
