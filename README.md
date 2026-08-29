@@ -63,6 +63,30 @@ The dev server runs on port 3000. `bng-command-center` uses the same port, so ru
 one at a time — Next silently falls back to another port if 3000 is taken, which makes
 `NEXTAUTH_URL` and the Google redirect URI wrong.
 
+## Deploying, and migrations
+
+`npm run build` does **not** run migrations. Apply them deliberately, from a machine that
+can reach the database directly:
+
+```
+npm run db:deploy     # prisma migrate deploy
+```
+
+then push, and let Vercel build.
+
+This is not a preference. `prisma migrate deploy` in the build script failed both ways
+available to it:
+
+- Through the **pooled** host, migrate's session-level advisory lock is stranded on a
+  pgbouncer connection that outlives the process. Every later deploy then fails with
+  P1002, waiting ten seconds on an idle connection that will never release it, and someone
+  has to kill the backend by hand.
+- Through the **direct** host, Vercel's build sandbox cannot open 5432 at all — P1001 in
+  under half a second, while the same endpoint accepts connections fine from a laptop.
+
+A build that reaches for the database is also the wrong shape: builds are cached, retried
+and run concurrently, and none of those are things a schema change should be subject to.
+
 ## Layout
 
 ```
