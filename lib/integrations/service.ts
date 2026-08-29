@@ -4,6 +4,7 @@ import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { channelSlugFor, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { normalizeCompanyName } from '../dedupe.ts';
+import { currencySettings } from '../settings.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
@@ -1094,12 +1095,25 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     if (pipeline?.stages.length) {
       const dealRows: unknown[][] = [];
 
+      // What a deal with no currency of its own is counted in.
+      //
+      // Not USD. The amount has to be stored in some currency, and tagging an unknown one
+      // as USD is what put Meta's rupee spend on the page multiplied by the exchange rate.
+      // The workspace's own reporting currency is the one label that cannot do that: it
+      // converts by a factor of one, so an unknown amount is counted at face value rather
+      // than inflated by a rate it never earned.
+      const reporting = (await currencySettings()).reporting;
+      let currencyless = 0;
+
       for (const p of dealPoints) {
         const m = meta(p);
         const externalId = p.entityId as string;
         const sourceStage = str(m.stage);
         const stage = matchStage(pipeline.stages, sourceStage);
         if (!stage) continue;
+
+        const dealCurrency = str(m.currency) ?? reporting;
+        if (!str(m.currency)) currencyless++;
 
         const closing = str(m.closingDate);
         const closingDate = closing ? new Date(closing) : null;
@@ -1128,7 +1142,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           pipeline.id,
           stage.id,
           Number(m.amount) || 0,
-          str(m.currency) ?? 'USD',
+          dealCurrency,
           Number(m.probability) || stage.probability,
           stage.isLost ? str(m.lostReason) : null,
           validClosing,
@@ -1146,6 +1160,14 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           providerId,
           externalId,
         ]);
+      }
+
+      // Said out loud rather than absorbed: a silent default is the whole failure mode
+      // being avoided here, and a count in the log is what makes it findable.
+      if (currencyless) {
+        console.warn(
+          `[${providerId}] ${currencyless} deals had no currency and were counted as ${reporting}.`,
+        );
       }
 
       const dealsTouched = await bulkUpsert(

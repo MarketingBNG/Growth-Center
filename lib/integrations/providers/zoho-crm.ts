@@ -413,7 +413,10 @@ function toPoint(moduleName: Module, row: Row): MetricPoint | null {
     entityLabel: text(row.Deal_Name) ?? id,
     entityMeta: {
       amount: Number(row.Amount) || 0,
-      currency: text(row.Currency) ?? 'USD',
+      // Passed through as-is, null included. Defaulting a missing currency to USD is how
+      // Meta's spend came to be stored in dollars and rendered as rupees, inflated by the
+      // exchange rate; the caller decides what to do with an absence it can see.
+      currency: text(row.Currency),
       stage: text(row.Stage),
       probability: Number(row.Probability) || 0,
       closingDate: text(row.Closing_Date),

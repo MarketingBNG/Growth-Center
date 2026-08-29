@@ -270,8 +270,17 @@ export async function channelPerformance(range: Range) {
     if (!channelId) continue;
     const acc = spendByChannel.get(channelId) ?? { spend: 0, clicks: 0, impressions: 0 };
     // A currency with no rate is left out of the total rather than added as though it
-    // were already in the reporting one.
-    acc.spend += convert(num(row._sum.amount), row.currency, money) ?? 0;
+    // were already in the reporting one — but said out loud, because a total that quietly
+    // omits part of the spend understates CAC and overstates ROAS, and looks right doing
+    // it. Unreachable while the workspace only reports USD and INR, both of which carry
+    // rates; it stops being unreachable the day a third currency arrives.
+    const converted = convert(num(row._sum.amount), row.currency, money);
+    if (converted === null) {
+      console.warn(
+        `[metrics] ${row.currency} has no exchange rate, so ${num(row._sum.amount)} of spend is missing from the channel totals.`,
+      );
+    }
+    acc.spend += converted ?? 0;
     acc.clicks += row._sum.clicks ?? 0;
     acc.impressions += row._sum.impressions ?? 0;
     spendByChannel.set(channelId, acc);
