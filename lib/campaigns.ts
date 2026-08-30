@@ -1,5 +1,5 @@
 import { db } from './prisma.ts';
-import { cac, num, rate, roas } from './calc.ts';
+import { cac, costPer, num, rate, roas } from './calc.ts';
 import { convert } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import type { Range } from './metrics.ts';
@@ -118,7 +118,7 @@ export async function campaignPerformance(range: Range, channelId?: string) {
         revenue: revenueSum,
         ctr: rate(clicks, impressions),
         clickToLead: rate(leadCount, clicks),
-        costPerLead: leadCount ? amount / leadCount : null,
+        costPerLead: costPer(amount, leadCount),
         cac: cac(amount, customerCount),
         roas: roas(revenueSum, amount),
       };
@@ -149,7 +149,7 @@ export function campaignTotals(rows: CampaignRow[]) {
     ...t,
     ctr: rate(t.clicks, t.impressions),
     clickToLead: rate(t.leads, t.clicks),
-    costPerLead: t.leads ? t.spend / t.leads : null,
+    costPerLead: costPer(t.spend, t.leads),
     cac: cac(t.spend, t.customers),
     roas: roas(t.revenue, t.spend),
   };

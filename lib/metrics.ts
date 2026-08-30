@@ -542,7 +542,11 @@ export async function channelPerformance(range: Range) {
         customers,
         revenue,
         ctr: rate(spend.clicks, spend.impressions),
-        costPerLead: leads ? spend.spend / leads : null,
+        // costPer(), not spend/leads: untracked spend is unknown, never zero. Divided
+        // directly, every organic channel reported a cost per lead of exactly ₹0 — a
+        // claim that acquiring 3,968 Facebook leads was free, where the truth is that
+        // nothing measured what it cost.
+        costPerLead: costPer(spend.spend, leads),
         cac: cac(spend.spend, customers),
         roas: roas(revenue, spend.spend),
       };
