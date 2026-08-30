@@ -854,7 +854,11 @@ export async function leadsKpis(days: number) {
 
   const cards: Kpi[] = [
     { key: 'leads', label: 'New leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
-    { key: 'qualified', label: 'Qualified', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
+    // Semi-qualified rather than qualified. This CRM stamps `qualifiedAt` only when a lead
+    // converts — 1,028 leads carry one and 1,025 of those are converted — so a "Qualified"
+    // card here printed the Converted card's number beside it, twice, in every period.
+    // "Semi-Qualified Lead" is the stage this team actually works: 1,713 leads against 3.
+    { key: 'semiQualified', label: 'Semi-qualified', value: now.semiQualified, previous: before.semiQualified, format: 'number', higherIsBetter: true, hint: 'Reached at least semi-qualified — the stage this CRM actually works' },
     { key: 'converted', label: 'Converted', value: convNow, previous: convBefore, format: 'number', higherIsBetter: true, hint: 'Counted on the day the CRM converted them' },
     // Blended, and labelled as such. Spend is Meta's alone — the only paid channel
     // connected — while the lead count is every lead however it arrived, most of them
@@ -863,10 +867,18 @@ export async function leadsKpis(days: number) {
     // which it is not.
     { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over all leads, however they arrived' },
     { key: 'response', label: 'Median response', value: medianNow, previous: medianBefore, format: 'duration', higherIsBetter: false, hint: 'First outbound touch; untouched leads excluded' },
-    { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },
+    // Reads zero on this workspace and that is the truth, not a gap: the CRM assigns an
+    // owner on creation, so all 27,256 imported leads have one. The hint says so rather
+    // than leaving a permanent nought looking like a broken query.
+    { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false, hint: 'Leads with no owner. The CRM assigns one on creation, so only leads added here can appear.' },
   ];
 
-  return { cards: await comparableDeltas(cards, current, previous), current: now, weekday, qualificationRate: now.leadToQualified };
+  return {
+    cards: await comparableDeltas(cards, current, previous),
+    current: now,
+    weekday,
+    qualificationRate: now.leadToSemiQualified,
+  };
 }
 
 /** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */

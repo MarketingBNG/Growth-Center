@@ -33,6 +33,10 @@ export function RangePicker({ current }: { current: string }) {
   function set(value: string) {
     const next = new URLSearchParams(params.toString());
     next.set('range', value);
+    // The page number belongs to the old range's row count. Narrowing from 365 days to 7
+    // while on page 40 landed on an empty table with a working pager above it, the same
+    // reason FilterBar drops it.
+    next.delete('page');
     startTransition(() => router.replace(`?${next.toString()}`));
   }
 

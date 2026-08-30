@@ -83,16 +83,19 @@ export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<
       title: 'Leads created',
       subtitle: by(bucket),
       headline: fmtNumber(f.leads),
-      note: `${fmtNumber(f.qualified)} reached qualified`,
+      note: `${fmtNumber(f.semiQualified)} reached semi-qualified`,
       data: series,
       series: [{ key: 'leads', label: 'Leads', kind: 'number' }],
     },
     weekday: { data: weekday },
     gauge: {
-      title: 'Qualification rate',
+      // Semi-qualified, matching the card, and with no target. The 40% target was invented
+      // here, and measured against `qualified` — a status this CRM stamps only on
+      // conversion — it read 1% and still said "on track for 40%".
+      title: 'Semi-qualified rate',
       value: qualificationRate,
-      target: 40,
-      note: targetNote(qualificationRate, 40, 'qualified leads'),
+      target: null,
+      note: targetNote(qualificationRate, null, 'Share of leads that reached semi-qualified'),
     },
   };
 }

@@ -45,7 +45,16 @@ export type LeadFilters = z.infer<typeof leadFilters>;
 
 const SORTABLE = ['createdAt', 'updatedAt', 'status', 'score', 'firstName'] as const;
 
-export function leadWhere(filters: LeadFilters, q: ListQuery) {
+/**
+ * `window` is the range the picker resolved, applied only when the URL carries no
+ * explicit `from`/`to`. Without it the range picker sat above a table it did not filter:
+ * choosing "Last 7 days" moved the KPIs and the chart while the list below kept showing
+ * all 27,256 leads, and the pager said so.
+ *
+ * An explicit `from`/`to` still wins — the CRM page's owner links carry one, and the list
+ * it opens must match the number that was clicked.
+ */
+export function leadWhere(filters: LeadFilters, q: ListQuery, window?: { from: Date; to: Date }) {
   const where: Record<string, unknown> = {};
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
@@ -60,6 +69,8 @@ export function leadWhere(filters: LeadFilters, q: ListQuery) {
       ...(filters.from ? { gte: new Date(`${filters.from}T00:00:00Z`) } : {}),
       ...(filters.to ? { lte: new Date(`${filters.to}T23:59:59Z`) } : {}),
     };
+  } else if (window) {
+    where.createdAt = { gte: window.from, lte: window.to };
   }
 
   if (q.q) {
@@ -73,8 +84,12 @@ export function leadWhere(filters: LeadFilters, q: ListQuery) {
   return where;
 }
 
-export async function listLeads(filters: LeadFilters, q: ListQuery) {
-  const where = leadWhere(filters, q);
+export async function listLeads(
+  filters: LeadFilters,
+  q: ListQuery,
+  window?: { from: Date; to: Date },
+) {
+  const where = leadWhere(filters, q, window);
   const key = (SORTABLE as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
 
   const [rows, total] = await Promise.all([
