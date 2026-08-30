@@ -25,7 +25,13 @@ import { NewLeadButton } from './NewLeadButton';
 export const metadata = { title: 'Leads · Growth Center' };
 
 const filtersFor = (people: AppUser[], owners: string[]) => [
-  { name: 'status', label: 'Status', options: LEAD_STATUSES.map((s) => ({ value: s, label: s })) },
+  // Underscores stripped, as the Source filter beside it already did — the Status
+  // dropdown was the one control on the page reading "semi_qualified".
+  {
+    name: 'status',
+    label: 'Status',
+    options: LEAD_STATUSES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
+  },
   {
     name: 'sourceType',
     label: 'Source',

@@ -8,20 +8,21 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { LEAD_STATUSES } from '@/lib/enums';
-import type { AppUser } from '@/lib/users';
 
 export function LeadActions({
   leadId,
   status,
   ownerEmail,
   convertedOpportunityId,
-  people,
+  owners,
 }: {
   leadId: string;
   status: string;
   ownerEmail: string | null;
   convertedOpportunityId: string | null;
-  people: AppUser[];
+  /** Every address this dropdown may show, the lead's current owner included. Built by
+   *  the page from the roster AND the owners the CRM actually assigned — see below. */
+  owners: { value: string; label: string }[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -64,6 +65,11 @@ export function LeadActions({
     <div className="flex flex-wrap items-center gap-2">
       {error ? <span className="text-xs text-destructive">{error}</span> : null}
 
+      {/* Options come from the page, not from the workspace roster alone. Built from the
+          roster the dropdown offered only the two people with accounts here, so for
+          essentially all 27,256 CRM-owned leads the current owner was not among them —
+          and a select whose value matches no option renders the first one. This read
+          "Unassigned" beside a Details panel naming the real owner. */}
       <Select
         aria-label="Owner"
         className="w-auto"
@@ -72,9 +78,9 @@ export function LeadActions({
         onChange={(e) => patch({ ownerEmail: e.target.value || null })}
       >
         <option value="">Unassigned</option>
-        {people.map((a) => (
-          <option key={a.email} value={a.email}>
-            {a.name}
+        {owners.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
           </option>
         ))}
       </Select>
@@ -88,7 +94,7 @@ export function LeadActions({
       >
         {LEAD_STATUSES.map((s) => (
           <option key={s} value={s}>
-            {s}
+            {s.replaceAll('_', ' ')}
           </option>
         ))}
       </Select>

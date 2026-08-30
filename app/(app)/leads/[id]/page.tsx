@@ -7,7 +7,7 @@ import { LeadStatusBadge, PriorityBadge, SourceBadge } from '@/components/patter
 import { Timeline } from '@/components/patterns/timeline';
 import { getLead } from '@/lib/leads';
 import { hasDb } from '@/lib/prisma';
-import { listAssignable } from '@/lib/users';
+import { listAssignable, peopleOn, personOptions } from '@/lib/users';
 import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
 import { LeadActions } from './LeadActions';
 import { NoteBox } from './NoteBox';
@@ -17,8 +17,15 @@ export const metadata = { title: 'Lead · Growth Center' };
 export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
   if (!hasDb()) notFound();
   const lead = await getLead((await params).id);
-  const people = await listAssignable();
+  const [people, seen] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
   if (!lead) notFound();
+
+  // The lead's own owner is appended in case it fell outside peopleOn's top 100, so the
+  // dropdown can always show who this lead currently belongs to.
+  const owners = personOptions(
+    people,
+    lead.ownerEmail ? [lead.ownerEmail, ...seen] : seen,
+  );
 
   const name = [lead.firstName, lead.lastName].filter(Boolean).join(' ');
   const utms = [
@@ -53,7 +60,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           status={lead.status}
           ownerEmail={lead.ownerEmail}
           convertedOpportunityId={lead.opportunities[0]?.id ?? null}
-          people={people}
+          owners={owners}
         />
       </div>
 
