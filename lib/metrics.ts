@@ -140,6 +140,28 @@ async function sessions(range: Range): Promise<number> {
   return siteMetric('sessions', range);
 }
 
+/**
+ * The first day the sessions series has data for, or null if it has none.
+ *
+ * The funnel puts visitors above leads, but sessions arrive from GA4 and leads from the
+ * CRM, and the two do not begin on the same day — GA4 was connected on 28 July 2026 and
+ * the CRM holds years. Over any window reaching back further than GA4 does, the visitor
+ * count is not a smaller number than leads because the funnel leaked; it is a shorter
+ * series. Compared once here so the pages that draw the funnel can say so rather than
+ * printing a 251% visitor-to-lead rate.
+ *
+ * `comparableDeltas` reads the same row for the same reason, but only to blank a change
+ * chip. This is the funnel's own version of that question.
+ */
+export async function sessionsStart(): Promise<Date | null> {
+  const first = await db().metricSnapshot.findFirst({
+    where: { metricKey: 'sessions', source: await excludeDemo('sessions') },
+    orderBy: { date: 'asc' },
+    select: { date: true },
+  });
+  return first?.date ?? null;
+}
+
 /** Any site-wide daily metric, summed over a range. GA4 and Search Console both report
  *  several of these and only `sessions` was ever read. */
 export async function siteMetric(metricKey: string, range: Range): Promise<number> {

@@ -10,6 +10,7 @@ import {
   pipelineTrend,
   rangeFor,
   repeatCustomerRate,
+  sessionsStart,
   trend,
 } from './metrics.ts';
 import type { Kpi } from './kpi.ts';
@@ -241,14 +242,20 @@ export async function analyticsBand(days: number, bucket: 'day' | 'month'): Prom
 export async function dashboardBand(
   days: number,
   bucket: 'day' | 'month',
-): Promise<{ band: BandData; funnel: Funnel }> {
+): Promise<{ band: BandData; funnel: Funnel; visitorsFrom: Date | null }> {
   const { current } = rangeFor(days);
-  const [{ cards, current: f }, series, weekday, repeat] = await Promise.all([
+  const [{ cards, current: f }, series, weekday, repeat, sessionsFrom] = await Promise.all([
     kpis(days),
     trend(current, bucket),
     leadsByWeekday(current),
     repeatCustomerRate(),
+    sessionsStart(),
   ]);
+
+  // Non-null only when the sessions series starts INSIDE the window, which is the case
+  // where the visitor count covers less time than every other stage of the funnel.
+  const visitorsFrom =
+    sessionsFrom && sessionsFrom.getTime() > current.from.getTime() ? sessionsFrom : null;
 
   const WANTED = ['visitors', 'leads', 'revenue', 'cac', 'roas'];
   const picked = WANTED.map((key) => cards.find((c) => c.key === key)).filter(
@@ -263,6 +270,7 @@ export async function dashboardBand(
     // The funnel comes back too: the dashboard draws it and its conversion footer from
     // the same period, and recomputing it would be another seven queries.
     funnel: f,
+    visitorsFrom,
     band: {
       kpis: picked,
       // From the funnel rather than the picked cards: the dashboard shows a subset, and a

@@ -3,7 +3,16 @@
 import { fmtCompact, fmtNumber, fmtPercent } from '@/lib/format';
 import { ChartFrame } from './chart-parts';
 
-export type Stage = { key: string; label: string; value: number; hint?: string };
+export type Stage = {
+  key: string;
+  label: string;
+  value: number;
+  hint?: string;
+  /** Suppresses this stage's rate against the one above when the two are not measured
+   *  over the same span — a smaller number is not a conversion if the stage above it
+   *  covers less time. Set by the caller, which is what knows about coverage. */
+  noRate?: boolean;
+};
 
 /** Stage order, never cycled — the fill identifies the step, not a category. */
 const STAGE_FILL = [
@@ -24,6 +33,13 @@ const STAGE_FILL = [
  *
  * The rate reads against the stage immediately above, not against the top of the funnel:
  * "37.9% of leads" is actionable where "1.0% of visitors" is not.
+ *
+ * A stage LARGER than the one above it is not a conversion rate and is never printed as
+ * one. The two stages that do it here have real causes — the visitor series starts later
+ * than the lead series, and deals get opened without the lead ever being flagged
+ * qualified — but neither is "251.1% of visitors converted", which is what this drew
+ * before. The bar is clamped to the track for the same reason: unclamped it overflowed,
+ * got clipped to full width, and read as the widest stage in the funnel.
  */
 export function FunnelChart({
   stages,
@@ -41,9 +57,14 @@ export function FunnelChart({
       <ol className="flex flex-col gap-[11px] px-3 pb-2 pt-2">
         {stages.map((s, i) => {
           const previous = i > 0 ? stages[i - 1] : null;
-          const step = previous && previous.value > 0 ? (s.value / previous.value) * 100 : null;
-          // A floor keeps a tiny final stage visible as a sliver rather than nothing.
-          const width = top > 0 ? Math.max((s.value / top) * 100, 2) : 0;
+          const grew = previous !== null && s.value > previous.value;
+          const step =
+            previous && previous.value > 0 && !grew && !s.noRate
+              ? (s.value / previous.value) * 100
+              : null;
+          // A floor keeps a tiny final stage visible as a sliver rather than nothing, and
+          // the ceiling keeps a stage that outgrew the top of the funnel inside its track.
+          const width = top > 0 ? Math.min(Math.max((s.value / top) * 100, 2), 100) : 0;
 
           return (
             <li key={s.key}>

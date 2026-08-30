@@ -20,7 +20,7 @@ import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
 import { campaignPerformance } from '@/lib/campaigns';
 import { rangeParam } from '@/lib/range';
-import { fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
+import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
 
@@ -76,7 +76,7 @@ export default async function DashboardPage({
       }),
     ]);
 
-  const { band, funnel: f } = dash;
+  const { band, funnel: f, visitorsFrom } = dash;
 
   // Money renders in the workspace's reporting currency, which the band already carries.
   // Aliased rather than passed at every call site: nine of them, and one missed would
@@ -84,6 +84,47 @@ export default async function DashboardPage({
   const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
   const ai = aiStatus();
   const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
+
+  // Semi-qualified is only its own step when something is actually sitting in it. The
+  // stage counts leads that reached AT LEAST semi-qualified, so with no lead carrying
+  // that status it equals Qualified exactly and the funnel draws the same number twice,
+  // joined by a meaningless "100.0% of semi-qualified". Dropped when it is a duplicate
+  // rather than deleted outright: the status is in the schema and the CRM may yet start
+  // writing it, and this comes back on its own the day it does.
+  const funnelStages = [
+    {
+      key: 'visitors',
+      label: 'Visitors',
+      value: f.visitors,
+      // Said on the stage itself, because this is the number the two below it are being
+      // measured against.
+      hint: visitorsFrom
+        ? `Sessions only go back to ${fmtDate(visitorsFrom)}; the stages below cover the whole period`
+        : undefined,
+    },
+    {
+      key: 'leads',
+      label: 'Leads',
+      value: f.leads,
+      // Same reason the footer drops visitor → lead: over a period the sessions series
+      // does not fully cover, leads over visitors is not a conversion rate.
+      noRate: visitorsFrom !== null,
+    },
+    ...(f.semiQualified !== f.qualified
+      ? [{ key: 'semiQualified', label: 'Semi-qualified', value: f.semiQualified }]
+      : []),
+    { key: 'qualified', label: 'Qualified', value: f.qualified },
+    {
+      key: 'opportunities',
+      label: 'Opportunities',
+      value: f.opportunities,
+      hint:
+        f.opportunities > f.qualified
+          ? 'More than qualified: deals get opened without the lead being marked qualified first'
+          : undefined,
+    },
+    { key: 'customers', label: 'Customers', value: f.customers },
+  ];
 
   return (
     <>
@@ -228,14 +269,7 @@ export default async function DashboardPage({
         <div className="flex min-w-0 flex-col gap-3.5">
           <FunnelChart
             subtitle="Each step against the one above it"
-            stages={[
-              { key: 'visitors', label: 'Visitors', value: f.visitors },
-              { key: 'leads', label: 'Leads', value: f.leads },
-              { key: 'semiQualified', label: 'Semi-qualified', value: f.semiQualified },
-              { key: 'qualified', label: 'Qualified', value: f.qualified },
-              { key: 'opportunities', label: 'Opportunities', value: f.opportunities },
-              { key: 'customers', label: 'Customers', value: f.customers },
-            ]}
+            stages={funnelStages}
           />
 
           <Card>
@@ -349,9 +383,16 @@ export default async function DashboardPage({
         earlier is real, but it is not a return on this period&apos;s spend.
       </p>
       <p className="pt-1 text-[11px] text-muted-foreground">
-        Conversion: {fmtPercent(f.visitorToLead ?? 0, 2)} visitor → lead ·{' '}
+        Conversion:{' '}
+        {/* Dropped rather than printed when sessions cover less of the period than leads
+            do — leads over a shorter visitor series is not a conversion rate, and over
+            twelve months it read as 251.13%. */}
+        {visitorsFrom ? null : <>{fmtPercent(f.visitorToLead ?? 0, 2)} visitor → lead · </>}
         {fmtPercent(f.leadToQualified ?? 0)} lead → qualified ·{' '}
         {fmtPercent(f.opportunityToCustomer ?? 0)} opportunity → customer
+        {visitorsFrom ? (
+          <> · visitor → lead needs sessions from before {fmtDate(visitorsFrom)}</>
+        ) : null}
       </p>
     </>
   );
