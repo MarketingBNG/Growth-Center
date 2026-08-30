@@ -75,6 +75,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <Detail label="Phone" value={lead.phone} />
               <Detail label="Owner" value={lead.ownerEmail ?? 'Unassigned'} />
               <Detail label="Source" value={<SourceBadge source={lead.sourceType} />} />
+              {/* The CRM's own two words for this lead, stored on import and shown
+                  nowhere until now: `sourceDetail` is where it actually came from ("fb",
+                  "Incorporation LinkdIn") and `sourceStatus` is the team's own status
+                  wording ("Semi-Qualified Lead"), which the shared seven-value vocabulary
+                  beside it cannot express. Set on 27,152 and 27,234 leads respectively. */}
+              <Detail label="Lead source" value={lead.sourceDetail} />
+              <Detail label="CRM status" value={lead.sourceStatus} />
               <Detail label="Channel" value={lead.channel?.name} />
               <Detail label="Campaign" value={lead.campaign?.name} />
               <Detail label="Created" value={fmtDate(lead.createdAt)} />
