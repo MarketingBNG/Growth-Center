@@ -85,6 +85,20 @@ export default async function DashboardPage({
   const ai = aiStatus();
   const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
 
+  // Leads, CPL, new revenue and ROAS all hang off a campaignId that no lead, deal or
+  // revenue row carries — Zoho records which CHANNEL a lead came from but never which ad,
+  // so those four columns were structurally empty: 0, "—", ₹0, "—" on every row, for
+  // every range. Four columns of nothing beside a real spend figure read as four
+  // campaigns that sold nothing, which is a claim, not an absence.
+  //
+  // What Meta does report per campaign is delivery — impressions, clicks — and those are
+  // on every one of the 2,008 spend rows. So the table shows what is known instead of
+  // ruling columns for what is not.
+  //
+  // Tested rather than hard-coded, so the day anything stamps a campaign on a lead the
+  // outcome columns come back on their own.
+  const campaignsAttributed = topCampaigns.some((c) => c.leads > 0 || c.revenue > 0);
+
   // Semi-qualified is only its own step when something is actually sitting in it. The
   // stage counts leads that reached AT LEAST semi-qualified, so with no lead carrying
   // that status it equals Qualified exactly and the funnel draws the same number twice,
@@ -229,10 +243,20 @@ export default async function DashboardPage({
                     <TR>
                       <TH>Campaign</TH>
                       <TH className="text-right">Spend</TH>
-                      <TH className="text-right">Leads</TH>
-                      <TH className="text-right">CPL</TH>
-                      <TH className="text-right">New revenue</TH>
-                      <TH className="text-right">ROAS</TH>
+                      {campaignsAttributed ? (
+                        <>
+                          <TH className="text-right">Leads</TH>
+                          <TH className="text-right">CPL</TH>
+                          <TH className="text-right">New revenue</TH>
+                          <TH className="text-right">ROAS</TH>
+                        </>
+                      ) : (
+                        <>
+                          <TH className="text-right">Impressions</TH>
+                          <TH className="text-right">Clicks</TH>
+                          <TH className="text-right">CTR</TH>
+                        </>
+                      )}
                     </TR>
                   </THead>
                   <TBody>
@@ -243,26 +267,44 @@ export default async function DashboardPage({
                           <p className="text-[11px] text-muted-foreground">{c.channelName}</p>
                         </TD>
                         <TD className="text-right tnum">{money(c.spend)}</TD>
-                        <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
-                        <TD className="text-right tnum text-muted-foreground">
-                          {c.costPerLead === null ? '—' : money(c.costPerLead)}
-                        </TD>
-                        <TD className="text-right tnum">{money(c.revenue)}</TD>
-                        <TD className="text-right tnum">
-                          {c.roas === null ? (
-                            <span className="text-muted-foreground">—</span>
-                          ) : (
-                            <span className={c.roas >= 1 ? 'text-success' : 'text-destructive'}>
-                              {fmtRatio(c.roas)}
-                            </span>
-                          )}
-                        </TD>
+                        {campaignsAttributed ? (
+                          <>
+                            <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
+                            <TD className="text-right tnum text-muted-foreground">
+                              {c.costPerLead === null ? '—' : money(c.costPerLead)}
+                            </TD>
+                            <TD className="text-right tnum">{money(c.revenue)}</TD>
+                            <TD className="text-right tnum">
+                              {c.roas === null ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <span className={c.roas >= 1 ? 'text-success' : 'text-destructive'}>
+                                  {fmtRatio(c.roas)}
+                                </span>
+                              )}
+                            </TD>
+                          </>
+                        ) : (
+                          <>
+                            <TD className="text-right tnum">{fmtNumber(c.impressions)}</TD>
+                            <TD className="text-right tnum">{fmtNumber(c.clicks)}</TD>
+                            <TD className="text-right tnum text-muted-foreground">
+                              {c.ctr === null ? '—' : fmtPercent(c.ctr, 2)}
+                            </TD>
+                          </>
+                        )}
                       </TR>
                     ))}
                   </TBody>
                 </Table>
               </TableWrap>
             )}
+            {!campaignsAttributed && topCampaigns.length > 0 ? (
+              <p className="px-5 pb-4 pt-1 text-[11px] text-muted-foreground">
+                Delivery only. No lead or deal records which campaign it came from, so
+                cost per lead and return cannot be attributed to a campaign yet.
+              </p>
+            ) : null}
           </TableCard>
         </div>
 
