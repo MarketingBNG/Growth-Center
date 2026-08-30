@@ -166,6 +166,9 @@ test('leadStatus tests "Not Qualified" before "Qualified"', () => {
   assert.equal(leadStatus('Junk Lead'), 'lost');
   assert.equal(leadStatus('Contacted'), 'contacted');
   assert.equal(leadStatus('Attempted to Contact'), 'contacted');
+  // Same trap as "Not Qualified": includes('contact') reads this as its own opposite.
+  assert.equal(leadStatus('Not Contacted'), 'new');
+  assert.equal(leadStatus('not contacted'), 'new');
 });
 
 test('leadStatus leaves an unrecognised org-specific status as new', () => {
@@ -426,7 +429,17 @@ test('leadStatus reads the wording this CRM actually uses, not Zoho defaults', (
   assert.equal(leadStatus('Looking For Job'), 'unqualified');
   assert.equal(leadStatus('Untouched Lead'), 'new');
   assert.equal(leadStatus('Qualified'), 'qualified');
-  assert.equal(leadStatus('Semi-Qualified Lead'), 'qualified');
+});
+
+test('"Semi-Qualified Lead" is its own status, not a qualified one', () => {
+  // It contains the word, so it used to fold into `qualified` — 2,480 semi-qualified
+  // leads against 10 fully qualified ones, under one label. The team's own decision is
+  // that the two are different stages, so they are counted separately.
+  assert.equal(leadStatus('Semi-Qualified Lead'), 'semi_qualified');
+  assert.equal(leadStatus('semi qualified'), 'semi_qualified');
+  assert.equal(leadStatus('Qualified'), 'qualified');
+  // Still not a seminar.
+  assert.equal(leadStatus('Seminar Attendee'), 'new');
 });
 
 test('leadStatus still tests "not qualified" before "qualified"', () => {
@@ -504,12 +517,20 @@ test('channelSlugFor reaches the sources that were landing nowhere', () => {
   assert.equal(channelSlugFor('import', 'LinkediIn'), 'linkedin');
 });
 
-test('a product name is not a channel, and is left unmapped rather than guessed', () => {
-  // 934 leads arrive under a service line and 23 under a podcast. Neither says how the
-  // person found the firm, and inventing a channel for them would be inventing the
-  // attribution the Marketing page is read for.
-  assert.equal(channelSlugFor('import', 'BNG US Incorp'), null);
-  assert.equal(channelSlugFor('import', 'NG Podcast'), null);
+test("the firm's own brands are direct, and nothing else is guessed", () => {
+  // 934 leads arrive under the incorporation service and 23 under the firm's podcast.
+  // Both are the firm's own properties, so the team's answer is Direct — a decision,
+  // not an inference from the name. Everything still genuinely unknown stays null:
+  // inventing a channel would be inventing the attribution the Marketing page is read for.
+  assert.equal(channelSlugFor('import', 'BNG US Incorp'), 'direct');
+  assert.equal(channelSlugFor('import', 'NG Podcast'), 'direct');
+  assert.equal(channelSlugFor('import', 'Platform'), null);
+  assert.equal(channelSlugFor('import', 'Excel CRM'), null);
+  // "Incorporation LinkdIn" is thousands of leads and must stay LinkedIn, not become
+  // Direct just because it contains "incorp".
+  assert.equal(channelSlugFor('social', 'Incorporation LinkdIn'), 'linkedin');
+  assert.equal(channelSlugFor('social', 'Old Incorp LinkedIn'), 'linkedin');
+  assert.equal(channelSlugFor('paid_ads', 'Incorporation Google Ads'), 'google-ads');
 });
 
 test('a paid source is an ad, not the organic platform it runs on', () => {

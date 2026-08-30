@@ -14,7 +14,9 @@ export const AXIS = {
 
 export const GRID = { stroke: 'var(--grid)', strokeDasharray: '3 4' } as const;
 
-/** Assign in order, never cycle. A 9th series folds into "Other". */
+/** Six slots, assigned in order. TrendChart wraps with `i % SERIES.length`, so a 7th
+ *  series would repeat the first colour — every call site currently passes one series,
+ *  and any chart that grows past six needs an "Other" bucket before it is added. */
 export const SERIES = [
   'var(--chart-1)',
   'var(--chart-2)',

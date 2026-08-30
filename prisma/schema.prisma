@@ -40,6 +40,11 @@ enum Role {
 enum LeadStatus {
   new
   contacted
+  /// This org's own first bar, and most of its worked pipeline: a lead that has passed
+  /// an initial screen but has not been fully qualified. It used to be folded into
+  /// `qualified` by a substring match, which made 2,480 of 2,490 "qualified" leads
+  /// semi-qualified ones. Its own stage so the funnel says which is which.
+  semi_qualified
   qualified
   unqualified
   converted

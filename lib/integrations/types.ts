@@ -189,3 +189,22 @@ export class IntegrationError extends Error {
     this.name = 'IntegrationError';
   }
 }
+
+/**
+ * How long any one call to a vendor's API may take before it is abandoned.
+ *
+ * Nothing here used to carry a timeout. `SYNC_BUDGET_MS` only checks the clock *between*
+ * page fetches, so it never covered a socket that simply stopped answering: one
+ * unresponsive vendor could hold the whole 300s function, get killed, leave its provider
+ * marked `syncing` until the ten-minute lease expired, and take every provider queued
+ * behind it down with it — and the cron only runs once a day.
+ *
+ * 60s is far longer than any of these APIs needs (the slowest observed page is a few
+ * seconds) and far inside the sync budget, so a timeout here means "hung", not "slow".
+ * An abandoned page is not lost work: syncs resume from the cursor they last stored.
+ */
+export const HTTP_TIMEOUT_MS = 60_000;
+
+/** `AbortSignal` for one vendor call. A helper rather than a bare literal so every
+ *  provider times out the same way and a new fetch cannot quietly omit it. */
+export const httpTimeout = () => AbortSignal.timeout(HTTP_TIMEOUT_MS);

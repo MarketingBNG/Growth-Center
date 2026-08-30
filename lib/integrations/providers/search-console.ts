@@ -1,4 +1,4 @@
-import { IntegrationError, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // Google Search Console — the provider that populates the SEO tables. It reports
 // per-query and per-page rows from the site's own traffic rather than an estimate of it,
@@ -28,6 +28,7 @@ async function accessToken(refreshToken: string): Promise<string> {
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
+    signal: httpTimeout(),
   });
   if (!res.ok) {
     throw new IntegrationError(
@@ -52,6 +53,7 @@ async function searchAnalytics(
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ rowLimit: ROW_LIMIT, ...body }),
+    signal: httpTimeout(),
   });
   if (!res.ok) {
     const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
@@ -139,6 +141,7 @@ export const searchConsole: IntegrationProvider = {
         redirect_uri: input.redirectUri,
         grant_type: 'authorization_code',
       }),
+      signal: httpTimeout(),
     });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 

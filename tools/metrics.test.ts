@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/calc.ts';
-import { rangeFor } from '../lib/metrics.ts';
+import { bucketKey, rangeFor } from '../lib/metrics.ts';
 
 // Rates return null, not 0, when there is no denominator. A 0% CTR on a campaign that
 // served no impressions is a false statement, and it would drag any average down.
@@ -67,4 +67,23 @@ test('rangeFor previous window abuts but never overlaps current', () => {
   assert.ok(gapHours < 1, 'the two windows abut');
   const prevDays = Math.round((previous.to.getTime() - previous.from.getTime()) / 86400000);
   assert.equal(prevDays, 7);
+});
+
+// The trend queries bucket dates in Postgres with to_char(date_trunc(...)), and the
+// keys they produce have to match the ones emptyBuckets() builds in JavaScript — a
+// mismatch would silently drop every row into a bucket nobody renders. bucketKey is the
+// shape both sides agree on: 'YYYY-MM-DD' for a day, 'YYYY-MM' for a month, in UTC.
+test('bucketKey is the format the SQL date_trunc must produce', () => {
+  const d = new Date('2026-03-09T23:45:00.000Z');
+  assert.equal(bucketKey(d, 'day'), '2026-03-09');
+  assert.equal(bucketKey(d, 'month'), '2026-03');
+});
+
+test('bucketKey reads dates in UTC, never local time', () => {
+  // 23:45 UTC is already the next day in much of the world. The database column is
+  // `timestamp without time zone` holding UTC, so UTC is the only correct reading —
+  // and this is what makes date_trunc agree without an AT TIME ZONE conversion.
+  assert.equal(bucketKey(new Date('2026-12-31T23:59:59.999Z'), 'day'), '2026-12-31');
+  assert.equal(bucketKey(new Date('2026-12-31T23:59:59.999Z'), 'month'), '2026-12');
+  assert.equal(bucketKey(new Date('2027-01-01T00:00:00.000Z'), 'day'), '2027-01-01');
 });

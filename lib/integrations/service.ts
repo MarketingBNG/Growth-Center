@@ -252,7 +252,20 @@ function dedupePoints(points: MetricPoint[]): MetricPoint[] {
 }
 
 async function writePoints(source: string, rawPoints: MetricPoint[]): Promise<number> {
-  const points = dedupePoints(rawPoints);
+  // `record` points are not archived, because there is nothing in them to archive.
+  //
+  // A metric_snapshot row holds source, entityType, entityId, metricKey, date and value
+  // — there is no payload column — so a `record` point stores only "this entity existed",
+  // which the typed tables already say better: lead, contact, opportunity and prospect
+  // each carry `source` and `externalId`. Nothing reads them back either; the
+  // materialisers below filter the same in-memory `points` array this function receives,
+  // never the database.
+  //
+  // They were 258,802 of the table's 277,886 rows and about 35 MB of a 118 MB table —
+  // 93% of it — growing with every record the CRM holds rather than with time, which is
+  // why a retention window would have freed almost nothing. The 19,084 genuine
+  // time-series rows are what the charts read, and they are all kept.
+  const points = dedupePoints(rawPoints).filter((p) => p.metricKey !== 'record');
   if (!points.length) return 0;
 
   let written = 0;
@@ -1875,12 +1888,24 @@ async function writeRevenueFromWonDeals(): Promise<number> {
       AND NOT EXISTS (
         SELECT 1 FROM opportunity o
         JOIN pipeline_stage s ON s.id = o."stageId"
-        WHERE o.id = c."opportunityId" AND s."isWon" AND o."closedAt" IS NOT NULL
+        WHERE o.id = c."opportunityId"
+          AND s."isWon"
+          AND o.value > 0
+          AND o."closedAt" IS NOT NULL
+          AND o."closedAt"::date <= current_date
       )
   `);
 
   // One customer per company — the schema allows only one — dated by that company's
   // earliest win, so "customer since" means what it says.
+  //
+  // The same three rules revenue is derived by, because a customer and their revenue
+  // have to agree about what a win is. They did not: revenue excluded zero-value deals
+  // and deals closing in the future, while this counted them — so 129 people whose deal
+  // closes as late as 2027, and 478 whose deal is worth nothing, were customers with no
+  // revenue. CAC divided spend by an inflated count and revenue-per-customer came out
+  // low. Nothing is lost by waiting: this runs on every sync, so a future-dated win
+  // becomes a customer by itself on the day its date arrives.
   await db().$executeRawUnsafe(`
     INSERT INTO customer (id, "companyId", "opportunityId", "wonAt", "createdAt", "updatedAt")
     SELECT gen_random_uuid()::text, d."companyId", d.id, d.won_at, now(), now()
@@ -1889,7 +1914,11 @@ async function writeRevenueFromWonDeals(): Promise<number> {
              o."companyId", o.id, o."closedAt" AS won_at
       FROM opportunity o
       JOIN pipeline_stage s ON s.id = o."stageId"
-      WHERE s."isWon" AND o."companyId" IS NOT NULL AND o."closedAt" IS NOT NULL
+      WHERE s."isWon"
+        AND o."companyId" IS NOT NULL
+        AND o.value > 0
+        AND o."closedAt" IS NOT NULL
+        AND o."closedAt"::date <= current_date
       ORDER BY o."companyId", o."closedAt" ASC
     ) d
     ON CONFLICT ("companyId") DO UPDATE

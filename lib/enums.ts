@@ -6,7 +6,7 @@
 // here, where there are no imports at all.
 
 export const LEAD_STATUSES = [
-  'new', 'contacted', 'qualified', 'unqualified', 'converted', 'lost',
+  'new', 'contacted', 'semi_qualified', 'qualified', 'unqualified', 'converted', 'lost',
 ] as const;
 
 export const SOURCE_TYPES = [

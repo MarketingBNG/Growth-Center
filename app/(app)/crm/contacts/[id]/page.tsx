@@ -8,7 +8,7 @@ import { Timeline } from '@/components/patterns/timeline';
 import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getContact } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
-import { fmtMoney, fmtRelative } from '@/lib/format';
+import { fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
 
 export const metadata = { title: 'Contact · Growth Center' };
 
@@ -62,9 +62,9 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               <Detail
                 label="LinkedIn"
                 value={
-                  contact.linkedin ? (
+                  safeUrl(contact.linkedin) ? (
                     <a
-                      href={contact.linkedin}
+                      href={safeUrl(contact.linkedin)!}
                       target="_blank"
                       rel="noreferrer"
                       className="hover:text-primary"

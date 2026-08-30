@@ -1,4 +1,4 @@
-import { IntegrationError, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // Facebook Page and Instagram Business organic performance — the Social page's numbers.
 //
@@ -33,7 +33,7 @@ async function exchangeForLongLived(token: string): Promise<{ token: string; exp
     fb_exchange_token: token,
   });
 
-  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new IntegrationError(
@@ -51,7 +51,7 @@ async function failed(res: Response): Promise<never> {
 }
 
 async function graph<T>(path: string, params: Record<string, string>): Promise<T> {
-  const res = await fetch(`${GRAPH}/${path}?${new URLSearchParams(params)}`);
+  const res = await fetch(`${GRAPH}/${path}?${new URLSearchParams(params)}`, { signal: httpTimeout() });
   if (!res.ok) await failed(res);
   return (await res.json()) as T;
 }
@@ -81,7 +81,7 @@ async function graphPaged<T>(
   let url = `${GRAPH}/${path}?${new URLSearchParams(params)}`;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: httpTimeout() });
     if (!res.ok) await failed(res);
     const json = (await res.json()) as { data?: T[]; paging?: { next?: string } };
     const rows = json.data ?? [];
@@ -272,7 +272,7 @@ export const metaSocial: IntegrationProvider = {
       redirect_uri: input.redirectUri,
       code: input.code,
     });
-    const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+    const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
     const json = (await res.json()) as { access_token?: string };

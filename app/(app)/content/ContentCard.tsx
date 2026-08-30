@@ -6,6 +6,7 @@ import { ExternalLink } from 'lucide-react';
 import { Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
+import { safeUrl } from '@/lib/format';
 
 export type Piece = {
   id: string;
@@ -72,9 +73,9 @@ export function ContentCard({ piece }: { piece: Piece }) {
             <option key={s} value={s}>{s}</option>
           ))}
         </Select>
-        {piece.url ? (
+        {safeUrl(piece.url) ? (
           <a
-            href={piece.url}
+            href={safeUrl(piece.url)!}
             target="_blank"
             rel="noreferrer"
             className="text-muted-foreground hover:text-foreground"

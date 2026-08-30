@@ -7,7 +7,6 @@ import { AddWidgetDrawer } from '@/components/patterns/add-widget-drawer';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge, PriorityBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
-import { SourceLine } from '@/components/patterns/source-badge';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
@@ -16,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { openPipeline, provenance, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
 import { campaignPerformance } from '@/lib/campaigns';
@@ -48,14 +47,13 @@ export default async function DashboardPage({
   const { value, days, bucket } = rangeParam(params);
   const { current } = rangeFor(days);
 
-  const [dash, pipeline, series, channels, campaigns, sources, recentLeads, tasks, insights] =
+  const [dash, pipeline, series, channels, campaigns, recentLeads, tasks, insights] =
     await Promise.all([
       dashboardBand(days, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
       campaignPerformance(current),
-      provenance(current),
       db().lead.findMany({
         orderBy: { createdAt: 'desc' },
         take: 6,
@@ -100,17 +98,10 @@ export default async function DashboardPage({
         }
       />
 
-      {/* Stated before the numbers, not after: the band mixes reported spend with
-          seeded visitors and looked entirely uniform without this. */}
-      <SourceLine
-        items={[
-          { label: 'Visitors', sources: sources.visitors },
-          { label: 'Spend', sources: sources.spend },
-          { label: 'Leads', sources: sources.leads },
-          { label: 'Revenue', sources: sources.revenue },
-        ]}
-      />
-
+      {/* Provenance moved inside the band, where it is interactive: each source is a
+          toggle that lifts the cards it feeds and dims the rest. It reads the sources
+          off the cards themselves, so it cannot fall out of step with them the way a
+          hand-written list above the numbers could. */}
       <MetricsBand {...band} />
 
       {/* 1.75fr / 1fr: the tables need the width, the summary cards do not.
@@ -240,6 +231,7 @@ export default async function DashboardPage({
             stages={[
               { key: 'visitors', label: 'Visitors', value: f.visitors },
               { key: 'leads', label: 'Leads', value: f.leads },
+              { key: 'semiQualified', label: 'Semi-qualified', value: f.semiQualified },
               { key: 'qualified', label: 'Qualified', value: f.qualified },
               { key: 'opportunities', label: 'Opportunities', value: f.opportunities },
               { key: 'customers', label: 'Customers', value: f.customers },

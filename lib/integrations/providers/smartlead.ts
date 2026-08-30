@@ -1,4 +1,5 @@
 import {
+  httpTimeout,
   IntegrationError,
   type IntegrationProvider,
   type MetricPoint,
@@ -30,7 +31,10 @@ function url(path: string, apiKey: string, params: Record<string, string> = {}):
 }
 
 async function get(path: string, apiKey: string, params?: Record<string, string>): Promise<unknown> {
-  const res = await fetch(url(path, apiKey, params), { headers: { accept: 'application/json' } });
+  const res = await fetch(url(path, apiKey, params), {
+    headers: { accept: 'application/json' },
+    signal: httpTimeout(),
+  });
 
   if (res.status === 401 || res.status === 403) {
     throw new IntegrationError('Smartlead rejected the API key.');

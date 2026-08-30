@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { body, listQuery, paged, parseQuery, route } from '@/lib/api';
 import { createTask, taskInput } from '@/lib/crm';
+import { TASK_STATUSES } from '@/lib/enums';
 import { db } from '@/lib/prisma';
 
 const filters = listQuery.extend({
-  status: z.enum(['open', 'in_progress', 'done', 'cancelled']).optional(),
+  status: z.enum(TASK_STATUSES).optional(),
   assigneeEmail: z.string().trim().optional(),
 });
 

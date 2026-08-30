@@ -1,4 +1,4 @@
-import { IntegrationError, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // GA4 via the Data API. Sessions, users and conversions land in MetricSnapshot under
 // entityType 'site', which is exactly what the dashboard's visitor count reads.
@@ -18,6 +18,7 @@ async function accessToken(refreshToken: string): Promise<string> {
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
+    signal: httpTimeout(),
   });
   if (!res.ok) {
     throw new IntegrationError(`Google rejected the refresh token (${res.status}). Reconnect the integration.`);
@@ -87,6 +88,7 @@ export const googleAnalytics: IntegrationProvider = {
         redirect_uri: input.redirectUri,
         grant_type: 'authorization_code',
       }),
+      signal: httpTimeout(),
     });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
@@ -120,6 +122,7 @@ export const googleAnalytics: IntegrationProvider = {
           dimensions: [{ name: 'date' }],
           metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'screenPageViews' }],
         }),
+        signal: httpTimeout(),
       },
     );
     if (!res.ok) {

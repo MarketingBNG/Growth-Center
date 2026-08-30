@@ -23,7 +23,16 @@ export function leadStatus(value: string | null | undefined): LeadStatus {
   if (v.includes('not qualified') || v.includes('unqualified') || v.includes('looking for job')) {
     return 'unqualified';
   }
+  // Before the plain `qualified` test, and for the same reason "Not Qualified" is:
+  // "Semi-Qualified Lead" contains the word. It is this org's largest worked segment —
+  // 2,480 leads against 10 that are fully qualified — so folding the two together made
+  // "qualified" mean almost nothing.
+  if (v.includes('semi') && v.includes('qualif')) return 'semi_qualified';
   if (v.includes('qualified')) return 'qualified';
+  // "Not Contacted" says the opposite of what `includes('contact')` reads it as. Same
+  // trap as "Not Qualified" above, and tested before the positive case for the same
+  // reason — this CRM writes both spellings.
+  if (v.includes('not contacted') || v.includes('uncontacted')) return 'new';
   // "Follow-up" and "Not Reachable" both describe an attempt that has already been made,
   // which is what `contacted` means. Left as `new` they made the funnel's first stage
   // look untouched.
@@ -237,8 +246,18 @@ export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | n
     // Smartlead is the cold-email tool, so a lead credited to it came from outreach.
     if (v.includes('smartlead') || v.includes('call') || v.includes('research')) return 'outreach';
     if (v.includes('email')) return 'email';
-    // The firm's own web properties.
-    if (v.includes('site') || v.includes('website')) return 'direct';
+    // The firm's own web properties, and the firm's own brands. "BNG US Incorp" is the
+    // incorporation service and "NG Podcast" is the firm's own show — 957 leads between
+    // them that reached no channel at all, because neither name contains any word the
+    // rules above look for.
+    if (
+      v.includes('site') ||
+      v.includes('website') ||
+      v.includes('incorp') ||
+      v.includes('podcast')
+    ) {
+      return 'direct';
+    }
   }
 
   switch (sourceType) {

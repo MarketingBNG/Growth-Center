@@ -3,7 +3,24 @@
 //
 // Read via process.env rather than Prisma's env() helper, which throws when the
 // variable is absent — `prisma generate` needs no database and runs on every build.
+import { existsSync, readFileSync } from 'node:fs';
 import { defineConfig } from 'prisma/config';
+
+// Prisma 7 no longer loads .env.local — it reads .env only, and Next.js is the thing
+// that reads .env.local. So every CLI command (`db:migrate`, `db:deploy`, `db:push`)
+// failed with "Connection url is empty" while the variables sat right there in the file.
+// Loaded here, nearest-first, rather than adding a dotenv dependency.
+//
+// Existing environment variables always win, so a real deployment's own DIRECT_URL is
+// never overwritten by a stray local file.
+for (const file of ['.env.local', '.env']) {
+  if (!existsSync(file)) continue;
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    process.env[match[1]] ??= match[2].trim().replace(/^["']|["']$/g, '');
+  }
+}
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',

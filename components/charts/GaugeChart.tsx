@@ -22,14 +22,12 @@ export function GaugeChart({
   value,
   note,
   target,
-  action,
   className,
 }: {
   value: number | null;
   note?: string;
   /** Drawn as the reference the note describes; does not change the fill. */
   target?: number | null;
-  action?: React.ReactNode;
   className?: string;
 }) {
   const pct = value === null ? 0 : Math.min(Math.max(value, 0), 100);
@@ -97,7 +95,6 @@ export function GaugeChart({
       {note ? (
         <p className="pt-2 text-center text-[11px] text-muted-foreground">{note}</p>
       ) : null}
-      {action ? <div className="pt-2.5">{action}</div> : null}
     </div>
   );
 }

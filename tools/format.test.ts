@@ -9,6 +9,7 @@ import {
   fmtNumber,
   fmtPercent,
   fmtRatio,
+  safeUrl,
 } from '../lib/format.ts';
 
 // Every formatter is on screen somewhere, and the null paths are load-bearing: "—" is
@@ -66,4 +67,29 @@ test('fmtDays singularises one day', () => {
 test('fmtCompact abbreviates only above a thousand', () => {
   assert.equal(fmtCompact(999), '999');
   assert.equal(fmtCompact(16_711), '16.7K');
+});
+
+test('safeUrl passes an ordinary link through', () => {
+  assert.equal(safeUrl('https://example.com/post'), 'https://example.com/post');
+  assert.equal(safeUrl('http://example.com/'), 'http://example.com/');
+});
+
+test('safeUrl gives a bare domain a scheme rather than making it a relative path', () => {
+  assert.equal(safeUrl('linkedin.com/in/someone'), 'https://linkedin.com/in/someone');
+  assert.equal(safeUrl('  example.com  '), 'https://example.com/');
+});
+
+test('safeUrl refuses a script URL however it is dressed up', () => {
+  assert.equal(safeUrl('javascript:alert(1)'), null);
+  assert.equal(safeUrl('JavaScript:alert(1)'), null);
+  assert.equal(safeUrl('  javascript:alert(1)  '), null);
+  assert.equal(safeUrl('data:text/html,<script>alert(1)</script>'), null);
+  assert.equal(safeUrl('vbscript:msgbox(1)'), null);
+});
+
+test('safeUrl returns null for nothing at all', () => {
+  assert.equal(safeUrl(null), null);
+  assert.equal(safeUrl(undefined), null);
+  assert.equal(safeUrl(''), null);
+  assert.equal(safeUrl('   '), null);
 });

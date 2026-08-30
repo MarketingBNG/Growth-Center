@@ -8,8 +8,9 @@ import { TrendChart, type TrendPoint, type TrendSeries } from '@/components/char
 import { WeekdayChart, type WeekdayPoint } from '@/components/charts/WeekdayChart';
 import { GaugeChart } from '@/components/charts/GaugeChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import type { Kpi } from '@/lib/kpi';
+import { sourceMeta } from '@/lib/sources';
+import { cn } from '@/lib/utils';
 
 export type MetricsBandProps = {
   kpis: Kpi[];
@@ -48,6 +49,14 @@ export function MetricsBand({
   const [open, setOpen] = useState(defaultOpen);
   const [ready, setReady] = useState(false);
 
+  // Which integration the reader is currently asking about. Highlights rather than
+  // filters: every figure here has exactly one source, so filtering to one would empty
+  // the row instead of comparing anything. Dimming the rest answers "which of these
+  // comes from GA4" while leaving the numbers on screen to be read.
+  const [focus, setFocus] = useState<string | null>(null);
+
+  const sources = [...new Set(kpis.flatMap((k) => k.sources ?? []))];
+
   // Read after mount: reading localStorage during render would make the server and
   // client markup disagree.
   useEffect(() => {
@@ -85,9 +94,55 @@ export function MetricsBand({
 
       {open ? (
         <div className="flex flex-col gap-3.5">
+          {/* Only worth showing when there is more than one to tell apart. */}
+          {sources.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
+                Sources
+              </span>
+              {sources.map((id) => {
+                const meta = sourceMeta(id);
+                const on = focus === id;
+                const count = kpis.filter((k) => (k.sources ?? []).includes(id)).length;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={on}
+                    title={`${meta.name} — ${meta.hint}`}
+                    onClick={() => setFocus(on ? null : id)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors',
+                      on
+                        ? 'border-foreground/25 bg-secondary text-foreground'
+                        : 'border-border text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {meta.label}
+                    <span className="text-[10px] font-bold tnum opacity-60">{count}</span>
+                  </button>
+                );
+              })}
+              {focus ? (
+                <button
+                  type="button"
+                  onClick={() => setFocus(null)}
+                  className="text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
             {kpis.map((k, i) => (
-              <KpiCard key={k.key} kpi={k} index={i} />
+              <KpiCard
+                key={k.key}
+                kpi={k}
+                index={i}
+                dimmed={focus !== null && !(k.sources ?? []).includes(focus)}
+              />
             ))}
           </div>
 
@@ -125,11 +180,6 @@ export function MetricsBand({
                         value={gauge.value}
                         note={gauge.note}
                         target={gauge.target}
-                        action={
-                          <Button variant="outline" className="h-[30px] rounded-full px-3 text-xs">
-                            Show details
-                          </Button>
-                        }
                       />
                     </div>
                   </Card>

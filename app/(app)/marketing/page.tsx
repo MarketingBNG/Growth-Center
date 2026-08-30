@@ -8,11 +8,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { channelPerformance, provenance, rangeFor } from '@/lib/metrics';
+import { channelPerformance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
-import { SourceBadge, SourceLine } from '@/components/patterns/source-badge';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { ChannelFilter } from './ChannelFilter';
 
@@ -40,12 +40,11 @@ export default async function MarketingPage({
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';
 
-  const [channels, allChannels, rows, band, sources] = await Promise.all([
+  const [channels, allChannels, rows, band] = await Promise.all([
     channelPerformance(current),
     db().channel.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     campaignPerformance(current, channelId),
     marketingBand(days, bucket),
-    provenance(current),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot
@@ -70,14 +69,6 @@ export default async function MarketingPage({
         title="Marketing"
         subtitle="Campaigns and channels, spend against return."
         actions={<RangePicker current={value} />}
-      />
-
-      <SourceLine
-        items={[
-          { label: 'Spend', sources: sources.spend },
-          { label: 'Leads', sources: sources.leads },
-          { label: 'Revenue', sources: sources.revenue },
-        ]}
       />
 
       <ChannelFilter

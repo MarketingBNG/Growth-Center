@@ -1,6 +1,6 @@
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
-import type { Kpi } from './kpi.ts';
+import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from './kpi.ts';
 import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
 import { convert, sumInReporting } from './currency.ts';
 import { currencySettings } from './settings.ts';
@@ -16,6 +16,88 @@ export type { Kpi } from './kpi.ts';
 // appears on two pages it is computed here once, so the pages cannot disagree.
 
 export type Range = { from: Date; to: Date };
+
+/**
+ * Blanks the change chip on any KPI whose data does not reach back into the period it is
+ * being compared with.
+ *
+ * GA4 was connected on 27 July and Meta Ads a day earlier, so a 30-day view compared a
+ * full month of sessions against the three days that happened to exist in the previous
+ * window and reported "+800.9%". That is not growth — it is the date the integration was
+ * switched on, printed as a trend. Spend does the same to CAC, ROAS and cost per lead,
+ * and revenue, which begins in November 2024, does a milder version of it to any
+ * 365-day comparison.
+ *
+ * `previous: null` is the existing "nothing to compare with" signal: kpiDelta() returns
+ * null for it and the card simply omits the chip. The value itself is never touched —
+ * only the claim about how it changed.
+ *
+ * Which series feeds which card lives in lib/kpi.ts, where it can be unit-tested.
+ */
+async function comparableDeltas(cards: Kpi[], previous: Range): Promise<Kpi[]> {
+  const [sessions, spend, leads, deals, revenue, customers, sessionSources, spendSources, leadSources, dealSources] =
+    await Promise.all([
+      db().metricSnapshot.findFirst({ where: { metricKey: 'sessions' }, orderBy: { date: 'asc' }, select: { date: true } }),
+      db().marketingSpend.findFirst({ orderBy: { date: 'asc' }, select: { date: true } }),
+      db().lead.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
+      db().opportunity.findFirst({ orderBy: { createdAt: 'asc' }, select: { createdAt: true } }),
+      db().revenueEntry.findFirst({ orderBy: { date: 'asc' }, select: { date: true } }),
+      db().customer.findFirst({ orderBy: { wonAt: 'asc' }, select: { wonAt: true } }),
+      // Who actually wrote each series, read from the rows rather than assumed. A second
+      // analytics provider, or Meta being replaced, changes these labels on its own.
+      db().metricSnapshot.findMany({ where: { metricKey: 'sessions' }, select: { source: true }, distinct: ['source'] }),
+      db().campaign.findMany({ where: { spend: { some: {} } }, select: { source: true }, distinct: ['source'] }),
+      db().lead.findMany({ select: { source: true }, distinct: ['source'] }),
+      db().opportunity.findMany({ select: { source: true }, distinct: ['source'] }),
+    ]);
+
+  const starts = {
+    sessions: sessions?.date ?? null,
+    spend: spend?.date ?? null,
+    leads: leads?.createdAt ?? null,
+    deals: deals?.createdAt ?? null,
+    revenue: revenue?.date ?? null,
+    customers: customers?.wonAt ?? null,
+  };
+
+  const ids = (rows: { source: string | null }[]) =>
+    [...new Set(rows.map((r) => r.source ?? INTERNAL_SOURCE))];
+
+  // Revenue and customers are derived from won deals rather than imported, so they carry
+  // the deals' provenance — that is genuinely where the money figures come from.
+  const sourcesFor: Record<KpiSeries, string[]> = {
+    sessions: ids(sessionSources),
+    spend: ids(spendSources),
+    leads: ids(leadSources),
+    deals: ids(dealSources),
+    revenue: ids(dealSources),
+    customers: ids(dealSources),
+  };
+
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+  return cards.map((card) => {
+    const series = KPI_SERIES[card.key] ?? [];
+    const sources = [...new Set(series.flatMap((k) => sourcesFor[k]))];
+
+    if (kpiIsComparable(card.key, previous.from, starts)) return { ...card, sources };
+
+    // Name the series that falls short and the date it begins, so the card explains
+    // itself instead of just going quiet.
+    const short = series.find((k) => {
+      const start = starts[k];
+      return !start || start.getTime() > previous.from.getTime();
+    });
+    const startedAt = short ? starts[short] : null;
+    const comparisonNote =
+      short && startedAt
+        ? `${SERIES_LABEL[short]} data only goes back to ${fmtDate(startedAt)}, so there is nothing to compare with`
+        : 'Not enough history to compare with';
+
+    return { ...card, sources, previous: null, comparisonNote };
+  });
+}
 
 /** A period and the equally-long period immediately before it, for deltas. */
 export function rangeFor(days: number, now = new Date()): { current: Range; previous: Range } {
@@ -79,14 +161,26 @@ export async function siteMetric(metricKey: string, range: Range): Promise<numbe
  * Qualified counts leads that reached qualified at any point, not leads currently
  * sitting in that status — otherwise converting a lead would decrease the qualified
  * count and the funnel would appear to leak backwards.
+ *
+ * Semi-qualified is its own stage. This CRM's "Semi-Qualified Lead" used to reach
+ * `qualified` through a substring match, so "qualified leads" was 2,480 semi-qualified
+ * ones and 10 fully qualified ones. Counted as "reached at least semi-qualified" — the
+ * current status, or any later stage — so it stays above `qualified` and cannot leak
+ * backwards either.
  */
 export async function funnel(range: Range) {
   const window = { gte: range.from, lte: range.to };
 
-  const [visitors, leads, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg] =
+  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg] =
     await Promise.all([
       sessions(range),
       db().lead.count({ where: { createdAt: window } }),
+      db().lead.count({
+        where: {
+          createdAt: window,
+          OR: [{ status: 'semi_qualified' }, { qualifiedAt: { not: null } }],
+        },
+      }),
       db().lead.count({ where: { createdAt: window, qualifiedAt: { not: null } } }),
       db().opportunity.count({ where: { createdAt: window } }),
       db().customer.count({ where: { wonAt: window } }),
@@ -122,6 +216,7 @@ export async function funnel(range: Range) {
     unconverted: [...revenueSum.unconverted, ...spendSum.unconverted],
     visitors,
     leads,
+    semiQualified,
     qualified,
     opportunities,
     customers,
@@ -129,6 +224,7 @@ export async function funnel(range: Range) {
     newRevenue,
     spend,
     visitorToLead: rate(leads, visitors),
+    leadToSemiQualified: rate(semiQualified, leads),
     leadToQualified: rate(qualified, leads),
     qualifiedToOpportunity: rate(opportunities, qualified),
     opportunityToCustomer: rate(customers, opportunities),
@@ -183,10 +279,10 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Deals won in this period' },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
+    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return' },
   ];
 
-  return { cards, current: now, previous: before };
+  return { cards: await comparableDeltas(cards, previous), current: now, previous: before };
 }
 
 
@@ -198,20 +294,65 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
  * and at 365 rows the cost is irrelevant.
  */
 export async function trend(range: Range, bucket: 'day' | 'month') {
-  const window = { gte: range.from, lte: range.to };
+  const demo = await excludeDemo('sessions');
+
+  // Bucketed by Postgres rather than in JavaScript.
+  //
+  // This used to fetch every row and group them in a Map: 16,517 lead rows pulled to
+  // produce twelve numbers, which was the slowest thing on the dashboard at ~2s. The
+  // date maths is identical, not merely similar — `createdAt` is `timestamp without
+  // time zone` holding UTC and the money columns are plain `date`, so `date_trunc`
+  // agrees with the old `toISOString().slice()` exactly, with no zone to convert. The
+  // server runs GMT besides. `bucketKey` below pins the shape the SQL must produce,
+  // and the two implementations were compared bucket-by-bucket against the live
+  // database over four ranges and both units — 572 values, all identical.
+  //
+  // Money is still grouped BY CURRENCY and converted here, not summed in SQL: Postgres
+  // has no exchange rates, and adding INR to USD is the bug this chart had.
+  const unit = bucket === 'month' ? 'month' : 'day';
+  const format = bucket === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
+  const at = (col: string) => `to_char(date_trunc('${unit}', ${col}), '${format}')`;
+
+  type Counted = { bucket: string; total: number | string | null };
+  type Money = { bucket: string; currency: string | null; total: number | string | null };
 
   const [sessionRows, leadRows, revenueRows, spendRows] = await Promise.all([
-    db().metricSnapshot.findMany({
-      where: { metricKey: 'sessions', date: window, source: await excludeDemo('sessions') },
-      select: { date: true, value: true },
-    }),
-    db().lead.findMany({ where: { createdAt: window }, select: { createdAt: true } }),
-    db().revenueEntry.findMany({ where: { date: window }, select: { date: true, amount: true } }),
-    db().marketingSpend.findMany({ where: { date: window }, select: { date: true, amount: true } }),
+    db().$queryRawUnsafe<Counted[]>(
+      `SELECT ${at('date')} AS bucket, SUM(value) AS total
+         FROM metric_snapshot
+        WHERE "metricKey" = 'sessions' AND date >= $1 AND date <= $2
+          ${demo ? `AND source <> 'demo'` : ''}
+        GROUP BY 1`,
+      range.from,
+      range.to,
+    ),
+    db().$queryRawUnsafe<Counted[]>(
+      `SELECT ${at('"createdAt"')} AS bucket, COUNT(*) AS total
+         FROM lead
+        WHERE "createdAt" >= $1 AND "createdAt" <= $2
+        GROUP BY 1`,
+      range.from,
+      range.to,
+    ),
+    db().$queryRawUnsafe<Money[]>(
+      `SELECT ${at('date')} AS bucket, currency, SUM(amount) AS total
+         FROM revenue_entry
+        WHERE date >= $1 AND date <= $2
+        GROUP BY 1, 2`,
+      range.from,
+      range.to,
+    ),
+    db().$queryRawUnsafe<Money[]>(
+      `SELECT ${at('date')} AS bucket, currency, SUM(amount) AS total
+         FROM marketing_spend
+        WHERE date >= $1 AND date <= $2
+        GROUP BY 1, 2`,
+      range.from,
+      range.to,
+    ),
   ]);
 
-  const key = (d: Date) =>
-    bucket === 'month' ? d.toISOString().slice(0, 7) : d.toISOString().slice(0, 10);
+  const fx = await currencySettings();
 
   const buckets = new Map<string, { date: string; visitors: number; leads: number; revenue: number; spend: number }>(
     emptyBuckets(range, bucket).map((k) => [
@@ -219,20 +360,34 @@ export async function trend(range: Range, bucket: 'day' | 'month') {
       { date: k, visitors: 0, leads: 0, revenue: 0, spend: 0 },
     ]),
   );
-  const at = (d: Date) => {
-    const k = key(d);
-    let row = buckets.get(k);
+  const bucketAt = (key: string) => {
+    let row = buckets.get(key);
     if (!row) {
-      row = { date: k, visitors: 0, leads: 0, revenue: 0, spend: 0 };
-      buckets.set(k, row);
+      row = { date: key, visitors: 0, leads: 0, revenue: 0, spend: 0 };
+      buckets.set(key, row);
     }
     return row;
   };
 
-  for (const r of sessionRows) at(r.date).visitors += num(r.value);
-  for (const r of leadRows) at(r.createdAt).leads += 1;
-  for (const r of revenueRows) at(r.date).revenue += num(r.amount);
-  for (const r of spendRows) at(r.date).spend += num(r.amount);
+  const unconverted = new Set<string>();
+  // A currency with no rate is left out rather than added at face value: a wrong number
+  // on a chart is worse than a slightly low one, and the warning says so.
+  const addMoney = (rows: Money[], field: 'revenue' | 'spend') => {
+    for (const r of rows) {
+      const converted = convert(num(r.total), r.currency, fx);
+      if (converted === null) unconverted.add(r.currency ?? 'unknown');
+      else bucketAt(r.bucket)[field] += converted;
+    }
+  };
+
+  for (const r of sessionRows) bucketAt(r.bucket).visitors += num(r.total);
+  for (const r of leadRows) bucketAt(r.bucket).leads += num(r.total);
+  addMoney(revenueRows, 'revenue');
+  addMoney(spendRows, 'spend');
+
+  if (unconverted.size) {
+    console.warn(`[metrics] trend: no exchange rate for ${[...unconverted].join(', ')}; those amounts are missing from the chart.`);
+  }
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -392,7 +547,13 @@ export async function medianResponseHours(range: Range): Promise<number | null> 
   const window = { gte: range.from, lte: range.to };
 
   const [leads, touches] = await Promise.all([
-    db().lead.findMany({ where: { createdAt: window }, select: { id: true, createdAt: true } }),
+    // Only leads that were actually touched — the loop below drops the rest anyway.
+    // Without this filter every lead in the range was fetched and most were discarded:
+    // 16,517 rows pulled to use 6,314 of them.
+    db().lead.findMany({
+      where: { createdAt: window, activities: { some: { type: { in: [...CONTACT_TYPES] } } } },
+      select: { id: true, createdAt: true },
+    }),
     db().activity.findMany({
       where: { type: { in: [...CONTACT_TYPES] }, lead: { createdAt: window } },
       select: { leadId: true, createdAt: true },
@@ -489,16 +650,25 @@ export async function avgCycleDays(range: Range): Promise<number | null> {
 /** Leads per weekday for the band's bar chart. Indexed Monday-first, because a week that
  *  starts on Sunday puts the quietest two days at opposite ends of the chart. */
 export async function leadsByWeekday(range: Range): Promise<{ label: string; value: number }[]> {
-  const rows = await db().lead.findMany({
-    where: { createdAt: { gte: range.from, lte: range.to } },
-    select: { createdAt: true },
-  });
+  // Counted in SQL. This pulled every lead's createdAt — 16,517 rows over a year — to
+  // produce seven numbers. Postgres' EXTRACT(DOW) and JavaScript's getUTCDay() both
+  // number Sunday 0, and `createdAt` is `timestamp without time zone` holding UTC, so
+  // the two agree without any zone conversion.
+  const rows = await db().$queryRawUnsafe<{ dow: number | string; total: number | string }[]>(
+    `SELECT EXTRACT(DOW FROM "createdAt") AS dow, COUNT(*) AS total
+       FROM lead
+      WHERE "createdAt" >= $1 AND "createdAt" <= $2
+      GROUP BY 1`,
+    range.from,
+    range.to,
+  );
 
   const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const counts = new Array(7).fill(0) as number[];
   for (const r of rows) {
-    // getUTCDay() is 0=Sunday; shift so Monday is 0.
-    counts[(r.createdAt.getUTCDay() + 6) % 7] += 1;
+    // Shift so Monday is 0: a week starting on Sunday puts the quietest two days at
+    // opposite ends of the chart.
+    counts[(num(r.dow) + 6) % 7] += num(r.total);
   }
   return labels.map((label, i) => ({ label, value: counts[i] }));
 }
@@ -632,7 +802,7 @@ export async function leadsKpis(days: number) {
     { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },
   ];
 
-  return { cards, current: now, weekday, qualificationRate: now.leadToQualified };
+  return { cards: await comparableDeltas(cards, previous), current: now, weekday, qualificationRate: now.leadToQualified };
 }
 
 /** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */
@@ -655,7 +825,7 @@ export async function crmKpis(days: number) {
     { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded into an existing lead' },
   ];
 
-  return { cards, customerShare: share, weekday };
+  return { cards: await comparableDeltas(cards, previous), customerShare: share, weekday };
 }
 
 /** Pipeline: Open deals · Total value · Weighted · Win rate · Avg cycle.
@@ -682,7 +852,7 @@ export async function pipelineKpis(days: number) {
     { key: 'cycle', label: 'Avg cycle', value: cycleNow, previous: cyclePrev, format: 'days', higherIsBetter: false, hint: 'Created to won, for deals won this period' },
   ];
 
-  return { cards, open, winRate: rateNow, weekday };
+  return { cards: await comparableDeltas(cards, previous), open, winRate: rateNow, weekday };
 }
 
 /** Marketing: Spend · Leads · CPL · ROAS · CAC. */
@@ -699,11 +869,11 @@ export async function marketingKpis(days: number) {
     { key: 'spend', label: 'Spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business ÷ spend' },
+    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return' },
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
   ];
 
-  return { cards, current: now, budgetPacing: pacing, weekday };
+  return { cards: await comparableDeltas(cards, previous), current: now, budgetPacing: pacing, weekday };
 }
 
 /** Analytics: Sessions · Visitor→lead · Lead→qualified · Opp→customer · Revenue. */
@@ -734,7 +904,7 @@ export async function analyticsKpis(days: number) {
     { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true },
   ];
 
-  return { cards, current: now, weekday };
+  return { cards: await comparableDeltas(cards, previous), current: now, weekday };
 }
 
 // ─── per-screen trend series ──────────────────────────────────────────────────
@@ -742,7 +912,7 @@ export async function analyticsKpis(days: number) {
 // Bucketed the same way as trend(): one query, grouped in JS, because the date columns
 // are DATE and a per-driver cast is not worth it at 365 rows.
 
-function bucketKey(d: Date, bucket: 'day' | 'month') {
+export function bucketKey(d: Date, bucket: 'day' | 'month') {
   return bucket === 'month' ? d.toISOString().slice(0, 7) : d.toISOString().slice(0, 10);
 }
 
@@ -800,19 +970,33 @@ export async function accountsTrend(range: Range, bucket: 'day' | 'month') {
 /** Deal value created per bucket, by the date the opportunity was opened — "pipeline
  *  created", not pipeline closed. */
 export async function pipelineTrend(range: Range, bucket: 'day' | 'month') {
+  // Deal values are held in the currency the deal was written in — 137 of the last
+  // year's are INR against 4,800 USD — and this series is rendered as money in the
+  // reporting currency, so each value is converted before it is added.
   const rows = await db().opportunity.findMany({
     where: { createdAt: { gte: range.from, lte: range.to } },
-    select: { createdAt: true, value: true },
+    select: { createdAt: true, value: true, currency: true },
   });
+
+  const fx = await currencySettings();
+  const unconverted = new Set<string>();
 
   const buckets = new Map<string, { date: string; created: number }>(
     emptyBuckets(range, bucket).map((k) => [k, { date: k, created: 0 }]),
   );
   for (const r of rows) {
+    const converted = convert(num(r.value), r.currency, fx);
+    if (converted === null) {
+      unconverted.add(r.currency ?? 'unknown');
+      continue;
+    }
     const k = bucketKey(r.createdAt, bucket);
     const row = buckets.get(k) ?? { date: k, created: 0 };
-    row.created += num(r.value);
+    row.created += converted;
     buckets.set(k, row);
+  }
+  if (unconverted.size) {
+    console.warn(`[metrics] pipelineTrend: no exchange rate for ${[...unconverted].join(', ')}; those deals are missing from the chart.`);
   }
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));

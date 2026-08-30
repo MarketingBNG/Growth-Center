@@ -56,9 +56,14 @@ export async function campaignPerformance(range: Range, channelId?: string) {
       where: { campaignId: { in: ids }, date: window, kind: 'one_time' },
       _sum: { amount: true },
     }),
-    db().customer.findMany({
-      where: { wonAt: window },
-      select: { opportunity: { select: { campaignId: true } } },
+    // Counted in SQL like its four siblings. This used to load every customer won in
+    // the window — unfiltered by campaign — and tally them in a Map, which is a table
+    // scan plus a join per row to produce a number Postgres can return on its own.
+    // Customer.opportunityId is unique, so one matching opportunity is one customer.
+    db().opportunity.groupBy({
+      by: ['campaignId'],
+      where: { campaignId: { in: ids }, customer: { is: { wonAt: window } } },
+      _count: { _all: true },
     }),
   ]);
 
@@ -84,12 +89,7 @@ export async function campaignPerformance(range: Range, channelId?: string) {
     revenueBy.set(key, (revenueBy.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, fx) ?? 0));
   }
 
-  const customerBy = new Map<string, number>();
-  for (const c of customers) {
-    const id = c.opportunity?.campaignId;
-    if (!id) continue;
-    customerBy.set(id, (customerBy.get(id) ?? 0) + 1);
-  }
+  const customerBy = new Map(customers.map((r) => [r.campaignId ?? '', r._count._all]));
 
   return campaigns
     .map((c) => {

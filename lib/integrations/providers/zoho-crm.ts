@@ -1,4 +1,4 @@
-import { IntegrationError, type Entity, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type Entity, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // Zoho CRM. BNG already runs Zoho, and bng-command-center's lib/zoho.ts is the working
 // reference for this token lifecycle — a long-lived refresh token minting short-lived
@@ -35,7 +35,7 @@ async function accessToken(refreshToken: string): Promise<string> {
     client_secret: process.env.ZOHO_CLIENT_SECRET ?? '',
     grant_type: 'refresh_token',
   });
-  const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST' });
+  const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
   if (!res.ok) throw new IntegrationError(`Zoho token refresh failed (${res.status}).`);
 
   const json = (await res.json()) as { access_token?: string; error?: string };
@@ -106,7 +106,7 @@ async function readPage(
   const headers: Record<string, string> = { authorization: `Zoho-oauthtoken ${token}` };
   if (since) headers['If-Modified-Since'] = since.toISOString();
 
-  const res = await fetch(`${API}/${moduleName}?${params}`, { headers });
+  const res = await fetch(`${API}/${moduleName}?${params}`, { headers, signal: httpTimeout() });
 
   // 204 is "nothing here" — an empty module, or nothing modified since. Both are a
   // successful, complete answer, not a failure.
@@ -475,7 +475,7 @@ export const zohoCrm: IntegrationProvider = {
       redirect_uri: input.redirectUri,
       code: input.code,
     });
-    const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST' });
+    const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
     const json = (await res.json()) as { refresh_token?: string; error?: string };
@@ -538,6 +538,7 @@ export const zohoCrm: IntegrationProvider = {
     const moduleName = type === 'deal' ? 'Deals' : type === 'contact' ? 'Contacts' : 'Leads';
     const res = await fetch(`${API}/${moduleName}?per_page=50`, {
       headers: { authorization: `Zoho-oauthtoken ${token}` },
+      signal: httpTimeout(),
     });
     if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
 

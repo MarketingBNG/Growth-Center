@@ -1,4 +1,4 @@
-import { IntegrationError, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // Meta Ads insights, written per campaign so the marketing table's spend, impressions
 // and clicks come from the platform rather than being entered by hand.
@@ -30,7 +30,7 @@ async function exchangeForLongLived(token: string): Promise<{ token: string; exp
     fb_exchange_token: token,
   });
 
-  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new IntegrationError(
@@ -99,7 +99,7 @@ export const metaAds: IntegrationProvider = {
       redirect_uri: input.redirectUri,
       code: input.code,
     });
-    const res = await fetch(`${GRAPH}/oauth/access_token?${params}`);
+    const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
     const json = (await res.json()) as { access_token?: string };
@@ -161,7 +161,7 @@ export const metaAds: IntegrationProvider = {
     // A guard rather than a while(true): a malformed cursor that returned itself would
     // otherwise spin until the function is killed.
     for (let page = 0; url && page < 50; page++) {
-      const res: Response = await fetch(url);
+      const res: Response = await fetch(url, { signal: httpTimeout() });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
         throw new IntegrationError(body?.error?.message ?? `Meta insights failed (${res.status}).`);
@@ -248,7 +248,7 @@ async function campaignDetails(
   let url: string | null = `${GRAPH}/${adAccountId}/campaigns?${params}`;
   try {
     for (let page = 0; url && page < 50; page++) {
-      const res: Response = await fetch(url);
+      const res: Response = await fetch(url, { signal: httpTimeout() });
       if (!res.ok) return out;
 
       const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };
@@ -286,6 +286,7 @@ async function accountCurrency(adAccountId: string, accessToken: string): Promis
   try {
     const res = await fetch(
       `${GRAPH}/${adAccountId}?fields=currency&access_token=${encodeURIComponent(accessToken)}`,
+      { signal: httpTimeout() },
     );
     if (!res.ok) {
       throw new IntegrationError(

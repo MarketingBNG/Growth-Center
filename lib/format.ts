@@ -122,3 +122,36 @@ export function fmtMoneyCompact(n: number | null | undefined, currency = 'USD'):
     maximumFractionDigits: Math.abs(n) < 10_000 ? 1 : 0,
   }).format(n);
 }
+
+/**
+ * A URL that is safe to put in an `href`, or null.
+ *
+ * `content_piece.url`, `contact.linkedin` and `company.website` are validated as bounded
+ * strings and nothing more, and two of them are rendered straight into an anchor. React
+ * does not block a `javascript:` href, so a value written through the CRM API — or
+ * arriving from a CRM import — would run as script in the browser of whoever clicked it.
+ * Both fields are empty across the whole database today; this closes the path before
+ * anything starts filling them.
+ *
+ * A bare domain is accepted and given an https scheme, because that is how people type a
+ * website into a form. Anything whose scheme is not http or https returns null and the
+ * caller renders plain text instead of a link.
+ */
+export function safeUrl(raw: string | null | undefined): string | null {
+  const value = (raw ?? '').trim();
+  if (!value) return null;
+
+  // No scheme and no colon at all: treat it as a bare domain rather than a relative
+  // path, so "linkedin.com/in/someone" links out instead of inside the app.
+  const candidate = /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.href;
+}

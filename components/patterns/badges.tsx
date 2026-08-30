@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 const LEAD_TONE = {
   new: 'info',
   contacted: 'purple',
+  // Distinct from `qualified`'s success green: it is progress, not the finish line.
+  semi_qualified: 'info',
   qualified: 'success',
   unqualified: 'neutral',
   converted: 'success',
@@ -12,7 +14,7 @@ const LEAD_TONE = {
 export function LeadStatusBadge({ status }: { status: keyof typeof LEAD_TONE }) {
   return (
     <Badge tone={LEAD_TONE[status] ?? 'neutral'} className="capitalize">
-      {status.replace('_', ' ')}
+      {status.replaceAll('_', ' ')}
     </Badge>
   );
 }
