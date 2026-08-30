@@ -15,14 +15,19 @@ import { listAssignable } from './users.ts';
 export async function pickOwner(): Promise<string | null> {
   // Everyone active, not a named team: teams are no longer hard-coded, they are a
   // free-text column someone may or may not have filled in.
-  const eligible = await listAssignable();
+  // Both reads at once. The load counts are grouped over the whole table and then
+  // narrowed to the eligible addresses in memory, which is what lets the two queries
+  // run together instead of the second waiting on the first's result — one fewer round
+  // trip on every auto-assignment.
+  const [eligible, counts] = await Promise.all([
+    listAssignable(),
+    db().lead.groupBy({
+      by: ['ownerEmail'],
+      where: { ownerEmail: { not: null }, status: { in: ['new', 'contacted'] } },
+      _count: { _all: true },
+    }),
+  ]);
   if (!eligible.length) return null;
-
-  const counts = await db().lead.groupBy({
-    by: ['ownerEmail'],
-    where: { ownerEmail: { in: eligible.map((e) => e.email) }, status: { in: ['new', 'contacted'] } },
-    _count: { _all: true },
-  });
 
   const load = new Map(counts.map((c) => [c.ownerEmail as string, c._count._all]));
   return eligible.reduce((best, e) =>
@@ -46,16 +51,18 @@ export function registerAutomations() {
     const owner = await pickOwner();
     if (!owner) return;
 
-    await db().lead.update({ where: { id: leadId }, data: { ownerEmail: owner } });
-    await db().activity.create({
-      data: {
-        type: 'owner_changed',
-        summary: `Auto-assigned to ${owner}`,
-        actorEmail: null,
-        detail: { rule: 'least-loaded marketing owner' },
-        leadId,
-      },
-    });
+    await Promise.all([
+      db().lead.update({ where: { id: leadId }, data: { ownerEmail: owner } }),
+      db().activity.create({
+        data: {
+          type: 'owner_changed',
+          summary: `Auto-assigned to ${owner}`,
+          actorEmail: null,
+          detail: { rule: 'least-loaded marketing owner' },
+          leadId,
+        },
+      }),
+    ]);
   });
 
   on('lead.qualified', async ({ leadId }) => {

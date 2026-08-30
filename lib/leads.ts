@@ -230,7 +230,17 @@ export async function createLead(
   input: LeadInput,
   actorEmail: string | null,
 ): Promise<CreateLeadResult> {
-  const duplicate = await findDuplicateLead(input.email);
+  // Three independent reads, issued together rather than one after another. Each round
+  // trip to the database costs ~280ms from a dev machine and the create path made a
+  // dozen of them in series, so "Create lead" sat spinning for four seconds. The two
+  // attribution lookups are wasted work on the rare duplicate, which is a fair trade
+  // for removing two round trips from every real create.
+  const [duplicate, attribution, fallbackChannelId] = await Promise.all([
+    findDuplicateLead(input.email),
+    resolveCampaign(input),
+    channelIdForSource(input.sourceType),
+  ]);
+
   if (duplicate) {
     // Record the repeat touch on the existing lead rather than dropping it silently —
     // "they filled the form again" is information the owner needs.
@@ -246,16 +256,14 @@ export async function createLead(
     return { created: false, leadId: duplicate.id, reason: 'duplicate' };
   }
 
-  // Attribution is resolved here rather than at each call site so a lead from the public
+  // Attribution is resolved above rather than at each call site so a lead from the public
   // form, the UI and an import are all credited the same way.
-  const attribution = await resolveCampaign(input);
-
+  //
   // Falling back to the channel the source type implies, which is what the CRM import
   // does. Without it a website form submission — the one path that is unambiguously the
   // site's own — arrived with no channel unless it happened to carry a utm_campaign that
   // matched a stored campaign by name.
-  const channelId =
-    attribution.channelId ?? input.channelId ?? (await channelIdForSource(input.sourceType));
+  const channelId = attribution.channelId ?? input.channelId ?? fallbackChannelId;
 
   const lead = await db().lead.create({
     data: {
@@ -268,22 +276,29 @@ export async function createLead(
     select: { id: true },
   });
 
-  await db().activity.create({
-    data: {
-      type: 'created',
-      summary: `Lead created from ${input.sourceType.replace('_', ' ')}`,
-      actorEmail,
-      detail: {
-        sourceType: input.sourceType,
-        utmSource: input.utmSource ?? null,
-        utmCampaign: input.utmCampaign ?? null,
-        attributed: !!attribution.campaignId,
+  // The history row and the CRM links touch different tables and neither reads the
+  // other's work, so they go together rather than in series.
+  await Promise.all([
+    db().activity.create({
+      data: {
+        type: 'created',
+        summary: `Lead created from ${input.sourceType.replace('_', ' ')}`,
+        actorEmail,
+        detail: {
+          sourceType: input.sourceType,
+          utmSource: input.utmSource ?? null,
+          utmCampaign: input.utmCampaign ?? null,
+          attributed: !!attribution.campaignId,
+        },
+        leadId: lead.id,
       },
-      leadId: lead.id,
-    },
-  });
+    }),
+    linkToCrm(lead.id, input),
+  ]);
 
-  await linkToCrm(lead.id, input);
+  // Awaited, not deferred: this is what assigns the owner, and the caller navigates
+  // straight to the lead's page — returning first would land the reader on a lead that
+  // says Unassigned until they reload.
   await dispatch({ type: 'lead.created', leadId: lead.id, actorEmail });
 
   return { created: true, leadId: lead.id };

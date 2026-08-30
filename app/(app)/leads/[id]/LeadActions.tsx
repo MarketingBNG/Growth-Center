@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useOptimistic, useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
@@ -29,17 +29,26 @@ export function LeadActions({
   const [error, setError] = useState<string | null>(null);
   const [converting, setConverting] = useState(false);
 
-  async function patch(json: Record<string, unknown>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await api(`/api/leads/${leadId}`, { method: 'PATCH', json });
-      router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+  // Both selects are driven by server props, so picking a value used to snap the control
+  // straight back to the old one — React re-asserts the prop — and it stayed wrong for
+  // the second or two the PATCH and the refresh took. The optimistic value shows the
+  // choice immediately and is dropped when the transition ends, at which point the prop
+  // is the server's real answer.
+  const [pending, startTransition] = useTransition();
+  const [shownStatus, showStatus] = useOptimistic(status);
+  const [shownOwner, showOwner] = useOptimistic(ownerEmail ?? '');
+
+  function patch(json: Record<string, unknown>, optimistic: () => void) {
+    startTransition(async () => {
+      optimistic();
+      setError(null);
+      try {
+        await api(`/api/leads/${leadId}`, { method: 'PATCH', json });
+        router.refresh();
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    });
   }
 
   async function convert(e: React.FormEvent<HTMLFormElement>) {
@@ -59,7 +68,7 @@ export function LeadActions({
     }
   }
 
-  const closed = status === 'converted' || status === 'lost';
+  const closed = shownStatus === 'converted' || shownStatus === 'lost';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -73,9 +82,12 @@ export function LeadActions({
       <Select
         aria-label="Owner"
         className="w-auto"
-        disabled={busy}
-        value={ownerEmail ?? ''}
-        onChange={(e) => patch({ ownerEmail: e.target.value || null })}
+        disabled={busy || pending}
+        value={shownOwner}
+        onChange={(e) => {
+          const next = e.target.value;
+          patch({ ownerEmail: next || null }, () => showOwner(next));
+        }}
       >
         <option value="">Unassigned</option>
         {owners.map((o) => (
@@ -88,9 +100,12 @@ export function LeadActions({
       <Select
         aria-label="Status"
         className="w-auto"
-        disabled={busy}
-        value={status}
-        onChange={(e) => patch({ status: e.target.value })}
+        disabled={busy || pending}
+        value={shownStatus}
+        onChange={(e) => {
+          const next = e.target.value;
+          patch({ status: next }, () => showStatus(next));
+        }}
       >
         {LEAD_STATUSES.map((s) => (
           <option key={s} value={s}>
