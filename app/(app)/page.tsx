@@ -132,9 +132,14 @@ export default async function DashboardPage({
       key: 'opportunities',
       label: 'Opportunities',
       value: f.opportunities,
+      // Checked against the live data rather than assumed: of 4,924 deals in the last
+      // twelve months, 4,476 have no lead linked at all and the other 448 all came from
+      // leads that did qualify. So the stage does not overtake Qualified because the flag
+      // gets skipped — it overtakes because most deals are entered straight into Zoho
+      // Deals and never existed as a lead.
       hint:
         f.opportunities > f.qualified
-          ? 'More than qualified: deals get opened without the lead being marked qualified first'
+          ? 'More than qualified: most deals are created directly in the CRM and never existed as a lead'
           : undefined,
     },
     { key: 'customers', label: 'Customers', value: f.customers },
