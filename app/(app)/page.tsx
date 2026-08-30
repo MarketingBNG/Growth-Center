@@ -337,7 +337,15 @@ export default async function DashboardPage({
             </CardHeader>
             <CardContent className="space-y-2.5">
               {insights.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No insights yet.</p>
+                // "No insights yet" reads as "we looked and found nothing" when in fact
+                // nothing has looked at all. The AI Assistant card at the foot of this
+                // same column already names the missing key; this one stayed quiet about
+                // it and the two disagreed about the same cause.
+                <p className="text-xs text-muted-foreground">
+                  {ai.configured
+                    ? 'No insights yet.'
+                    : 'Set ANTHROPIC_API_KEY to generate insights from your numbers.'}
+                </p>
               ) : (
                 insights.map((i) => (
                   <div key={i.id} className="rounded-md border border-border px-3 py-2">
