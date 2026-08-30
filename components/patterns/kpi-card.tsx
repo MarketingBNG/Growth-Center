@@ -165,7 +165,10 @@ export function KpiCard({
       <p className="pt-1.5 text-[11.5px] text-muted-foreground">
         {change === null
           ? kpi.value === null
-            ? (kpi.hint ?? 'No data')
+            ? // The note comes first: when a card has no value the reason is the whole
+              // message, and falling through to the hint described what the figure WOULD
+              // have meant while saying nothing about why it is missing.
+              (kpi.comparisonNote ?? kpi.hint ?? 'No data')
             : (kpi.comparisonNote ?? 'No prior period')
           : `vs ${show({ ...kpi, value: kpi.previous })} prior period`}
       </p>

@@ -11,11 +11,12 @@ import {
   rangeFor,
   repeatCustomerRate,
   sessionsStart,
+  spendStart,
   trend,
 } from './metrics.ts';
 import type { Kpi } from './kpi.ts';
 import type { Funnel } from './metrics.ts';
-import { fmtMoney, fmtNumber, fmtPercent, fmtRatio } from './format.ts';
+import { fmtDate, fmtMoney, fmtNumber, fmtPercent, fmtRatio } from './format.ts';
 
 // Assembles the analytics band for one screen. Lives here rather than in the pages so
 // the band's figures come from lib/metrics.ts like every other number, and so five
@@ -244,18 +245,24 @@ export async function dashboardBand(
   bucket: 'day' | 'month',
 ): Promise<{ band: BandData; funnel: Funnel; visitorsFrom: Date | null }> {
   const { current } = rangeFor(days);
-  const [{ cards, current: f }, series, weekday, repeat, sessionsFrom] = await Promise.all([
+  const [{ cards, current: f }, series, weekday, repeat, sessionsFrom, spendFrom] = await Promise.all([
     kpis(days),
     trend(current, bucket),
     leadsByWeekday(current),
     repeatCustomerRate(),
     sessionsStart(),
+    spendStart(),
   ]);
 
   // Non-null only when the sessions series starts INSIDE the window, which is the case
   // where the visitor count covers less time than every other stage of the funnel.
   const visitorsFrom =
     sessionsFrom && sessionsFrom.getTime() > current.from.getTime() ? sessionsFrom : null;
+
+  // Same test for spend. The ROAS card is already blanked over a window spend does not
+  // cover, and this note sits two inches from it printing the very figure the card
+  // declined to state.
+  const spendShort = !spendFrom || spendFrom.getTime() > current.from.getTime();
 
   const WANTED = ['visitors', 'leads', 'revenue', 'cac', 'roas'];
   const picked = WANTED.map((key) => cards.find((c) => c.key === key)).filter(
@@ -280,7 +287,9 @@ export async function dashboardBand(
         title: 'Revenue and spend',
         subtitle: by(bucket, ' · they share a unit, so they share a chart'),
         headline: money(f.revenue),
-        note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
+        note: spendShort
+          ? `${money(f.spend)} spent, but only from ${fmtDate(spendFrom)} — too little of the period to state a return`
+          : `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
         data: series,
         series: [
           { key: 'revenue', label: 'Revenue', kind: 'money' },

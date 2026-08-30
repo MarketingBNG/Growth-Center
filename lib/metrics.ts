@@ -34,7 +34,7 @@ export type Range = { from: Date; to: Date };
  *
  * Which series feeds which card lives in lib/kpi.ts, where it can be unit-tested.
  */
-async function comparableDeltas(cards: Kpi[], previous: Range): Promise<Kpi[]> {
+async function comparableDeltas(cards: Kpi[], current: Range, previous: Range): Promise<Kpi[]> {
   const [sessions, spend, leads, deals, revenue, customers, sessionSources, spendSources, leadSources, dealSources] =
     await Promise.all([
       db().metricSnapshot.findFirst({ where: { metricKey: 'sessions' }, orderBy: { date: 'asc' }, select: { date: true } }),
@@ -77,23 +77,51 @@ async function comparableDeltas(cards: Kpi[], previous: Range): Promise<Kpi[]> {
   const fmtDate = (d: Date) =>
     d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
+  /** The series behind `key` that does not reach back to `from`, if any. */
+  const shortfall = (key: string, from: Date) => {
+    const series = KPI_SERIES[key] ?? [];
+    const short = series.find((k) => {
+      const start = starts[k];
+      return !start || start.getTime() > from.getTime();
+    });
+    const startedAt = short ? starts[short] : null;
+    return short && startedAt ? { series: short, startedAt } : null;
+  };
+
   return cards.map((card) => {
     const series = KPI_SERIES[card.key] ?? [];
     const sources = [...new Set(series.flatMap((k) => sourcesFor[k]))];
+
+    // A card built from TWO series is a ratio, and a ratio is only meaningful when both
+    // of its inputs cover the same span. Ad spend begins on 27 July 2026 while customers
+    // and revenue go back years, so over any longer window CAC divided a month of spend
+    // by a year of customers (₹289) and ROAS divided a year of revenue by a month of
+    // spend (542.91x). Neither is a small error — they are off by the ratio of the two
+    // spans, and they were the two largest figures on the page.
+    //
+    // Single-series cards are left alone. 6,456 visitors over a year is an incomplete
+    // count but it is a true one; only the division is unsound.
+    if (series.length > 1) {
+      const gap = shortfall(card.key, current.from);
+      if (gap) {
+        return {
+          ...card,
+          sources,
+          value: null,
+          previous: null,
+          comparisonNote: `${SERIES_LABEL[gap.series]} data only goes back to ${fmtDate(gap.startedAt)}, so this cannot be measured over the whole period`,
+        };
+      }
+    }
 
     if (kpiIsComparable(card.key, previous.from, starts)) return { ...card, sources };
 
     // Name the series that falls short and the date it begins, so the card explains
     // itself instead of just going quiet.
-    const short = series.find((k) => {
-      const start = starts[k];
-      return !start || start.getTime() > previous.from.getTime();
-    });
-    const startedAt = short ? starts[short] : null;
-    const comparisonNote =
-      short && startedAt
-        ? `${SERIES_LABEL[short]} data only goes back to ${fmtDate(startedAt)}, so there is nothing to compare with`
-        : 'Not enough history to compare with';
+    const gap = shortfall(card.key, previous.from);
+    const comparisonNote = gap
+      ? `${SERIES_LABEL[gap.series]} data only goes back to ${fmtDate(gap.startedAt)}, so there is nothing to compare with`
+      : 'Not enough history to compare with';
 
     return { ...card, sources, previous: null, comparisonNote };
   });
@@ -156,6 +184,16 @@ async function sessions(range: Range): Promise<number> {
 export async function sessionsStart(): Promise<Date | null> {
   const first = await db().metricSnapshot.findFirst({
     where: { metricKey: 'sessions', source: await excludeDemo('sessions') },
+    orderBy: { date: 'asc' },
+    select: { date: true },
+  });
+  return first?.date ?? null;
+}
+
+/** The first day ad spend was recorded, or null if none ever was. The same question
+ *  `sessionsStart` answers, for the series that makes CAC and ROAS a ratio. */
+export async function spendStart(): Promise<Date | null> {
+  const first = await db().marketingSpend.findFirst({
     orderBy: { date: 'asc' },
     select: { date: true },
   });
@@ -304,7 +342,7 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return' },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), current: now, previous: before };
+  return { cards: await comparableDeltas(cards, current, previous), current: now, previous: before };
 }
 
 
@@ -824,7 +862,7 @@ export async function leadsKpis(days: number) {
     { key: 'unassigned', label: 'Unassigned', value: unassignedNow, previous: unassignedBefore, format: 'number', higherIsBetter: false },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), current: now, weekday, qualificationRate: now.leadToQualified };
+  return { cards: await comparableDeltas(cards, current, previous), current: now, weekday, qualificationRate: now.leadToQualified };
 }
 
 /** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */
@@ -847,7 +885,7 @@ export async function crmKpis(days: number) {
     { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded into an existing lead' },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), customerShare: share, weekday };
+  return { cards: await comparableDeltas(cards, current, previous), customerShare: share, weekday };
 }
 
 /** Pipeline: Open deals · Total value · Weighted · Win rate · Avg cycle.
@@ -874,7 +912,7 @@ export async function pipelineKpis(days: number) {
     { key: 'cycle', label: 'Avg cycle', value: cycleNow, previous: cyclePrev, format: 'days', higherIsBetter: false, hint: 'Created to won, for deals won this period' },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), open, winRate: rateNow, weekday };
+  return { cards: await comparableDeltas(cards, current, previous), open, winRate: rateNow, weekday };
 }
 
 /** Marketing: Spend · Leads · CPL · ROAS · CAC. */
@@ -895,7 +933,7 @@ export async function marketingKpis(days: number) {
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), current: now, budgetPacing: pacing, weekday };
+  return { cards: await comparableDeltas(cards, current, previous), current: now, budgetPacing: pacing, weekday };
 }
 
 /** Analytics: Sessions · Visitor→lead · Lead→qualified · Opp→customer · Revenue. */
@@ -926,7 +964,7 @@ export async function analyticsKpis(days: number) {
     { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true },
   ];
 
-  return { cards: await comparableDeltas(cards, previous), current: now, weekday };
+  return { cards: await comparableDeltas(cards, current, previous), current: now, weekday };
 }
 
 // ─── per-screen trend series ──────────────────────────────────────────────────
