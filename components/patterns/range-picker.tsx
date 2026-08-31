@@ -21,7 +21,12 @@ function label(days: number) {
   const to = new Date();
   const from = new Date(to.getTime() - (days - 1) * 86_400_000);
   const fmt = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
-  return `${fmt(from)} – ${fmt(to)}, ${to.getUTCFullYear()}`;
+  // A window that crosses New Year has to carry both years. With one year printed at the
+  // end, the 12-month range read "Sep 1 – Aug 31, 2026" — a range that runs backwards
+  // inside a single year, rather than one starting in 2025.
+  return from.getUTCFullYear() === to.getUTCFullYear()
+    ? `${fmt(from)} – ${fmt(to)}, ${to.getUTCFullYear()}`
+    : `${fmt(from)}, ${from.getUTCFullYear()} – ${fmt(to)}, ${to.getUTCFullYear()}`;
 }
 
 /** The date range lives in the URL, so a shared link shows the same numbers. */
