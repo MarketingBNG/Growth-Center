@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
+import { TaskList } from '@/components/patterns/task-list';
 import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getCompany } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
-import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
+import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
 import { convert } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
 
@@ -43,9 +44,14 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
             {company.customer ? <Badge tone="success">customer</Badge> : null}
           </div>
+          {/* Domain, industry and country are empty on all 2,953 imported companies —
+              Zoho holds none of the three — so this line read "No details recorded"
+              under every name on the site while the phone number and owner sat unread
+              in the same row. */}
           <p className="mt-1 text-[13.5px] text-muted-foreground">
-            {[company.domain, company.industry, company.country].filter(Boolean).join(' · ') ||
-              'No details recorded'}
+            {[company.domain, company.industry, company.country, company.phone]
+              .filter(Boolean)
+              .join(' · ') || 'No details recorded'}
           </p>
         </div>
         {revenue > 0 ? (
@@ -58,6 +64,32 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
+          {/* The contact page had a Details card and the company page had none, so
+              everything the sync does carry about an account — phone, website, size,
+              country, owner — had nowhere to appear. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              <Detail label="Phone" value={company.phone} />
+              <Detail
+                label="Website"
+                value={
+                  safeUrl(company.website) ? (
+                    <a href={safeUrl(company.website)!} target="_blank" rel="noreferrer" className="hover:text-primary">
+                      {company.website}
+                    </a>
+                  ) : null
+                }
+              />
+              <Detail label="Industry" value={company.industry} />
+              <Detail label="Country" value={company.country} />
+              <Detail label="Size" value={company.size} />
+              <Detail label="Owner" value={company.ownerEmail ?? 'Unassigned'} />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Contacts ({company.contacts.length})</CardTitle>
@@ -156,6 +188,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="space-y-4">
+          <TaskList tasks={company.tasks} />
+
           {company.customer ? (
             <Card>
               <CardHeader>
@@ -184,5 +218,14 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
     </>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
+    </div>
   );
 }

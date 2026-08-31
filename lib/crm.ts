@@ -147,7 +147,10 @@ export async function getCompany(id: string) {
       customer: { include: { revenue: { orderBy: { date: 'desc' }, take: 24 } } },
       noteEntries: { orderBy: { createdAt: 'desc' } },
       activities: { orderBy: { createdAt: 'desc' }, take: 50 },
-      tasks: { orderBy: { dueDate: 'asc' } },
+      // Open ones only, as getLead already did. The detail pages call this card "Open
+      // tasks"; a completed task listed under that heading is simply wrong, and the
+      // History timeline below it already records the completion.
+      tasks: { where: { status: { in: ['open', 'in_progress'] } }, orderBy: { dueDate: 'asc' } },
     },
   });
 }
@@ -164,7 +167,10 @@ export async function getContact(id: string) {
       },
       noteEntries: { orderBy: { createdAt: 'desc' } },
       activities: { orderBy: { createdAt: 'desc' }, take: 50 },
-      tasks: { orderBy: { dueDate: 'asc' } },
+      // Open ones only, as getLead already did. The detail pages call this card "Open
+      // tasks"; a completed task listed under that heading is simply wrong, and the
+      // History timeline below it already records the completion.
+      tasks: { where: { status: { in: ['open', 'in_progress'] } }, orderBy: { dueDate: 'asc' } },
     },
   });
 }

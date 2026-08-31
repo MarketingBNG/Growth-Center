@@ -32,6 +32,7 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
         ? {
             name: value('name'),
             domain: value('domain'),
+            phone: value('phone'),
             industry: value('industry'),
             country: value('country'),
             tags: [],
@@ -71,14 +72,20 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
               <Field label="Domain" hint="Used to match future leads to this company.">
                 <Input name="domain" placeholder="acme.com" maxLength={200} />
               </Field>
+              {/* Phone is the column the list actually shows, and the form had no way to
+                  set it — a company added by hand arrived with a blank where every
+                  imported one has a number. */}
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Industry">
-                  <Input name="industry" maxLength={80} />
+                <Field label="Phone">
+                  <Input name="phone" maxLength={40} />
                 </Field>
                 <Field label="Country">
                   <Input name="country" maxLength={80} />
                 </Field>
               </div>
+              <Field label="Industry" hint="Empty on every synced company; shown on the record itself.">
+                <Input name="industry" maxLength={80} />
+              </Field>
             </>
           ) : (
             <>

@@ -3,8 +3,9 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { LeadStatusBadge, PriorityBadge, SourceBadge } from '@/components/patterns/badges';
+import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
+import { TaskList } from '@/components/patterns/task-list';
 import { getLead } from '@/lib/leads';
 import { hasDb } from '@/lib/prisma';
 import { listAssignable, peopleOn, personOptions } from '@/lib/users';
@@ -155,27 +156,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className="space-y-4">
-          {lead.tasks.length ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Open tasks</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {lead.tasks.map((t) => (
-                  <div key={t.id} className="rounded-md border border-border px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm leading-snug">{t.title}</p>
-                      <PriorityBadge priority={t.priority} />
-                    </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {t.dueDate ? `Due ${fmtDate(t.dueDate)}` : 'No due date'}
-                      {t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
-                    </p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
+          <TaskList tasks={lead.tasks} />
 
           <Card>
             <CardHeader>

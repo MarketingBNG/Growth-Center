@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
+import { TaskList } from '@/components/patterns/task-list';
 import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getContact } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
@@ -145,12 +146,16 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>History</CardTitle>
-          </CardHeader>
-          <Timeline entries={contact.activities} />
-        </Card>
+        <div className="space-y-4">
+          <TaskList tasks={contact.tasks} />
+
+          <Card>
+            <CardHeader>
+              <CardTitle>History</CardTitle>
+            </CardHeader>
+            <Timeline entries={contact.activities} />
+          </Card>
+        </div>
       </div>
     </>
   );
