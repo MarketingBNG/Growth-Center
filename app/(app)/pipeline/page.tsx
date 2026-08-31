@@ -109,9 +109,10 @@ export default async function PipelinePage({
 
       {data.truncated ? (
         <p className="mb-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[12.5px] text-muted-foreground">
-          Each column shows its {BOARD_LIMIT} most recently updated deals, of{' '}
-          {fmtNumber(data.openTotal)} open. The totals above cover all of them, and each
-          column says how many it is holding back.
+          Each column shows its {BOARD_LIMIT} most recently updated deals — the ones still
+          open, or for the won and lost columns, the ones that ended there. The figures
+          above cover all {fmtNumber(data.openTotal)} open deals, and each column says how
+          many it is holding back.
         </p>
       ) : null}
 

@@ -22,17 +22,32 @@ export default async function SocialPage() {
     );
   }
 
-  const { accounts, recent, totals, seededNetworks } = await socialOverview();
+  const { accounts, reportedAccounts, recent, totals, seededNetworks } = await socialOverview();
 
   if (accounts.length === 0) {
+    // Two different empty pages. An integration that is reporting accounts nobody can see
+    // is a sync fault, and telling that reader to go and connect Facebook is both wrong and
+    // a dead end — they already have.
+    const reporting = reportedAccounts.length > 0;
     return (
       <>
         <PageHeader title="Social" subtitle="Accounts, reach and engagement." />
         <Card>
           <EmptyState
-            icon={<Share2 className="size-6" />}
-            title="No social accounts"
-            hint="Connect Facebook and Instagram on the Integrations page. LinkedIn needs their Marketing Developer Platform approval."
+            icon={reporting ? <TriangleAlert className="size-6" /> : <Share2 className="size-6" />}
+            title={reporting ? 'Accounts are being reported but none are stored' : 'No social accounts'}
+            hint={
+              reporting
+                ? `${reportedAccounts.length} account${reportedAccounts.length === 1 ? '' : 's'} — ${reportedAccounts
+                    .map((a) => a.entityId)
+                    .join(', ')} — last reported ${fmtRelative(
+                    reportedAccounts.reduce<Date | null>(
+                      (latest, a) => (a.lastSeen && (!latest || a.lastSeen > latest) ? a.lastSeen : latest),
+                      null,
+                    ),
+                  )}. Run the sync again from the Integration Center; if this persists the connection is reporting accounts the app cannot key.`
+                : 'Connect Facebook and Instagram on the Integrations page. LinkedIn needs their Marketing Developer Platform approval.'
+            }
           />
         </Card>
       </>

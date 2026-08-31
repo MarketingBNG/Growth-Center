@@ -80,6 +80,18 @@ export async function board(pipelineId?: string) {
     : await defaultPipeline();
   if (!pipeline) return null;
 
+  // A won or lost stage holds its deals; an in-play stage holds the ones still open.
+  //
+  // OPEN_DEAL was applied to every column, and it excludes won and lost stages by
+  // definition — so those columns could only ever render empty and print a 0. The board
+  // showed "Deal Complete · won · 0" and "Deal Lost · lost · 0" directly beneath a 98.7%
+  // win rate, in a period that closed 366 won deals and 5 lost ones. The filter belongs
+  // on the stages where "open" is a meaningful question.
+  const scopeFor = (stage: { id: string; isWon: boolean; isLost: boolean }) =>
+    stage.isWon || stage.isLost
+      ? { pipelineId: pipeline.id, stageId: stage.id }
+      : { pipelineId: pipeline.id, stageId: stage.id, ...OPEN_DEAL };
+
   // One query per column rather than one for the board, so every stage shows its own
   // most-recently-touched deals. The board renders a draggable card each, so the cap
   // stays — but it is reported per column, and `openPipeline()` in lib/metrics.ts still
@@ -88,7 +100,7 @@ export async function board(pipelineId?: string) {
     Promise.all(
       pipeline.stages.map((stage) =>
         db().opportunity.findMany({
-          where: { pipelineId: pipeline.id, stageId: stage.id, ...OPEN_DEAL },
+          where: scopeFor(stage),
           orderBy: { updatedAt: 'desc' },
           take: BOARD_LIMIT,
           include: {
@@ -98,24 +110,25 @@ export async function board(pipelineId?: string) {
         }),
       ),
     ),
-    db().opportunity.groupBy({
-      by: ['stageId'],
-      where: { pipelineId: pipeline.id, ...OPEN_DEAL },
-      _count: { _all: true },
-    }),
+    Promise.all(
+      pipeline.stages.map((stage) => db().opportunity.count({ where: scopeFor(stage) })),
+    ),
   ]);
 
-  const totalFor = new Map(counts.map((c) => [c.stageId, c._count._all]));
   const columns = pipeline.stages.map((stage, i) => ({
     stage,
     cards: perStage[i],
-    /** Every open deal in this stage, which is not always what `cards` holds. */
-    total: totalFor.get(stage.id) ?? 0,
+    /** Everything this column stands for, which is not always what `cards` holds. */
+    total: counts[i],
   }));
 
   return {
     pipeline,
-    openTotal: columns.reduce((n, c) => n + c.total, 0),
+    // Open deals only, whatever the terminal columns now hold — this is the figure the
+    // page prints as "of N open", and the KPI cards it sits under count the same thing.
+    openTotal: columns
+      .filter((c) => !c.stage.isWon && !c.stage.isLost)
+      .reduce((n, c) => n + c.total, 0),
     truncated: columns.some((c) => c.cards.length < c.total),
     columns,
   };

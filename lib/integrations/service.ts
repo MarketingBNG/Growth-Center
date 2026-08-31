@@ -494,18 +494,34 @@ async function writeSocialActivity(
   // side as though both were current. That is how a Facebook Page granted by mistake
   // stayed on the page after the reconnect that replaced it.
   //
-  // Guarded on accountPoints: a sync that reported no accounts at all says nothing about
-  // which accounts exist, and must not be read as "delete everything". Posts go with the
-  // account by cascade.
-  if (accountPoints.length) {
+  // Guarded on what was actually RESOLVED, not on what arrived.
+  //
+  // The guard used to be `accountPoints.length`, and the keep-set is built by the loop
+  // above, which skips any point whose entityMeta carries no network or no handle. A sync
+  // that reported accounts but resolved none of them therefore reached this delete with an
+  // empty keep-set — and Prisma compiles `notIn: []` to a condition that matches every
+  // row, so it wiped every account this integration had. That is how the Social page came
+  // to read "No social accounts. Connect Facebook and Instagram" while the integration
+  // was still syncing a follower count for facebook:gyanodayanandanvan every day.
+  //
+  // A sync that resolved no accounts says nothing about which accounts exist, exactly as
+  // a sync that reported none says nothing. Posts go with the account by cascade.
+  const keep = [...accountIdByKey.values()];
+  if (keep.length) {
     const pruned = await db().socialAccount.deleteMany({
-      where: { integrationId, id: { notIn: [...accountIdByKey.values()] } },
+      where: { integrationId, id: { notIn: keep } },
     });
     if (pruned.count) {
       console.info(
         `[social] pruned ${pruned.count} account(s) this integration no longer reports`,
       );
     }
+  } else if (accountPoints.length) {
+    // Said out loud: the accounts are being reported and none of them can be written, so
+    // the Social page will stay empty and nothing else would explain why.
+    console.warn(
+      `[social] ${accountPoints.length} account point(s) carried no usable network/handle; nothing written and nothing pruned`,
+    );
   }
 
   // One row per post, carrying whichever metrics that network reported. A key the

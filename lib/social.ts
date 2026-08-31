@@ -102,8 +102,31 @@ export async function socialOverview() {
     { followers: 0, posts: 0, reach: 0, engagements: 0, clicks: 0 },
   );
 
+  // What the integrations SAY they are reporting, whether or not an account row exists
+  // for it.
+  //
+  // Read so an empty page can tell the two cases apart. With no accounts written, the page
+  // said "No social accounts. Connect Facebook and Instagram on the Integrations page" —
+  // advice for someone who has not connected anything, shown to a workspace whose Meta
+  // connection was syncing a follower count every day. The accounts had been deleted by a
+  // prune bug in writeSocialActivity; the page had no way to say so and blamed the reader.
+  const reportedAccounts = rows.length
+    ? []
+    : (
+        await db().metricSnapshot.groupBy({
+          by: ['entityId'],
+          where: { entityType: 'social_account' },
+          _max: { date: true },
+        })
+      )
+        .filter((r) => r.entityId)
+        .map((r) => ({ entityId: r.entityId as string, lastSeen: r._max.date }));
+
   return {
     accounts: rows,
+    /** Accounts an integration has reported into the metrics layer but which have no
+     *  SocialAccount row. Only populated when the page would otherwise be empty. */
+    reportedAccounts,
     recent,
     totals: { ...totals, engagementRate: rate(totals.engagements, totals.reach) },
     /** Networks whose figures are still seeded. Empty means the page can drop its warning.

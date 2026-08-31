@@ -4,6 +4,7 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { BarChart } from '@/components/charts/BarChart';
+import { TrendChart } from '@/components/charts/TrendChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
@@ -132,6 +133,19 @@ export default async function MarketingPage({
             : null}
         </p>
       ) : null}
+
+      {/* Spend on its own axis. It used to share the band's chart with revenue, which runs
+          four orders of magnitude higher here, so the line it drew was flat on zero. */}
+      <div className="pb-[18px]">
+        <TrendChart
+          title="Ad spend"
+          subtitle={bucket === 'month' ? 'By month' : 'By day'}
+          data={band.trend.data}
+          series={[{ key: 'spend', label: 'Spend', kind: 'money' }]}
+          currency={band.currency}
+          height={180}
+        />
+      </div>
 
       {/* A chart that compares channels answers nothing once you have picked one, and a
           single bar next to an axis is a worse way to read one number than the band above

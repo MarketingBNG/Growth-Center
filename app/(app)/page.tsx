@@ -168,9 +168,10 @@ export default async function DashboardPage({
           align-items:start so a short right column does not stretch its cards. */}
       <div className="grid items-start gap-3.5 lg:[grid-template-columns:minmax(0,1.75fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3.5">
-          {/* Revenue and spend live in the band above; these two do not share a unit
-              with it, or with each other, so they keep their own charts — never a
-              second y-axis. */}
+          {/* Revenue lives in the band above; none of these share a unit with it, or with
+              each other, so they each keep their own chart — never a second y-axis. Spend
+              is here rather than beside revenue for exactly that reason: against revenue
+              it was a flat line on the axis. */}
           <div className="grid gap-3.5 sm:grid-cols-2">
             <TrendChart
               title="Visitors"
@@ -182,6 +183,13 @@ export default async function DashboardPage({
               title="Leads"
               data={series}
               series={[{ key: 'leads', label: 'Leads', kind: 'number' }]}
+              height={150}
+            />
+            <TrendChart
+              title="Marketing spend"
+              data={series}
+              series={[{ key: 'spend', label: 'Spend', kind: 'money' }]}
+              currency={band.currency}
               height={150}
             />
           </div>

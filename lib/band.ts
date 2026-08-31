@@ -184,15 +184,15 @@ export async function marketingBand(
     kpis: cards,
     currency: fx,
     trend: {
-      title: 'Revenue and spend',
-      subtitle: by(bucket, ' · they share a unit, so they share a chart'),
+      // Revenue alone. Sharing a unit is not sharing a scale: this account books revenue
+      // four orders of magnitude above its daily ad spend, so the spend line lay flat on
+      // the axis while the subtitle claimed to be showing it. Spend has its own chart.
+      title: 'Revenue booked',
+      subtitle: by(bucket),
       headline: money(f.revenue),
-      note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
+      note: `${money(f.spend)} spent · ${fmtRatio(f.roas)} return · charted separately`,
       data: series,
-      series: [
-        { key: 'revenue', label: 'Revenue', kind: 'money' },
-        { key: 'spend', label: 'Spend', kind: 'money' },
-      ],
+      series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
     },
     weekday: { data: weekday },
     gauge: {
@@ -293,17 +293,16 @@ export async function dashboardBand(
       // selection that happened to exclude every money card would lose the currency.
       currency: f.currency,
       trend: {
-        title: 'Revenue and spend',
-        subtitle: by(bucket, ' · they share a unit, so they share a chart'),
+        // See marketingBand: revenue and spend do not share a scale, so they no longer
+        // share a chart. Spend is plotted on its own beneath the band.
+        title: 'Revenue booked',
+        subtitle: by(bucket),
         headline: money(f.revenue),
         note: spendShort
           ? `${money(f.spend)} spent, but only from ${fmtDate(spendFrom)} — too little of the period to state a return`
-          : `${money(f.spend)} spent · ${fmtRatio(f.roas)} return`,
+          : `${money(f.spend)} spent · ${fmtRatio(f.roas)} return · charted separately`,
         data: series,
-        series: [
-          { key: 'revenue', label: 'Revenue', kind: 'money' },
-          { key: 'spend', label: 'Marketing spend', kind: 'money' },
-        ],
+        series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
       },
       weekday: { data: weekday },
       gauge: {
