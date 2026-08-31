@@ -42,16 +42,13 @@ export function TR({ className, ...props }: React.ComponentProps<'tr'>) {
   );
 }
 
+/** Exported so `SortHeader` can render its own `<th>` — aria-sort belongs on the cell,
+ *  not on the button inside it — without restating these classes. */
+export const TH_CLASS =
+  'px-5 py-[9px] text-left align-middle text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground';
+
 export function TH({ className, ...props }: React.ComponentProps<'th'>) {
-  return (
-    <th
-      className={cn(
-        'px-5 py-[9px] text-left align-middle text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground',
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <th className={cn(TH_CLASS, className)} {...props} />;
 }
 
 export function TD({ className, ...props }: React.ComponentProps<'td'>) {

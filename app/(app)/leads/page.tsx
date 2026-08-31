@@ -5,6 +5,7 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
+import { SortHeader } from '@/components/patterns/sort-header';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -117,13 +118,15 @@ export default async function LeadsPage({
               <Table>
                 <THead>
                   <TR>
-                    <TH>Name</TH>
-                    <TH>Company</TH>
-                    <TH>Status</TH>
-                    <TH>Source</TH>
+                    {/* SortHeader renders its own th, so these are not wrapped in TH. */}
+                    <SortHeader name="firstName">Name</SortHeader>
+                    <SortHeader name="companyName">Company</SortHeader>
+                    <SortHeader name="status">Status</SortHeader>
+                    <SortHeader name="sourceType">Source</SortHeader>
+                    {/* Channel is a relation, so it is not in the sort allow-list. */}
                     <TH>Channel</TH>
-                    <TH>Owner</TH>
-                    <TH className="text-right">Created</TH>
+                    <SortHeader name="ownerEmail">Owner</SortHeader>
+                    <SortHeader name="createdAt" align="right">Created</SortHeader>
                   </TR>
                 </THead>
                 <TBody>

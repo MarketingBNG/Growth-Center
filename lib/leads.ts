@@ -43,7 +43,13 @@ export const leadFilters = z.object({
 
 export type LeadFilters = z.infer<typeof leadFilters>;
 
-const SORTABLE = ['createdAt', 'updatedAt', 'status', 'score', 'firstName'] as const;
+// Every column the table actually shows a header for, so a sortable header exists for
+// each. All are Lead scalars — the allow-list is what keeps `?sort=` out of a relation
+// or an arbitrary field.
+const SORTABLE = [
+  'createdAt', 'updatedAt', 'status', 'score', 'firstName',
+  'companyName', 'sourceType', 'ownerEmail',
+] as const;
 
 /**
  * `window` is the range the picker resolved, applied only when the URL carries no
@@ -84,6 +90,11 @@ export function leadWhere(filters: LeadFilters, q: ListQuery, window?: { from: D
   return where;
 }
 
+/** The sortable columns that allow a null. Postgres puts nulls first on DESC, so sorting
+ *  by Company or Owner descending opened with a screenful of blanks; these ask for them
+ *  at the end instead, in both directions. */
+const NULLABLE_SORTS = new Set(['companyName', 'ownerEmail', 'lastName']);
+
 export async function listLeads(
   filters: LeadFilters,
   q: ListQuery,
@@ -91,11 +102,14 @@ export async function listLeads(
 ) {
   const where = leadWhere(filters, q, window);
   const key = (SORTABLE as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
+  const orderBy = NULLABLE_SORTS.has(key)
+    ? { [key]: { sort: q.dir, nulls: 'last' as const } }
+    : { [key]: q.dir };
 
   const [rows, total] = await Promise.all([
     db().lead.findMany({
       where,
-      orderBy: { [key]: q.dir },
+      orderBy,
       skip: (q.page - 1) * q.perPage,
       take: q.perPage,
       include: {
