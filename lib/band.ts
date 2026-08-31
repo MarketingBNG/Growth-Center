@@ -224,15 +224,16 @@ export async function analyticsBand(days: number, bucket: 'day' | 'month'): Prom
     kpis: cards,
     currency: fx,
     trend: {
-      title: 'Revenue and spend',
-      subtitle: by(bucket, ' · never a second y-axis'),
+      // Revenue alone. Pairing it with spend on this chart broke the one rule the chart
+      // has: a single shared y-axis. Booked revenue runs four orders of magnitude above
+      // daily ad spend, so the spend line sat flat on the axis, unreadable, while the
+      // subtitle claimed to be showing it. Spend has its own chart on the page.
+      title: 'Revenue booked',
+      subtitle: by(bucket),
       headline: money(f.revenue),
-      note: 'Sessions and leads sit on their own charts',
+      note: 'Ad spend, sessions and leads each sit on their own chart',
       data: series,
-      series: [
-        { key: 'revenue', label: 'Revenue', kind: 'money' },
-        { key: 'spend', label: 'Spend', kind: 'money' },
-      ],
+      series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
     },
     weekday: { data: weekday },
     gauge: {

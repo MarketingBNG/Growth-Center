@@ -11,6 +11,12 @@ const STATE: Record<string, { label: string; tone: 'neutral' | 'info' | 'success
   demo_data: { label: 'Demo data', tone: 'warning' },
 };
 
+/** The state in the same words the badge uses, so a caption beside a badge cannot
+ *  disagree with it — "Not connected" was printed next to a "Syncing…" badge. */
+export function stateLabel(state: string): string {
+  return STATE[state]?.label ?? state;
+}
+
 export function StateBadge({ state }: { state: string }) {
   const s = STATE[state] ?? { label: state, tone: 'neutral' as const };
   return <Badge tone={s.tone}>{s.label}</Badge>;

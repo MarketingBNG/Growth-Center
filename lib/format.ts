@@ -85,6 +85,27 @@ export function fmtRelative(d: Date | string | null | undefined): string {
   return fmtDate(date);
 }
 
+/**
+ * Relative age of a DATE-only value, in days.
+ *
+ * `fmtRelative` works in hours, which is wrong for a column that stores a calendar day
+ * at UTC midnight: a snapshot dated today read "12h ago", and one dated today in a
+ * later timezone would read "in 5h". Metric snapshots are days, so say days.
+ */
+export function fmtDaysAgo(d: Date | string | null | undefined): string {
+  if (!d) return 'never';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (Number.isNaN(date.getTime())) return '—';
+  const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  const now = new Date();
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const days = Math.round((today - day) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days}d ago`;
+  return fmtDate(date);
+}
+
 /** Percentage change, or null when there is no baseline to compare against. */
 export function delta(current: number, previous: number): number | null {
   if (!previous) return null;
