@@ -486,6 +486,28 @@ async function writeSocialActivity(
     accountIdByKey.set(`${network}:${handle}`, row.id);
   }
 
+  // Accounts this integration used to report and no longer does.
+  //
+  // The upsert above adds and updates but never removes, so a connection that changes
+  // which accounts it covers left the old ones behind wearing this integrationId — and
+  // the Social page cannot tell a stale row from a live one, so it renders them side by
+  // side as though both were current. That is how a Facebook Page granted by mistake
+  // stayed on the page after the reconnect that replaced it.
+  //
+  // Guarded on accountPoints: a sync that reported no accounts at all says nothing about
+  // which accounts exist, and must not be read as "delete everything". Posts go with the
+  // account by cascade.
+  if (accountPoints.length) {
+    const pruned = await db().socialAccount.deleteMany({
+      where: { integrationId, id: { notIn: [...accountIdByKey.values()] } },
+    });
+    if (pruned.count) {
+      console.info(
+        `[social] pruned ${pruned.count} account(s) this integration no longer reports`,
+      );
+    }
+  }
+
   // One row per post, carrying whichever metrics that network reported. A key the
   // provider omitted keeps the column default rather than being written as zero —
   // Instagram reports no link clicks on organic media, and a 0 there would read as
