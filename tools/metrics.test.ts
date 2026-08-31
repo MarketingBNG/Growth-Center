@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/calc.ts';
-import { bucketKey, previousOf, rangeFor, windowFor } from '../lib/metrics.ts';
+import { bucketKey, liveDays, previousOf, rangeFor, windowFor } from '../lib/metrics.ts';
 
 // Rates return null, not 0, when there is no denominator. A 0% CTR on a campaign that
 // served no impressions is a false statement, and it would drag any average down.
@@ -111,4 +111,37 @@ test('previousOf never overlaps the range it precedes', () => {
   assert.ok(prev.to < range.from);
   assert.equal(prev.to.getTime() + 1, range.from.getTime());
   assert.equal(prev.to.getTime() - prev.from.getTime(), range.to.getTime() - range.from.getTime());
+});
+
+// Budget pacing divided a whole period's spend by a single day's budget and reported
+// 906.9%: Meta quotes a daily budget, and summing those raw compares a month of one
+// against a day of the other. What a range permitted is the daily figure times the days
+// the campaign was live in it.
+test('liveDays counts the overlap, both ends included', () => {
+  const range = { from: new Date('2026-08-02T00:00:00Z'), to: new Date('2026-08-31T23:59:59.999Z') };
+
+  // Open-ended and started long ago: the whole range.
+  assert.equal(liveDays({ startDate: new Date('2025-10-17T00:00:00Z'), endDate: null }, range), 30);
+
+  // Started partway through, still running.
+  assert.equal(liveDays({ startDate: new Date('2026-08-22T00:00:00Z'), endDate: null }, range), 10);
+
+  // Ran for six days inside the range and stopped.
+  assert.equal(
+    liveDays(
+      { startDate: new Date('2026-08-10T00:00:00Z'), endDate: new Date('2026-08-15T00:00:00Z') },
+      range,
+    ),
+    6,
+  );
+
+  // No dates at all is the whole range, matching the overlap query that selected it.
+  assert.equal(liveDays({ startDate: null, endDate: null }, range), 30);
+});
+
+test('liveDays never returns zero, so pacing cannot divide by it', () => {
+  const range = { from: new Date('2026-08-02T00:00:00Z'), to: new Date('2026-08-31T23:59:59.999Z') };
+  // A campaign that ended before the range began is filtered out upstream; if one ever
+  // reaches here it must not zero the denominator for every other campaign in the sum.
+  assert.equal(liveDays({ startDate: null, endDate: new Date('2026-07-01T00:00:00Z') }, range), 1);
 });

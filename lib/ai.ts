@@ -84,19 +84,21 @@ export async function growthContext(days = 90) {
       spend: Math.round(c.spend),
       leads: c.leads,
       customers: c.customers,
-      revenue: Math.round(c.revenue),
+      revenue: c.revenue === null ? null : Math.round(c.revenue),
       cac: c.cac === null ? null : Math.round(c.cac),
       roas: c.roas === null ? null : Number(c.roas.toFixed(2)),
     })),
     campaigns: campaigns
-      .filter((c) => c.spend > 0 || c.leads > 0)
+      .filter((c) => c.spend > 0 || (c.leads ?? 0) > 0)
       .map((c) => ({
         name: c.name,
         channel: c.channelName,
         spend: Math.round(c.spend),
+        // Null where nothing attributes the figure to a campaign. Sent as 0 the model
+        // reads it as a campaign that produced nothing and writes that up as a finding.
         leads: c.leads,
         customers: c.customers,
-        revenue: Math.round(c.revenue),
+        revenue: c.revenue === null ? null : Math.round(c.revenue),
         costPerLead: c.costPerLead === null ? null : Math.round(c.costPerLead),
         roas: c.roas === null ? null : Number(c.roas.toFixed(2)),
       })),
@@ -183,7 +185,16 @@ export function ruleFindings(ctx: GrowthContext) {
     const sorted = [...paid].sort((a, b) => (b.roas ?? 0) - (a.roas ?? 0));
     const best = sorted[0];
     const worst = sorted[sorted.length - 1];
-    if (best.roas && worst.roas !== null && best.roas > worst.roas) {
+    // A non-null ROAS means revenue is attributed to the campaign, so both figures below
+    // are known — narrowed here rather than defaulted at the call sites, which would put a
+    // confident 0 into a sentence the model then reports as fact.
+    if (
+      best.roas &&
+      worst.roas !== null &&
+      best.roas > worst.roas &&
+      best.revenue !== null &&
+      worst.revenue !== null
+    ) {
       findings.push({
         kind: 'opportunity',
         title: `${best.name} returns ${best.roas}× against ${worst.name}'s ${worst.roas}×`,

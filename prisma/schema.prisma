@@ -173,6 +173,14 @@ model Campaign {
   /// The currency the budget is stated in — the ad account's, not the workspace's.
   currency String @default("USD")
 
+  /// Whether `budget` is a per-day allowance or one for the campaign's whole run.
+  /// "daily" | "lifetime", null when the provider did not say.
+  ///
+  /// Meta reports one or the other and never both, and the two were collapsed into a
+  /// single column. Pacing then divided a month of spend by a single day's budget and
+  /// reported 906.9% — the arithmetic was right and the units were not.
+  budgetPeriod String?
+
   /// The provider's own id for this campaign, when it came from one. Lets a sync
   /// update in place instead of duplicating.
   externalId String?

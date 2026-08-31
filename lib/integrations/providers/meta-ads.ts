@@ -212,6 +212,7 @@ type CampaignDetail = {
   startDate: string | null;
   endDate: string | null;
   budget: number | null;
+  budgetPeriod: 'daily' | 'lifetime' | null;
 };
 
 /**
@@ -220,6 +221,10 @@ type CampaignDetail = {
  * Budget is reported in minor units — 5000 means £50.00 — and a campaign carries either a
  * daily or a lifetime one, never both. The daily figure is preferred because it is what
  * the account is actually pacing to; a lifetime budget stands in when there is no daily.
+ *
+ * Which of the two it was is recorded alongside it. Without that the number is not
+ * comparable to a period's spend: a daily budget has to be multiplied by the days the
+ * campaign ran before the division means anything.
  *
  * A failure here is not a failure of the sync. Spend is the number every ROAS and CAC
  * figure depends on and it has already been fetched; losing a start date is worth far
@@ -253,12 +258,16 @@ async function campaignDetails(
 
       const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };
       for (const row of json.data ?? []) {
-        const minorUnits = Number(row.daily_budget ?? row.lifetime_budget);
+        const daily = Number(row.daily_budget);
+        const hasDaily = Number.isFinite(daily) && daily > 0;
+        const minorUnits = hasDaily ? daily : Number(row.lifetime_budget);
+        const budget = Number.isFinite(minorUnits) && minorUnits > 0 ? minorUnits / 100 : null;
         out.set(row.id, {
           status: row.status?.toLowerCase() ?? null,
           startDate: row.start_time ?? null,
           endDate: row.stop_time ?? null,
-          budget: Number.isFinite(minorUnits) && minorUnits > 0 ? minorUnits / 100 : null,
+          budget,
+          budgetPeriod: budget === null ? null : hasDaily ? 'daily' : 'lifetime',
         });
       }
       url = json.paging?.next ?? null;

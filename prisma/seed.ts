@@ -270,6 +270,9 @@ async function main() {
         status: 'active',
         startDate: dayOffset(MONTHS * 30),
         budget: c.cpc > 0 ? int(15000, 60000) : null,
+        // A budget for the campaign's whole run, not a daily allowance. Said explicitly
+        // so pacing reads the demo data the same way it reads a synced account.
+        budgetPeriod: c.cpc > 0 ? 'lifetime' : null,
         source: c.source,
         externalId: c.source ? `demo-${c.channel}-${campaigns.length + 1}` : null,
       },

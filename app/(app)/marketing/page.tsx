@@ -61,7 +61,8 @@ export default async function MarketingPage({
 
   // Which sources actually appear in this period, so the filter never offers an option
   // that would return nothing.
-  const hasActivity = (r: (typeof rows)[number]) => r.spend > 0 || r.leads > 0 || r.revenue > 0;
+  const hasActivity = (r: (typeof rows)[number]) =>
+    r.spend > 0 || (r.leads ?? 0) > 0 || (r.revenue ?? 0) > 0;
 
   const presentSources = [...new Set(rows.filter(hasActivity).map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
     id,
@@ -80,6 +81,20 @@ export default async function MarketingPage({
 
   const totals = campaignTotals(filtered);
   const active = filtered.filter(hasActivity);
+
+  // Whether anything downstream of a click is attributed to a campaign. Zoho stamps a
+  // CHANNEL on a lead but never a campaign — Campaign_Source is null on all 27,256 — so
+  // Leads, CPL, Deals, Cust., New revenue, CAC and ROAS cannot be computed per campaign,
+  // and campaignPerformance returns null for them rather than 0.
+  //
+  // Seven columns of dashes beside a real spend figure is not better than seven columns
+  // of zeroes; it is the same empty table with quieter punctuation. So the table shows
+  // what Meta does report per campaign — delivery — and says once, above it, why the rest
+  // is missing. The dashboard's campaign table already does this.
+  //
+  // Derived from the data, so the outcome columns come back on their own the day anything
+  // starts stamping a campaign on a lead.
+  const attributed = active.some((c) => c.leads !== null || c.revenue !== null);
 
   return (
     <>
@@ -117,6 +132,13 @@ export default async function MarketingPage({
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Campaigns</CardTitle>
+          {active.length > 0 && !attributed ? (
+            <p className="text-[11px] text-muted-foreground">
+              Delivery only. The CRM records which channel a lead came from but never which
+              campaign, so leads, CPL, deals, revenue, CAC and ROAS cannot be attributed to a
+              campaign here — they would be blank on every row rather than zero.
+            </p>
+          ) : null}
         </CardHeader>
         {active.length === 0 ? (
           <EmptyState
@@ -126,7 +148,7 @@ export default async function MarketingPage({
           />
         ) : (
           <TableWrap>
-            <Table className="min-w-[1180px]">
+            <Table className={attributed ? 'min-w-[1180px]' : 'min-w-[760px]'}>
               <THead>
                 <TR>
                   <TH>Campaign</TH>
@@ -135,13 +157,17 @@ export default async function MarketingPage({
                   <TH className="text-right">Impr.</TH>
                   <TH className="text-right">Clicks</TH>
                   <TH className="text-right">CTR</TH>
-                  <TH className="text-right">Leads</TH>
-                  <TH className="text-right">CPL</TH>
-                  <TH className="text-right">Deals</TH>
-                  <TH className="text-right">Cust.</TH>
-                  <TH className="text-right">New revenue</TH>
-                  <TH className="text-right">CAC</TH>
-                  <TH className="text-right">ROAS</TH>
+                  {attributed ? (
+                    <>
+                      <TH className="text-right">Leads</TH>
+                      <TH className="text-right">CPL</TH>
+                      <TH className="text-right">Deals</TH>
+                      <TH className="text-right">Cust.</TH>
+                      <TH className="text-right">New revenue</TH>
+                      <TH className="text-right">CAC</TH>
+                      <TH className="text-right">ROAS</TH>
+                    </>
+                  ) : null}
                 </TR>
               </THead>
               <TBody>
@@ -160,25 +186,29 @@ export default async function MarketingPage({
                     <TD className="text-right tnum text-muted-foreground">
                       {c.ctr === null ? '—' : fmtPercent(c.ctr, 2)}
                     </TD>
-                    <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
-                    <TD className="text-right tnum text-muted-foreground">
-                      {c.costPerLead === null ? '—' : money(c.costPerLead)}
-                    </TD>
-                    <TD className="text-right tnum">{fmtNumber(c.opportunities)}</TD>
-                    <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
-                    <TD className="text-right tnum">{money(c.revenue)}</TD>
-                    <TD className="text-right tnum text-muted-foreground">
-                      {c.cac === null ? '—' : money(c.cac)}
-                    </TD>
-                    <TD className="text-right tnum">
-                      {c.roas === null ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <span className={c.roas >= 1 ? 'text-success' : 'text-destructive'}>
-                          {fmtRatio(c.roas)}
-                        </span>
-                      )}
-                    </TD>
+                    {attributed ? (
+                      <>
+                        <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
+                        <TD className="text-right tnum text-muted-foreground">
+                          {c.costPerLead === null ? '—' : money(c.costPerLead)}
+                        </TD>
+                        <TD className="text-right tnum">{fmtNumber(c.opportunities)}</TD>
+                        <TD className="text-right tnum">{fmtNumber(c.customers)}</TD>
+                        <TD className="text-right tnum">{money(c.revenue)}</TD>
+                        <TD className="text-right tnum text-muted-foreground">
+                          {c.cac === null ? '—' : money(c.cac)}
+                        </TD>
+                        <TD className="text-right tnum">
+                          {c.roas === null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <span className={c.roas >= 1 ? 'text-success' : 'text-destructive'}>
+                              {fmtRatio(c.roas)}
+                            </span>
+                          )}
+                        </TD>
+                      </>
+                    ) : null}
                   </TR>
                 ))}
                 {/* Ratios here are recomputed from the totals, never averaged from the
@@ -190,15 +220,19 @@ export default async function MarketingPage({
                   <TD className="text-right tnum">{fmtNumber(totals.impressions)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.clicks)}</TD>
                   <TD className="text-right tnum">{totals.ctr === null ? '—' : fmtPercent(totals.ctr, 2)}</TD>
-                  <TD className="text-right tnum">{fmtNumber(totals.leads)}</TD>
-                  <TD className="text-right tnum">
-                    {totals.costPerLead === null ? '—' : money(totals.costPerLead)}
-                  </TD>
-                  <TD className="text-right tnum">{fmtNumber(totals.opportunities)}</TD>
-                  <TD className="text-right tnum">{fmtNumber(totals.customers)}</TD>
-                  <TD className="text-right tnum">{money(totals.revenue)}</TD>
-                  <TD className="text-right tnum">{totals.cac === null ? '—' : money(totals.cac)}</TD>
-                  <TD className="text-right tnum">{totals.roas === null ? '—' : fmtRatio(totals.roas)}</TD>
+                  {attributed ? (
+                    <>
+                      <TD className="text-right tnum">{fmtNumber(totals.leads)}</TD>
+                      <TD className="text-right tnum">
+                        {totals.costPerLead === null ? '—' : money(totals.costPerLead)}
+                      </TD>
+                      <TD className="text-right tnum">{fmtNumber(totals.opportunities)}</TD>
+                      <TD className="text-right tnum">{fmtNumber(totals.customers)}</TD>
+                      <TD className="text-right tnum">{money(totals.revenue)}</TD>
+                      <TD className="text-right tnum">{totals.cac === null ? '—' : money(totals.cac)}</TD>
+                      <TD className="text-right tnum">{totals.roas === null ? '—' : fmtRatio(totals.roas)}</TD>
+                    </>
+                  ) : null}
                 </TR>
               </TBody>
             </Table>

@@ -83,7 +83,7 @@ export default async function DashboardPage({
   // print rupees with a dollar sign — the failure this whole change is about.
   const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
   const ai = aiStatus();
-  const topCampaigns = campaigns.filter((c) => c.spend > 0 || c.revenue > 0).slice(0, 6);
+  const topCampaigns = campaigns.filter((c) => c.spend > 0 || (c.revenue ?? 0) > 0).slice(0, 6);
 
   // Leads, CPL, new revenue and ROAS all hang off a campaignId that no lead, deal or
   // revenue row carries — Zoho records which CHANNEL a lead came from but never which ad,
@@ -97,7 +97,7 @@ export default async function DashboardPage({
   //
   // Tested rather than hard-coded, so the day anything stamps a campaign on a lead the
   // outcome columns come back on their own.
-  const campaignsAttributed = topCampaigns.some((c) => c.leads > 0 || c.revenue > 0);
+  const campaignsAttributed = topCampaigns.some((c) => (c.leads ?? 0) > 0 || (c.revenue ?? 0) > 0);
 
   // Semi-qualified is only its own step when something is actually sitting in it. The
   // stage counts leads that reached AT LEAST semi-qualified, so with no lead carrying

@@ -826,7 +826,7 @@ export async function budgetPacing(range: Range): Promise<number | null> {
           { OR: [{ endDate: null }, { endDate: { gte: range.from } }] },
         ],
       },
-      select: { budget: true, currency: true },
+      select: { budget: true, currency: true, budgetPeriod: true, startDate: true, endDate: true },
     }),
   ]);
 
@@ -838,12 +838,35 @@ export async function budgetPacing(range: Range): Promise<number | null> {
     spendRows.map((r) => ({ amount: num(r._sum.amount), currency: r.currency })),
     money,
   ).total;
+  // A daily budget is an allowance per day, so what the period permitted is that figure
+  // times the days the campaign was actually live inside it. Summed raw, thirty days of
+  // spend was divided by one day of budget and the gauge read 906.9% — every Meta budget
+  // here is a daily one, so the whole reading was out by roughly the length of the range.
+  //
+  // A lifetime budget covers the entire run and is taken as it stands.
   const budget = sumInReporting(
-    budgetRows.map((c) => ({ amount: num(c.budget), currency: c.currency })),
+    budgetRows.map((c) => ({
+      amount: num(c.budget) * (c.budgetPeriod === 'daily' ? liveDays(c, range) : 1),
+      currency: c.currency,
+    })),
     money,
   ).total;
 
   return rate(spend, budget);
+}
+
+const DAY_MS = 86_400_000;
+
+/** Days a campaign was live within the range, both ends included. An open-ended campaign
+ *  runs to the end of the range; one that started before it began at the range's start. */
+export function liveDays(
+  campaign: { startDate: Date | null; endDate: Date | null },
+  range: Range,
+): number {
+  const from = campaign.startDate && campaign.startDate > range.from ? campaign.startDate : range.from;
+  const to = campaign.endDate && campaign.endDate < range.to ? campaign.endDate : range.to;
+  const days = Math.floor((to.getTime() - from.getTime()) / DAY_MS) + 1;
+  return Math.max(1, days);
 }
 
 // ─── per-screen KPI sets ──────────────────────────────────────────────────────

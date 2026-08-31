@@ -69,6 +69,24 @@ export async function campaignPerformance(range: Range, channelId?: string) {
 
   const fx = await currencySettings();
 
+  // Whether anything in the workspace is attributed to a campaign at all.
+  //
+  // Zoho carries no campaign key on a lead, deal or payment — Campaign_Source is null on
+  // every record — so these columns cannot be computed for any campaign, ever, from the
+  // data this app receives. Reported as 0 they read as "this campaign produced nothing",
+  // which is a claim about the campaign; the truth is that nothing measured it. Same rule
+  // lib/calc.ts already applies to cost: unknown is never zero.
+  const [anyLead, anyOpportunity, anyRevenue] = await Promise.all([
+    db().lead.findFirst({ where: { campaignId: { not: null } }, select: { id: true } }),
+    db().opportunity.findFirst({ where: { campaignId: { not: null } }, select: { id: true } }),
+    db().revenueEntry.findFirst({ where: { campaignId: { not: null } }, select: { id: true } }),
+  ]);
+  const tracked = {
+    leads: anyLead !== null,
+    opportunities: anyOpportunity !== null,
+    revenue: anyRevenue !== null,
+  };
+
   // Folded back per campaign once every amount is in the reporting currency. A campaign
   // billed in two currencies would otherwise appear twice.
   const spendBy = new Map<string, { amount: number; clicks: number; impressions: number }>();
@@ -112,18 +130,21 @@ export async function campaignPerformance(range: Range, channelId?: string) {
         spend: amount,
         impressions,
         clicks,
-        leads: leadCount,
-        opportunities: oppBy.get(c.id) ?? 0,
-        customers: customerCount,
-        revenue: revenueSum,
+        // Null, not 0, wherever nothing links that entity to a campaign — and every
+        // figure derived from it goes null with it rather than dividing by a count that
+        // only means "unmeasured".
+        leads: tracked.leads ? leadCount : null,
+        opportunities: tracked.opportunities ? (oppBy.get(c.id) ?? 0) : null,
+        customers: tracked.opportunities ? customerCount : null,
+        revenue: tracked.revenue ? revenueSum : null,
         ctr: rate(clicks, impressions),
-        clickToLead: rate(leadCount, clicks),
-        costPerLead: costPer(amount, leadCount),
-        cac: cac(amount, customerCount),
-        roas: roas(revenueSum, amount),
+        clickToLead: tracked.leads ? rate(leadCount, clicks) : null,
+        costPerLead: tracked.leads ? costPer(amount, leadCount) : null,
+        cac: tracked.opportunities ? cac(amount, customerCount) : null,
+        roas: tracked.revenue ? roas(revenueSum, amount) : null,
       };
     })
-    .sort((a, b) => b.revenue - a.revenue || b.spend - a.spend);
+    .sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0) || b.spend - a.spend);
 }
 
 export type CampaignRow = Awaited<ReturnType<typeof campaignPerformance>>[number];
@@ -132,25 +153,30 @@ export type CampaignRow = Awaited<ReturnType<typeof campaignPerformance>>[number
  *  the totals, never averaged from the rows — averaging ratios is how a footer ends up
  *  disagreeing with its own columns. */
 export function campaignTotals(rows: CampaignRow[]) {
-  const t = rows.reduce(
-    (acc, r) => ({
-      spend: acc.spend + r.spend,
-      impressions: acc.impressions + r.impressions,
-      clicks: acc.clicks + r.clicks,
-      leads: acc.leads + r.leads,
-      opportunities: acc.opportunities + r.opportunities,
-      customers: acc.customers + r.customers,
-      revenue: acc.revenue + r.revenue,
-    }),
-    { spend: 0, impressions: 0, clicks: 0, leads: 0, opportunities: 0, customers: 0, revenue: 0 },
-  );
+  // An untracked column stays untracked in the footer. Summed with `?? 0` it would come
+  // back as a confident 0 under a column of dashes, which is the disagreement this
+  // footer's ratios are already recomputed to avoid.
+  const sum = (pick: (r: CampaignRow) => number | null): number | null =>
+    rows.some((r) => pick(r) === null)
+      ? null
+      : rows.reduce((acc, r) => acc + (pick(r) ?? 0), 0);
+
+  const t = {
+    spend: rows.reduce((acc, r) => acc + r.spend, 0),
+    impressions: rows.reduce((acc, r) => acc + r.impressions, 0),
+    clicks: rows.reduce((acc, r) => acc + r.clicks, 0),
+    leads: sum((r) => r.leads),
+    opportunities: sum((r) => r.opportunities),
+    customers: sum((r) => r.customers),
+    revenue: sum((r) => r.revenue),
+  };
 
   return {
     ...t,
     ctr: rate(t.clicks, t.impressions),
-    clickToLead: rate(t.leads, t.clicks),
-    costPerLead: costPer(t.spend, t.leads),
-    cac: cac(t.spend, t.customers),
-    roas: roas(t.revenue, t.spend),
+    clickToLead: t.leads === null ? null : rate(t.leads, t.clicks),
+    costPerLead: t.leads === null ? null : costPer(t.spend, t.leads),
+    cac: t.customers === null ? null : cac(t.spend, t.customers),
+    roas: t.revenue === null ? null : roas(t.revenue, t.spend),
   };
 }

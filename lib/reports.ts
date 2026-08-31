@@ -49,9 +49,9 @@ export type Report = { id: ReportId; name: string; range: Range; sections: Secti
 
 /** The reporting currency's symbol, not a dollar sign: this workspace reports in rupees
  *  and its ad spend is billed in them. */
-const moneyIn = (settings: CurrencySettings) => (n: number) =>
-  `${symbolOf(settings.reporting)}${Math.round(n).toLocaleString('en-US')}`;
-const int = (n: number) => n.toLocaleString('en-US');
+const moneyIn = (settings: CurrencySettings) => (n: number | null) =>
+  n === null ? '—' : `${symbolOf(settings.reporting)}${Math.round(n).toLocaleString('en-US')}`;
+const int = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
 const pct = (n: number | null, d = 1) => (n === null ? '—' : `${n.toFixed(d)}%`);
 const ratio = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}×`);
 
@@ -114,7 +114,7 @@ export async function buildReport(id: ReportId, days: number): Promise<Report> {
   if (id === 'marketing') {
     const rows = await campaignPerformance(current);
     const totals = campaignTotals(rows);
-    const active = rows.filter((r) => r.spend > 0 || r.leads > 0);
+    const active = rows.filter((r) => r.spend > 0 || (r.leads ?? 0) > 0);
     return {
       ...base,
       sections: [

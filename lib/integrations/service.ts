@@ -368,6 +368,9 @@ async function writeCampaignSpend(
           startDate: date(d.startDate) ?? undefined,
           endDate: date(d.endDate) ?? undefined,
           budget: typeof d.budget === 'number' ? d.budget : undefined,
+          // Stored beside the amount because the amount alone is not comparable to a
+          // period's spend — see Campaign.budgetPeriod.
+          budgetPeriod: str(d.budgetPeriod) ?? undefined,
         }
       : {};
 
