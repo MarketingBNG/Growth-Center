@@ -47,13 +47,24 @@ console.log(`  ${f.visitors.toLocaleString('en-US')} visitors -> ${f.leads} lead
 check(f.visitors > f.leads, 'the funnel narrows from visitors to leads');
 check(f.leads >= f.qualified, 'qualified never exceeds leads');
 check(f.revenue > 0 && f.spend > 0, 'revenue and spend are both present');
-check(f.roas !== null && f.roas > 0, `ROAS is computable (${f.roas?.toFixed(2)}x)`);
+// Non-null, not necessarily above zero: a period where the paid channels booked nothing
+// has an honest ROAS of 0x, and asserting otherwise would demand the figure be flattering.
+check(f.roas !== null, `ROAS is computable (${f.roas?.toFixed(2)}x)`);
 check(f.newRevenue <= f.revenue, `new business (${money(f.newRevenue)}) does not exceed total revenue (${money(f.revenue)})`);
-// ROAS must divide NEW business by spend. Recurring income from customers won earlier is
-// not a return on this period's spend, and counting it gave an 18x blended figure.
 check(
-  Math.abs((f.roas ?? 0) - f.newRevenue / f.spend) < 0.01,
-  'ROAS is new business over spend, not all revenue over spend',
+  f.paidRevenue <= f.newRevenue,
+  `paid-channel new business (${money(f.paidRevenue)}) does not exceed all new business (${money(f.newRevenue)})`,
+);
+check(
+  f.paidCustomers <= f.customers,
+  `paid-channel customers (${f.paidCustomers}) do not exceed all new customers (${f.customers})`,
+);
+// ROAS divides the new business booked against a PAID channel by spend. Two earlier
+// definitions were both wrong here: all revenue over spend (18x), then all new business
+// over spend (225x) - on an account that books 94% of its money against no channel.
+check(
+  Math.abs((f.roas ?? 0) - f.paidRevenue / f.spend) < 0.01,
+  'ROAS is paid-channel new business over spend, not the whole business over spend',
 );
 check(f.cac !== null, `CAC is computable (${f.cac ? money(f.cac) : 'null'})`);
 
@@ -192,6 +203,18 @@ check(share === null || (share >= 0 && share <= 100), 'customer share is null or
 
 console.log(`  budget pacing: ${pacing === null ? 'null (no campaign budgets)' : pacing.toFixed(1) + '%'}`);
 check(pacing === null || pacing >= 0, 'budget pacing is null or non-negative');
+
+// The invariant the blended definition broke: Reports printed a 225x headline ROAS
+// directly above a channel table whose only paid row said 0.00x. Whatever the headline
+// claims, it cannot beat the best return any single paid channel actually earned.
+console.log('\nHeadline ROAS against the channel table');
+const paidRows = (await channelPerformance(current)).filter((c) => c.spend > 0);
+const bestChannelRoas = Math.max(0, ...paidRows.map((c) => c.roas ?? 0));
+console.log(`  headline ${f.roas?.toFixed(2)}x - best paid channel ${bestChannelRoas.toFixed(2)}x (${paidRows.length} paid channel(s))`);
+check(
+  (f.roas ?? 0) <= bestChannelRoas + 0.01,
+  'the headline ROAS does not beat the best return any paid channel earned',
+);
 
 console.log('\nPer-screen KPI sets');
 const sets = {

@@ -276,7 +276,21 @@ export async function funnel(range: Range, channelId?: string) {
       }
     : { wonAt: window };
 
-  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg] =
+  // The channels that actually carried spend in this window. ROAS and CAC are measured
+  // against these and nothing else — see below.
+  const paidChannelIds = [
+    ...new Set(
+      (
+        await db().campaign.findMany({
+          where: { spend: { some: { date: window } }, ...byChannel },
+          select: { channelId: true },
+        })
+      ).map((c) => c.channelId),
+    ),
+  ];
+  const paidChannel = { channelId: { in: paidChannelIds } };
+
+  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
     await Promise.all([
       channelId ? Promise.resolve(0) : sessions(range),
       db().lead.count({ where: { createdAt: window, ...byChannel } }),
@@ -305,6 +319,25 @@ export async function funnel(range: Range, channelId?: string) {
         where: { date: window, ...(channelId ? { campaign: { is: { channelId } } } : {}) },
         _sum: { amount: true },
       }),
+      // New business from the paid channels only, which is what "return on ad spend"
+      // means. See the ROAS note below.
+      db().revenueEntry.groupBy({
+        by: ['currency'],
+        where: { date: window, kind: 'one_time', ...paidChannel },
+        _sum: { amount: true },
+      }),
+      // Customers won through a paid channel, resolved lead-first exactly as
+      // channelPerformance and the revenue insert do, so a customer counts against the
+      // channel their money was filed under.
+      db().customer.count({
+        where: {
+          wonAt: window,
+          OR: [
+            { opportunity: { is: { lead: { is: paidChannel } } } },
+            { opportunity: { is: { lead: { is: null }, ...paidChannel } } },
+          ],
+        },
+      }),
     ]);
 
   const money = await currencySettings();
@@ -315,10 +348,12 @@ export async function funnel(range: Range, channelId?: string) {
   const revenueSum = inReporting(revenueAgg);
   const newRevenueSum = inReporting(newRevenueAgg);
   const spendSum = inReporting(spendAgg);
+  const paidRevenueSum = inReporting(paidRevenueAgg);
 
   const revenue = revenueSum.total;
   const newRevenue = newRevenueSum.total;
   const spend = spendSum.total;
+  const paidRevenue = paidRevenueSum.total;
 
   return {
     currency: money.reporting,
@@ -334,13 +369,32 @@ export async function funnel(range: Range, channelId?: string) {
     revenue,
     newRevenue,
     spend,
+    /** New business booked against a channel that carried spend — the numerator ROAS is
+     *  actually entitled to. */
+    paidRevenue,
+    /** Customers won through a channel that carried spend — the denominator CAC is
+     *  actually entitled to. */
+    paidCustomers,
     visitorToLead: rate(leads, visitors),
     leadToSemiQualified: rate(semiQualified, leads),
     leadToQualified: rate(qualified, leads),
     qualifiedToOpportunity: rate(opportunities, qualified),
     opportunityToCustomer: rate(customers, opportunities),
-    cac: cac(spend, customers),
-    roas: roas(newRevenue, spend),
+    // Measured against the paid channels, not the whole business.
+    //
+    // Blended, these divided ALL new business by ad spend, and this account books 94% of
+    // its revenue against no channel at all. That printed a 225x ROAS and a ₹4,067 CAC
+    // on the same screens whose channel table said Meta Ads — the only paid channel —
+    // had earned ₹0 from ₹406,737 and won nobody. Reports showed both figures at once
+    // and contradicted itself.
+    //
+    // This is the rule lib/calc.ts already applies in the other direction: revenue that
+    // no spend can be shown to have produced is not a return on that spend, the same way
+    // leads with no tracked spend have an unknown cost rather than a zero one. When paid
+    // revenue is zero the ratio is an honest 0x; when nothing was won `cac` returns null
+    // rather than dividing by it.
+    cac: cac(spend, paidCustomers),
+    roas: roas(paidRevenue, spend),
   };
 }
 
@@ -389,8 +443,8 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'All revenue booked, including recurring' },
     { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Deals won in this period' },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return' },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend' },
+    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business booked against a paid channel, over all paid spend. Revenue that reached no channel is not a return on ad spend' },
   ];
 
   return { cards: await comparableDeltas(cards, current, previous), current: now, previous: before };
@@ -1042,20 +1096,20 @@ export async function marketingKpis(days: number, channelId?: string) {
     { key: 'spend', label: 'Spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false },
-    // The blended wording is only true unfiltered. Scoped to a channel these ARE that
-    // channel's own figures, and calling them blended would describe the opposite of what
-    // is on screen.
+    // Scoped to a channel these ARE that channel's own figures. Unfiltered they cover
+    // every paid channel together, which is still a statement about ad spend rather than
+    // about the whole business.
     {
       key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true,
       hint: channelId
         ? 'This channel’s new business over its own spend'
-        : 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return',
+        : 'New business booked against a paid channel, over all paid spend. Revenue that reached no channel is not a return on ad spend',
     },
     {
       key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false,
       hint: channelId
         ? 'This channel’s spend over the customers it brought'
-        : 'Blended: all paid spend over every new customer, however they arrived',
+        : 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend',
     },
   ];
 

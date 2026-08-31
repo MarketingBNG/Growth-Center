@@ -433,9 +433,10 @@ export default async function DashboardPage({
       </div>
 
       <p className="pt-4 text-[11px] text-muted-foreground">
-        ROAS and the channel and campaign tables use <span className="text-foreground">new business
-        won in this period</span>, not all revenue booked — recurring income from customers won
-        earlier is real, but it is not a return on this period&apos;s spend.
+        ROAS and CAC measure <span className="text-foreground">the paid channels only</span>: new
+        business booked against a channel that carried spend, over that spend. Revenue that reached
+        no channel, and customers who arrived another way, are real but they are not a return on
+        advertising. Recurring income from customers won earlier is left out for the same reason.
       </p>
       <p className="pt-1 text-[11px] text-muted-foreground">
         Conversion:{' '}
