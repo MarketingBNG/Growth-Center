@@ -15,7 +15,10 @@ import type { Range } from './metrics.ts';
 /** The statuses that get their own column, in the order the team reads them, with the
  *  CRM wording each matches. Anything else is counted under "Other" rather than dropped. */
 export const LEAD_STATES = [
-  { key: 'sq', label: 'SQ', hint: 'Semi-qualified', match: (v: string) => v.includes('qualified') },
+  // 'semi-qualified', not 'qualified': Zoho's plain "Qualified" is a further stage than
+  // "Semi-Qualified Lead" and ten leads carry it. Matching the substring folded them into
+  // a column labelled Semi-qualified, which is a different thing.
+  { key: 'sq', label: 'SQ', hint: 'Semi-qualified', match: (v: string) => v.includes('semi-qualified') || v.includes('semi qualified') },
   { key: 'followup', label: 'Follow-up', hint: 'Being worked', match: (v: string) => v.includes('follow') },
   {
     key: 'cnr',
@@ -57,7 +60,7 @@ export type CrmOverview = Awaited<ReturnType<typeof crmOverview>>;
 export async function crmOverview(range: Range) {
   const window = { gte: range.from, lte: range.to };
 
-  const [byStatus, byOwner, leadTotal, converted, dealsCreated, wonRows] = await Promise.all([
+  const [byStatus, byOwner, leadTotal, converted, cohortConverted, dealsCreated, wonRows] = await Promise.all([
     db().lead.groupBy({ by: ['sourceStatus'], where: { createdAt: window }, _count: { _all: true } }),
     // Owner AND status together: the allocation table is what each owner has marked, not
     // simply how many they hold.
@@ -70,6 +73,11 @@ export async function crmOverview(range: Range) {
     // Counted on the day the CRM converted them, not the day they arrived: a lead from
     // June converted in August belongs to August.
     db().lead.count({ where: { convertedAt: window } }),
+    // The rate needs the other cohort. Dividing the count above by the leads that arrived
+    // in the window compared two different sets of leads — 29 conversions over 1,388
+    // arrivals read as "2.1% of leads" when 16 of those 1,388 had converted, and the 29
+    // included leads that arrived months earlier.
+    db().lead.count({ where: { createdAt: window, NOT: { convertedAt: null } } }),
     db().opportunity.count({ where: { createdAt: window } }),
     db().opportunity.findMany({
       where: { closedAt: window, stage: { isWon: true } },
@@ -110,7 +118,10 @@ export async function crmOverview(range: Range) {
     statuses,
     owners: [...owners.values()].sort((a, b) => b.total - a.total),
     converted,
-    conversionRate: rate(converted, leadTotal),
+    /** Of the leads that ARRIVED in this window, how many have converted so far. Not a
+     *  share of `converted`, which counts conversions of leads from any time. */
+    cohortConverted,
+    conversionRate: rate(cohortConverted, leadTotal),
     dealsCreated,
     revenue,
     currency: fx.reporting,

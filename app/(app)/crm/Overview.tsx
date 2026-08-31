@@ -30,7 +30,8 @@ export function Overview({
   const leadsHref = (owner: string) =>
     `/leads?ownerEmail=${encodeURIComponent(owner === 'Unassigned' ? 'unassigned' : owner)}` +
     `&from=${day(window.from)}&to=${day(window.to)}`;
-  const columns = [...LEAD_STATES, { key: 'other', label: 'Other', hint: 'Untouched or unclassified' } as const];
+  // "Untouched" earned its own column, so Other is what is left after it.
+  const columns = [...LEAD_STATES, { key: 'other', label: 'Other', hint: 'Every other status' } as const];
 
   return (
     <div className="space-y-4 pb-4">
@@ -39,10 +40,13 @@ export function Overview({
         <Tile
           label="Converted"
           value={fmtNumber(data.converted)}
+          // Said precisely, because the two numbers count different sets of leads: the
+          // headline is every conversion recorded in this window, whenever the lead
+          // arrived; the rate is how far this window's own arrivals have got.
           sub={
             data.conversionRate === null
-              ? 'No leads to convert'
-              : `${fmtPercent(data.conversionRate, 1)} of leads`
+              ? 'Conversions recorded in this window'
+              : `${fmtPercent(data.conversionRate, 1)} of this window's own leads so far`
           }
         />
         <Tile label="Deals created" value={fmtNumber(data.dealsCreated)} sub="Opened in this window" />

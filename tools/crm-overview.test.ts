@@ -7,11 +7,18 @@ import { stateOf } from '../lib/crm-overview.ts';
 
 test('each of the four columns claims its own statuses', () => {
   assert.equal(stateOf('Semi-Qualified Lead'), 'sq');
-  assert.equal(stateOf('Qualified'), 'sq');
   assert.equal(stateOf('Follow-up'), 'followup');
   assert.equal(stateOf('Not Reachable'), 'cnr');
   assert.equal(stateOf('Dead Lead'), 'dead');
   assert.equal(stateOf('Lead Lost'), 'dead');
+});
+
+test('plain "Qualified" is not semi-qualified', () => {
+  // The SQ column is labelled Semi-qualified, and Zoho's "Qualified" is a further stage
+  // that ten leads carry. Matching on the substring folded them into a column that says
+  // something different about them.
+  assert.equal(stateOf('Qualified'), 'other');
+  assert.equal(stateOf('Semi Qualified'), 'sq');
 });
 
 test('"Not Qualified" is not a qualified lead', () => {

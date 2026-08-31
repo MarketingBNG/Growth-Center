@@ -15,8 +15,9 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { pageQuery } from '@/lib/query';
-import { listCompanies, listContacts } from '@/lib/crm';
+import { pageQuery, pick } from '@/lib/query';
+import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm';
+import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
 import { fmtDate, fmtNumber } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { NewCrmRecordButton } from './NewCrmRecordButton';
@@ -25,6 +26,31 @@ import { crmOverview } from '@/lib/crm-overview';
 import { rangeFor } from '@/lib/metrics';
 
 export const metadata = { title: 'CRM · Growth Center' };
+
+/** Owner on both tabs - every row has one - plus, for companies, the customer/prospect
+ *  split the Status column already shows. */
+const filtersFor = (tab: 'companies' | 'contacts', people: AppUser[], owners: string[]) => [
+  {
+    name: 'ownerEmail',
+    label: 'Owner',
+    // The roster AND whoever the CRM assigned, as the leads page does: most owners here
+    // have no account in this app and would otherwise be unselectable.
+    options: [{ value: UNASSIGNED, label: 'Unassigned' }, ...personOptions(people, owners)],
+  },
+  ...(tab === 'companies'
+    ? [
+        {
+          name: 'status',
+          label: 'Status',
+          options: [
+            { value: 'customer', label: 'Customer' },
+            { value: 'prospect', label: 'Prospect' },
+          ],
+        },
+      ]
+    : []),
+];
+
 
 export default async function CrmPage({
   searchParams,
@@ -79,8 +105,22 @@ export default async function CrmPage({
   // The chart buckets by the window actually being drawn, not by the preset behind it.
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
-  const [data, band, overview] = await Promise.all([
-    tab === 'companies' ? listCompanies(q) : listContacts(q),
+  const { ownerEmail, status } = pick<{ ownerEmail?: string; status?: string }>(params, [
+    'ownerEmail',
+    'status',
+  ]);
+  const owner = ownerEmail || undefined;
+  const filtered = Boolean(q.q || ownerEmail || status);
+
+  const [people, owners, data, band, overview] = await Promise.all([
+    listAssignable(),
+    peopleOn(tab === 'companies' ? 'company' : 'contact', 'ownerEmail'),
+    tab === 'companies'
+      ? listCompanies(q, {
+          ownerEmail: owner,
+          status: status === 'customer' || status === 'prospect' ? status : undefined,
+        })
+      : listContacts(q, { ownerEmail: owner }),
     // The picked window, not the preset day count: the cards and the chart now describe
     // the same period as the panel and the label above them.
     crmBand(picked ?? days, bucket),
@@ -125,13 +165,15 @@ export default async function CrmPage({
             you can look a client up useless for looking anyone up. That is the right
             behaviour, but the picker gave no hint of it — so the list says so itself. */}
         <p className="ml-auto text-xs text-muted-foreground">
-          {q.q ? `${fmtNumber(data.total)} matching` : `All ${fmtNumber(data.total)} ${tab}`} · the
+          {filtered ? `${fmtNumber(data.total)} matching` : `All ${fmtNumber(data.total)} ${tab}`} · the
           date range applies to the panels above
         </p>
       </div>
 
+      {/* Both lists were unfilterable, though every row carries an owner and the leads
+          table beside them has had these dropdowns all along. */}
       <FilterBar
-        filters={[]}
+        filters={filtersFor(tab, people, owners)}
         searchPlaceholder={tab === 'companies' ? 'Company or phone…' : 'Name, email or phone…'}
       />
 
@@ -139,8 +181,14 @@ export default async function CrmPage({
         {data.rows.length === 0 ? (
           <EmptyState
             icon={<Users className="size-6" />}
-            title={`No ${tab} yet`}
-            hint="Records appear here automatically when a lead arrives with a company email, or add one by hand."
+            // A search that matches nothing is not an empty book. The old copy told
+            // someone who had just typed a name that no records existed at all.
+            title={filtered ? `No ${tab} match this view` : `No ${tab} yet`}
+            hint={
+              filtered
+                ? 'Clear the search or the filters to see the rest.'
+                : 'Records appear here automatically when a lead arrives with a company email, or add one by hand.'
+            }
           />
         ) : (
           <>

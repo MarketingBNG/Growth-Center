@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { db } from './prisma.ts';
 import { normalizeCompanyName, normalizeDomain, normalizeEmail } from './dedupe.ts';
+import { INTERNAL_SOURCE } from './sources.ts';
 import type { ListQuery } from './api.ts';
 
 export const companyInput = z.object({
@@ -70,12 +71,54 @@ export function singleParent(input: {
   );
 }
 
+/** The Owner dropdown's value for "nobody holds this", which is a real thing to filter
+ *  on and cannot be expressed as an email. */
+export const UNASSIGNED = 'unassigned';
+
+export type CompanyFilters = { ownerEmail?: string; status?: 'customer' | 'prospect' };
+export type ContactFilters = { ownerEmail?: string; companyId?: string };
+
 const COMPANY_SORT = ['name', 'createdAt', 'updatedAt'] as const;
 const CONTACT_SORT = ['lastName', 'firstName', 'createdAt', 'updatedAt'] as const;
 
-export async function listCompanies(q: ListQuery, ownerEmail?: string) {
+/**
+ * Ids whose phone number contains these digits, however the number is punctuated.
+ *
+ * Phones arrive from the CRM exactly as somebody typed them — "98101 89048",
+ * "+91 9008858515", "(917) 981-9599" — so a `contains` on the search box missed every
+ * number a reader would type from memory. This strips the punctuation on both sides in
+ * the database and matches on digits alone.
+ *
+ * The character class is spelled out rather than written `\D`: a backslash escape has to
+ * survive both the JavaScript string and Postgres, and the one that reached the database
+ * matched a literal D, so the query stripped the letter and left the spaces in place.
+ *
+ * The table name is a literal from a union, never caller input; the digits are bound as a
+ * parameter. Capped, because the id list goes back into a Prisma `in`.
+ */
+async function phoneMatches(table: 'company' | 'contact', term: string): Promise<string[]> {
+  const digits = term.replace(/\D/g, '');
+  // Under four digits matches most of the book and is never what someone means by a
+  // phone search.
+  if (digits.length < 4) return [];
+
+  const rows = await db().$queryRawUnsafe<{ id: string }[]>(
+    `SELECT id FROM "${table}" WHERE phone IS NOT NULL AND regexp_replace(phone, '[^0-9]', '', 'g') LIKE $1 LIMIT 500`,
+    `%${digits}%`,
+  );
+  return rows.map((r) => r.id);
+}
+
+export async function listCompanies(q: ListQuery, filters: CompanyFilters = {}) {
   const where: Record<string, unknown> = {};
-  if (ownerEmail) where.ownerEmail = ownerEmail;
+  if (filters.ownerEmail) {
+    where.ownerEmail = filters.ownerEmail === UNASSIGNED ? null : filters.ownerEmail;
+  }
+  // A company is a customer when it has a customer row — the same test the Status column
+  // renders, so the filter and the badge can never disagree.
+  if (filters.status === 'customer') where.customer = { isNot: null };
+  if (filters.status === 'prospect') where.customer = { is: null };
+
   if (q.q) {
     where.OR = [
       { name: { contains: q.q, mode: 'insensitive' } },
@@ -84,6 +127,7 @@ export async function listCompanies(q: ListQuery, ownerEmail?: string) {
       // and industry is empty on every imported company, so it could only ever match the
       // handful entered by hand while a phone number matches most of the table.
       { phone: { contains: q.q, mode: 'insensitive' } },
+      ...(await phoneMatches('company', q.q)).map((id) => ({ id })),
     ];
   }
   // A–Z by default, because that is how you look a company up. But once someone asks for
@@ -108,15 +152,19 @@ export async function listCompanies(q: ListQuery, ownerEmail?: string) {
   return { rows, total };
 }
 
-export async function listContacts(q: ListQuery, companyId?: string) {
+export async function listContacts(q: ListQuery, filters: ContactFilters = {}) {
   const where: Record<string, unknown> = {};
-  if (companyId) where.companyId = companyId;
+  if (filters.companyId) where.companyId = filters.companyId;
+  if (filters.ownerEmail) {
+    where.ownerEmail = filters.ownerEmail === UNASSIGNED ? null : filters.ownerEmail;
+  }
   if (q.q) {
     where.OR = [
       { firstName: { contains: q.q, mode: 'insensitive' } },
       { lastName: { contains: q.q, mode: 'insensitive' } },
       { email: { contains: q.q, mode: 'insensitive' } },
       { phone: { contains: q.q, mode: 'insensitive' } },
+      ...(await phoneMatches('contact', q.q)).map((id) => ({ id })),
     ];
   }
   const key = (CONTACT_SORT as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
@@ -184,7 +232,10 @@ export async function createCompany(input: CompanyInput) {
   const company = await db().company.create({
     // The matching key, kept in step with the name on every write — a company created
     // here and one created from a lead have to be findable as the same account.
-    data: { ...input, domain, nameKey: normalizeCompanyName(input.name) },
+    //
+    // `source` is stamped because a null one is read as the seeder's, and the badge for
+    // that says "never real" in amber. A company someone typed in is as real as it gets.
+    data: { ...input, domain, source: INTERNAL_SOURCE, nameKey: normalizeCompanyName(input.name) },
     select: { id: true },
   });
   return { created: true as const, id: company.id };
@@ -197,7 +248,7 @@ export async function createContact(input: ContactInput) {
     if (existing) return { created: false as const, id: existing.id };
   }
   const contact = await db().contact.create({
-    data: { ...input, email },
+    data: { ...input, email, source: INTERNAL_SOURCE },
     select: { id: true },
   });
   return { created: true as const, id: contact.id };

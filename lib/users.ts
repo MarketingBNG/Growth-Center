@@ -198,12 +198,14 @@ export async function setActive(inputEmail: string, active: boolean) {
  * raw query. Prisma's groupBy validates the field for the model.
  */
 export async function peopleOn(
-  model: 'lead' | 'task',
+  model: 'lead' | 'task' | 'company' | 'contact',
   column: 'ownerEmail' | 'assigneeEmail',
 ): Promise<string[]> {
   const client = prisma();
   if (!client) return [];
 
+  // Spelled out per model rather than shared: Prisma generates a distinct, mutable
+  // argument type for each groupBy, and one literal cannot satisfy all of them.
   const rows =
     model === 'lead'
       ? await client.lead.groupBy({
@@ -213,13 +215,29 @@ export async function peopleOn(
           orderBy: { _count: { ownerEmail: 'desc' } },
           take: 100,
         })
-      : await client.task.groupBy({
-          by: ['assigneeEmail'],
-          where: { assigneeEmail: { not: null } },
-          _count: { _all: true },
-          orderBy: { _count: { assigneeEmail: 'desc' } },
-          take: 100,
-        });
+      : model === 'company'
+        ? await client.company.groupBy({
+            by: ['ownerEmail'],
+            where: { ownerEmail: { not: null } },
+            _count: { _all: true },
+            orderBy: { _count: { ownerEmail: 'desc' } },
+            take: 100,
+          })
+        : model === 'contact'
+          ? await client.contact.groupBy({
+              by: ['ownerEmail'],
+              where: { ownerEmail: { not: null } },
+              _count: { _all: true },
+              orderBy: { _count: { ownerEmail: 'desc' } },
+              take: 100,
+            })
+          : await client.task.groupBy({
+              by: ['assigneeEmail'],
+              where: { assigneeEmail: { not: null } },
+              _count: { _all: true },
+              orderBy: { _count: { assigneeEmail: 'desc' } },
+              take: 100,
+            });
 
   return rows
     .map((r) => (column === 'ownerEmail' ? (r as { ownerEmail: string | null }).ownerEmail : (r as { assigneeEmail: string | null }).assigneeEmail))
