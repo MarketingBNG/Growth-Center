@@ -3,6 +3,7 @@ import { db } from './prisma.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
+import { symbolOf } from './currency.ts';
 
 // AI insights over Growth Center's own data.
 //
@@ -180,6 +181,14 @@ export async function ask(question: string, context: GrowthContext): Promise<Ans
 export function ruleFindings(ctx: GrowthContext) {
   const findings: { kind: 'opportunity' | 'risk' | 'anomaly' | 'recommendation'; title: string; body: string }[] = [];
 
+  // Every figure below is already in ctx.currency — growthContext converted it and says so
+  // for exactly this reason. These sentences then printed a dollar sign onto it anyway, so
+  // a workspace reporting in rupees read "Meta Ads has spent $406,737": the right number
+  // with a symbol that overstates it by ninety-five times, in text a person is meant to
+  // act on. The model's own answers were never wrong about this; only the rule findings,
+  // which are the ones shown before any key is configured.
+  const money = (n: number) => `${symbolOf(ctx.currency)}${n.toLocaleString('en-US')}`;
+
   const paid = ctx.channels.filter((c) => c.spend > 0 && c.roas !== null);
   if (paid.length >= 2) {
     const sorted = [...paid].sort((a, b) => (b.roas ?? 0) - (a.roas ?? 0));
@@ -198,16 +207,20 @@ export function ruleFindings(ctx: GrowthContext) {
       findings.push({
         kind: 'opportunity',
         title: `${best.name} returns ${best.roas}× against ${worst.name}'s ${worst.roas}×`,
-        body: `Over the last ${ctx.periodDays} days ${best.name} took $${best.spend.toLocaleString('en-US')} and returned $${best.revenue.toLocaleString('en-US')}. ${worst.name} took $${worst.spend.toLocaleString('en-US')} and returned $${worst.revenue.toLocaleString('en-US')}.`,
+        body: `Over the last ${ctx.periodDays} days ${best.name} took ${money(best.spend)} and returned ${money(best.revenue)}. ${worst.name} took ${money(worst.spend)} and returned ${money(worst.revenue)}.`,
       });
     }
   }
 
+  // TODO: 1000 is a currency-blind floor, written when every figure here was assumed to be
+  // dollars. Against a workspace reporting in rupees it is about $10, so it no longer
+  // excludes the trivial spend it was meant to. Left as it stands rather than rescaled on
+  // a guess — what counts as spend worth flagging is the account's call, not this file's.
   const noReturn = ctx.channels.filter((c) => c.spend > 1000 && c.revenue === 0);
   for (const c of noReturn) {
     findings.push({
       kind: 'risk',
-      title: `${c.name} has spent $${c.spend.toLocaleString('en-US')} with no attributed revenue`,
+      title: `${c.name} has spent ${money(c.spend)} with no attributed revenue`,
       body: `${c.leads} leads arrived from ${c.name} in this period and none have produced revenue yet. That may be a genuine loss or simply a longer sales cycle — the deals it produced are visible on the pipeline board.`,
     });
   }
@@ -228,15 +241,15 @@ export function ruleFindings(ctx: GrowthContext) {
     findings.push({
       kind: 'anomaly',
       title: `Lead volume is down ${Math.abs(leadDelta).toFixed(0)}% on the previous period`,
-      body: `${ctx.current.leads} leads against ${ctx.previousPeriod.leads}, while spend moved from $${ctx.previousPeriod.marketingSpend.toLocaleString('en-US')} to $${ctx.current.marketingSpend.toLocaleString('en-US')}.`,
+      body: `${ctx.current.leads} leads against ${ctx.previousPeriod.leads}, while spend moved from ${money(ctx.previousPeriod.marketingSpend)} to ${money(ctx.current.marketingSpend)}.`,
     });
   }
 
   if (ctx.openPipeline.deals > 0) {
     findings.push({
       kind: 'opportunity',
-      title: `$${ctx.openPipeline.weighted.toLocaleString('en-US')} of weighted pipeline is open`,
-      body: `${ctx.openPipeline.deals} deals worth $${ctx.openPipeline.value.toLocaleString('en-US')} at face value, $${ctx.openPipeline.weighted.toLocaleString('en-US')} weighted by each deal's own probability.`,
+      title: `${money(ctx.openPipeline.weighted)} of weighted pipeline is open`,
+      body: `${ctx.openPipeline.deals} deals worth ${money(ctx.openPipeline.value)} at face value, ${money(ctx.openPipeline.weighted)} weighted by each deal's own probability.`,
     });
   }
 
