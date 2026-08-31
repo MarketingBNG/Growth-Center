@@ -35,6 +35,18 @@ export function FilterBar({
     startTransition(() => router.replace(`?${next.toString()}`));
   }
 
+  // Clear drops the filters and the search term — and nothing else. It used to replace the
+  // whole query string, which also threw away the date range and, on the CRM screen, the
+  // tab: clearing a search while reading Contacts bounced you back to Companies.
+  function clear() {
+    const next = new URLSearchParams(params.toString());
+    next.delete('q');
+    next.delete('page');
+    for (const f of filters) next.delete(f.name);
+    const query = next.toString();
+    startTransition(() => router.replace(query ? `?${query}` : '?'));
+  }
+
   const active = filters.some((f) => params.get(f.name)) || params.get('q');
 
   return (
@@ -73,7 +85,7 @@ export function FilterBar({
       ))}
 
       {active ? (
-        <Button variant="ghost" size="sm" onClick={() => startTransition(() => router.replace('?'))}>
+        <Button variant="ghost" size="sm" onClick={clear}>
           <X /> Clear
         </Button>
       ) : null}

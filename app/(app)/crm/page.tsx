@@ -7,6 +7,7 @@ import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
+import { SortHeader } from '@/components/patterns/sort-header';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -115,7 +116,7 @@ export default async function CrmPage({
 
       <FilterBar
         filters={[]}
-        searchPlaceholder={tab === 'companies' ? 'Company or domain…' : 'Name, email or title…'}
+        searchPlaceholder={tab === 'companies' ? 'Company or phone…' : 'Name, email or phone…'}
       />
 
       <Card className="overflow-hidden">
@@ -146,10 +147,11 @@ type CompanyRow = {
   id: string;
   name: string;
   domain: string | null;
-  industry: string | null;
+  phone: string | null;
   country: string | null;
   ownerEmail: string | null;
   source: string | null;
+  createdAt: Date;
   _count: { contacts: number; opportunities: number };
   customer: { wonAt: Date } | null;
 };
@@ -159,12 +161,18 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
     <Table>
       <THead>
         <TR>
-          <TH>Company</TH>
-          <TH>Industry</TH>
+          {/* SortHeader renders its own th; only the columns lib/crm.ts allows are
+              clickable, so a header cannot ask for an order the query will ignore. */}
+          <SortHeader name="name">Company</SortHeader>
+          {/* Phone, not Industry. Zoho carries no Industry on any of the 2,953 accounts,
+              so the column was a full-height run of em dashes; the phone number is on
+              seven accounts in eight and is what anyone reading this row wants next. */}
+          <TH>Phone</TH>
           <TH className="text-right">Contacts</TH>
           <TH className="text-right">Deals</TH>
           <TH>Status</TH>
           <TH>Owner</TH>
+          <SortHeader name="createdAt" align="right">Added</SortHeader>
         </TR>
       </THead>
       <TBody>
@@ -179,7 +187,7 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
               </span>
               {c.domain ? <p className="text-xs text-muted-foreground">{c.domain}</p> : null}
             </TD>
-            <TD className="text-muted-foreground">{c.industry ?? '—'}</TD>
+            <TD className="text-muted-foreground">{c.phone ?? '—'}</TD>
             <TD className="text-right tnum">{c._count.contacts}</TD>
             <TD className="text-right tnum">{c._count.opportunities}</TD>
             <TD>
@@ -192,6 +200,7 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
             <TD className="text-muted-foreground">
               {c.ownerEmail ? c.ownerEmail.split('@')[0] : '—'}
             </TD>
+            <TD className="text-right text-muted-foreground tnum">{fmtDate(c.createdAt)}</TD>
           </TR>
         ))}
       </TBody>
@@ -204,10 +213,10 @@ type ContactRow = {
   firstName: string;
   lastName: string | null;
   email: string | null;
-  title: string | null;
   phone: string | null;
   ownerEmail: string | null;
   source: string | null;
+  createdAt: Date;
   company: { id: string; name: string } | null;
 };
 
@@ -216,11 +225,11 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
     <Table>
       <THead>
         <TR>
-          <TH>Name</TH>
-          <TH>Title</TH>
+          <SortHeader name="firstName">Name</SortHeader>
           <TH>Company</TH>
           <TH>Email</TH>
           <TH>Owner</TH>
+          <SortHeader name="createdAt" align="right">Added</SortHeader>
         </TR>
       </THead>
       <TBody>
@@ -234,7 +243,6 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
                 <SourceBadge source={c.source ?? DEMO_SOURCE} />
               </span>
             </TD>
-            <TD className="text-muted-foreground">{c.title ?? '—'}</TD>
             <TD>
               {c.company ? (
                 <Link
@@ -251,6 +259,7 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
             <TD className="text-muted-foreground">
               {c.ownerEmail ? c.ownerEmail.split('@')[0] : '—'}
             </TD>
+            <TD className="text-right text-muted-foreground tnum">{fmtDate(c.createdAt)}</TD>
           </TR>
         ))}
       </TBody>

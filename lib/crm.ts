@@ -80,15 +80,22 @@ export async function listCompanies(q: ListQuery, ownerEmail?: string) {
     where.OR = [
       { name: { contains: q.q, mode: 'insensitive' } },
       { domain: { contains: q.q, mode: 'insensitive' } },
-      { industry: { contains: q.q, mode: 'insensitive' } },
+      // Phone rather than industry. The box offers to search what the rows actually hold,
+      // and industry is empty on every imported company, so it could only ever match the
+      // handful entered by hand while a phone number matches most of the table.
+      { phone: { contains: q.q, mode: 'insensitive' } },
     ];
   }
-  const key = (COMPANY_SORT as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'name';
+  // A–Z by default, because that is how you look a company up. But once someone asks for
+  // a column by name, `dir` is theirs: the direction was pinned to 'asc' for `name`, so
+  // clicking the Company header to reverse it changed nothing.
+  const chosen = (COMPANY_SORT as readonly string[]).includes(q.sort ?? '');
+  const key = chosen ? q.sort! : 'name';
 
   const [rows, total] = await Promise.all([
     db().company.findMany({
       where,
-      orderBy: { [key]: key === 'name' ? 'asc' : q.dir },
+      orderBy: { [key]: chosen ? q.dir : 'asc' },
       skip: (q.page - 1) * q.perPage,
       take: q.perPage,
       include: {
@@ -109,7 +116,7 @@ export async function listContacts(q: ListQuery, companyId?: string) {
       { firstName: { contains: q.q, mode: 'insensitive' } },
       { lastName: { contains: q.q, mode: 'insensitive' } },
       { email: { contains: q.q, mode: 'insensitive' } },
-      { title: { contains: q.q, mode: 'insensitive' } },
+      { phone: { contains: q.q, mode: 'insensitive' } },
     ];
   }
   const key = (CONTACT_SORT as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
