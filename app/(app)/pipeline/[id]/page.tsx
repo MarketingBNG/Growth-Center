@@ -37,8 +37,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   // together they read as a contradiction — the same deal at $150 here and Rs.14,313
   // there — so when the two differ this says what the other number is.
   const fx = await currencySettings();
+  // Nothing to reconcile on a deal worth nothing: "$0.00 - Rs.0 reported" is noise, and
+  // plenty of these deals carry no amount.
   const reported =
-    deal.currency === fx.reporting ? null : convert(Number(deal.value), deal.currency, fx);
+    deal.currency === fx.reporting || Number(deal.value) === 0
+      ? null
+      : convert(Number(deal.value), deal.currency, fx);
 
   return (
     <>
@@ -93,7 +97,20 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               <Detail label="Probability" value={`${deal.probability}%`} />
               <Detail label="Owner" value={deal.ownerEmail ?? 'Unassigned'} />
               <Detail label="Expected close" value={fmtDate(deal.expectedCloseDate)} />
-              <Detail label="Closed" value={deal.closedAt ? fmtDate(deal.closedAt) : 'Open'} />
+              {/* "Open" only when the stage says so. Zoho leaves Closing_Date empty on
+                  982 of its won deals, so 1,122 of these sit in a won or lost stage with
+                  no date — and this row called every one of them open, directly under a
+                  badge reading "Project In Progress". */}
+              <Detail
+                label="Closed"
+                value={
+                  deal.closedAt
+                    ? fmtDate(deal.closedAt)
+                    : deal.stage.isWon || deal.stage.isLost
+                      ? `${deal.stage.isWon ? 'Won' : 'Lost'}, no date recorded`
+                      : 'Open'
+                }
+              />
               <Detail label="Created" value={fmtDate(deal.createdAt)} />
               <Detail
                 label="Company"
