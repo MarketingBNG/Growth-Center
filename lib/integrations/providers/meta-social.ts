@@ -239,6 +239,27 @@ export const metaSocial: IntegrationProvider = {
     { name: 'META_APP_SECRET', description: 'Secret for that Meta app' },
   ],
   docsUrl: 'https://developers.facebook.com/docs/graph-api/reference/page/insights',
+  configFields: [
+    {
+      name: 'pageIds',
+      label: 'Page IDs to sync',
+      placeholder: '206831169337632, 118421…',
+      help:
+        'Optional. Blank syncs every Page the connection was granted. Set it when the account admins more than one Page and only some belong in here. The ID is on the Page under Meta Business Settings; set a wrong one and the sync error lists every Page this connection can actually see, with its ID.',
+      // Digits and separators only. A pasted Page URL or name would silently match no
+      // Page and sync nothing, which is the failure this field exists to prevent.
+      normalise: (v) => {
+        const trimmed = v.trim();
+        if (!trimmed) return '';
+        const ids = trimmed.split(/[\s,]+/).filter(Boolean);
+        const bad = ids.filter((id) => !/^\d+$/.test(id));
+        if (bad.length) {
+          throw new Error(`A Page ID is all digits. Not a Page ID: ${bad.join(', ')}.`);
+        }
+        return [...new Set(ids)].join(',');
+      },
+    },
+  ],
 
   isConfigured() {
     return !!process.env.META_APP_ID && !!process.env.META_APP_SECRET;
@@ -311,7 +332,7 @@ export const metaSocial: IntegrationProvider = {
     };
   },
 
-  async sync(credential, _config, range) {
+  async sync(credential, config, range) {
     const { accessToken } = JSON.parse(credential) as Stored;
     const since = String(Math.floor(range.from.getTime() / 1000));
     const until = String(Math.floor(range.to.getTime() / 1000));
@@ -326,11 +347,34 @@ export const metaSocial: IntegrationProvider = {
       limit: '100',
     });
 
-    const points: MetricPoint[] = [];
+    // Which of the granted Pages belong in here. Meta returns only the Pages ticked at
+    // the consent screen, and it returns them in no useful order — so an account that
+    // admins several had whichever ones it granted synced silently, with no way to tell
+    // from the app which Page the figures on /social even described.
+    const wanted = new Set(
+      String((config.pageIds as string | undefined) ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    );
+    const selected = wanted.size ? pages.filter((p) => wanted.has(p.id)) : pages;
 
-    for (const page of pages) {
+    if (wanted.size && !selected.length) {
+      throw new IntegrationError(
+        `None of the configured Page IDs were granted to this connection. Granted: ${
+          pages.map((p) => `${p.name ?? p.username ?? 'unnamed'} (${p.id})`).join(', ') || 'none'
+        }. Clear the setting to sync every granted Page, or reconnect and tick the Page you want.`,
+      );
+    }
+
+    const points: MetricPoint[] = [];
+    /** What was actually found, so the failure below can name it. */
+    const seen: string[] = [];
+
+    for (const page of selected) {
       const pageToken = page.access_token ?? accessToken;
       const handle = page.username ?? page.id;
+      seen.push(`${page.name ?? handle} (${page.id})`);
 
       points.push(
         accountPoint('facebook', handle, page.name, page.followers_count ?? page.fan_count ?? 0, now),
@@ -384,8 +428,17 @@ export const metaSocial: IntegrationProvider = {
       }
 
       // ── the Instagram account attached to this Page ──────────────────────────────
+      // Absent, not null, when nothing is linked — Graph omits the field entirely. This
+      // used to `continue` in silence, so a workspace expecting Instagram saw a
+      // connected card, a Facebook-only page, and nothing anywhere saying why. Still not
+      // fatal: the Page's own figures are worth keeping, and plenty of Pages have no
+      // Instagram by design. It is recorded instead, and surfaces if the sync finds
+      // nothing at all.
       const ig = page.instagram_business_account;
-      if (!ig) continue;
+      if (!ig) {
+        seen.push(`${page.name ?? handle}: no Instagram Business account is linked`);
+        continue;
+      }
 
       const igHandle = ig.username ?? ig.id;
       const igProfile = await graph<{ followers_count?: number; name?: string }>(ig.id, {
@@ -466,7 +519,7 @@ export const metaSocial: IntegrationProvider = {
 
     if (!points.length) {
       throw new IntegrationError(
-        'Meta returned no Page or Instagram data. Check the Page is granted and has posts in this window.',
+        `Meta returned no Page or Instagram data. Found: ${seen.join('; ') || 'no Pages'}. Check the Page you want is granted and has posts in this window.`,
       );
     }
     return points;
