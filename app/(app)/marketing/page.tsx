@@ -11,7 +11,7 @@ import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
 import { channelPerformance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
-import { fmtMoney, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
+import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { ChannelFilter } from './ChannelFilter';
@@ -42,7 +42,15 @@ export default async function MarketingPage({
 
   const [channels, allChannels, rows, band] = await Promise.all([
     channelPerformance(current),
-    db().channel.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    // Only channels that actually hold a campaign. Every channel in the workspace was
+    // offered before, and eleven of the twelve had nothing to show: clicking one swapped
+    // the table for "No campaign activity", which reads as a broken page rather than as
+    // an empty channel.
+    db().channel.findMany({
+      where: { campaigns: { some: {} } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }),
     campaignPerformance(current, channelId),
     marketingBand(days, bucket),
   ]);
@@ -53,15 +61,25 @@ export default async function MarketingPage({
 
   // Which sources actually appear in this period, so the filter never offers an option
   // that would return nothing.
-  const presentSources = [...new Set(rows.map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
+  const hasActivity = (r: (typeof rows)[number]) => r.spend > 0 || r.leads > 0 || r.revenue > 0;
+
+  const presentSources = [...new Set(rows.filter(hasActivity).map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
     id,
     name: sourceMeta(id).name,
   }));
 
   const filtered = source ? rows.filter((r) => (r.source ?? DEMO_SOURCE) === source) : rows;
 
+  // Unattributed is a real row and belongs in a table, but it is not a channel, and as a
+  // bar it was nine times the largest real one — every channel the chart exists to compare
+  // rendered as the same one-pixel sliver. Split out and stated in the subtitle instead of
+  // dropped, so the money is still accounted for.
+  const withRevenue = channels.filter((c) => c.revenue > 0);
+  const unattributed = withRevenue.find((c) => c.id === 'unattributed')?.revenue ?? 0;
+  const named = withRevenue.filter((c) => c.id !== 'unattributed');
+
   const totals = campaignTotals(filtered);
-  const active = filtered.filter((r) => r.spend > 0 || r.leads > 0 || r.revenue > 0);
+  const active = filtered.filter(hasActivity);
 
   return (
     <>
@@ -83,8 +101,16 @@ export default async function MarketingPage({
       <div className="pb-[18px]">
         <BarChart
           title="Revenue by channel"
-          data={channels.filter((c) => c.revenue > 0).map((c) => ({ label: c.name, value: c.revenue }))}
+          subtitle={
+            unattributed > 0
+              ? `${fmtMoneyCompact(unattributed, band.currency)} reached no channel and is not plotted`
+              : undefined
+          }
+          data={named.map((c) => ({ label: c.name, value: c.revenue }))}
           kind="money"
+          // Without this the axis labelled rupees with a dollar sign, while every other
+          // figure on the page was already in the workspace's own currency.
+          currency={band.currency}
         />
       </div>
 

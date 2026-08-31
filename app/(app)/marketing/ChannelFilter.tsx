@@ -44,7 +44,10 @@ export function ChannelFilter({
         ))}
       </div>
 
-      {sources.length > 1 ? (
+      {/* Shown while a source is selected even if it is the only one left: narrowing to a
+          channel can drop the row to a single source, and the chip that clears the filter
+          went with it — leaving an empty table and no way back to it. */}
+      {sources.length > 1 || currentSource ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <Chip active={!currentSource} onClick={() => set('source', '')}>
             All sources
