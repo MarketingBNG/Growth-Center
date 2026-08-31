@@ -19,6 +19,7 @@ import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { splitName } from '../lib/integrations/service.ts';
 import {
   channelSlugFor,
+  cleanImportedName,
   leadSourceType,
   leadStatus,
   matchStage,
@@ -367,6 +368,29 @@ test('a lone name goes in firstName so joining the two does not repeat it', () =
   assert.equal(join(splitName('Sanju', null, 'Sanju', 'x')), 'Sanju');
   // Nothing usable at all still has to satisfy a NOT NULL column.
   assert.equal(join(splitName(null, null, undefined, 'lead-9931')), 'lead-9931');
+});
+
+test('the [MERGED] tag Zoho writes into a name is not part of the name', () => {
+  const join = (n: { firstName: string; lastName: string | null }) =>
+    [n.firstName, n.lastName].filter(Boolean).join(' ');
+
+  assert.equal(cleanImportedName('[MERGED] Arif Ibrahim'), 'Arif Ibrahim');
+  assert.equal(cleanImportedName('[merged]  Rani'), 'Rani');
+  assert.equal(cleanImportedName('  [Merged] Dr Pinki Gangwar'), 'Dr Pinki Gangwar');
+  assert.equal(join(splitName('[MERGED] Arif', 'Ibrahim', undefined, 'x')), 'Arif Ibrahim');
+  assert.equal(join(splitName(null, '[MERGED] wajahat khan', undefined, 'x')), 'wajahat khan');
+
+  // Only that exact prefix. Brackets are part of real names in this data, and a general
+  // rule would eat them.
+  assert.equal(cleanImportedName('Paramasivam [He/Him/His] PhD'), 'Paramasivam [He/Him/His] PhD');
+  assert.equal(cleanImportedName('[AK] Anand'), '[AK] Anand');
+  assert.equal(cleanImportedName('Madiwalar [Target Leads Provider]'), 'Madiwalar [Target Leads Provider]');
+  assert.equal(cleanImportedName('Merged Traders Pvt Ltd'), 'Merged Traders Pvt Ltd');
+
+  // A name that was nothing but the tag falls through to the next candidate.
+  assert.equal(cleanImportedName('[MERGED]'), null);
+  assert.equal(join(splitName('[MERGED]', null, 'Sanju', 'x')), 'Sanju');
+  assert.equal(cleanImportedName(null), null);
 });
 
 const STAGE_NAMES = [

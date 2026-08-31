@@ -279,3 +279,22 @@ export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | n
       return null;
   }
 }
+
+/**
+ * Strips the "[MERGED]" tag Zoho prefixes onto the name of the record that survives a
+ * duplicate merge. That tag is its own bookkeeping, written into the name field itself,
+ * so the import copied it verbatim and eighteen people were called things like
+ * "[MERGED] Arif Ibrahim" on screen and in search.
+ *
+ * Deliberately only this exact prefix. Square brackets appear legitimately in names here
+ * — "Paramasivam [He/Him/His] PhD", "[AK] Anand", "Madiwalar [Target Leads Provider]" —
+ * so a general bracket-stripping rule would eat real names to fix a Zoho artifact.
+ *
+ * Returns null for a name that was nothing but the tag, letting splitName fall through to
+ * the next candidate rather than showing an empty name.
+ */
+export function cleanImportedName(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const cleaned = value.replace(/^\s*\[merged\]\s*/i, '').trim();
+  return cleaned || null;
+}

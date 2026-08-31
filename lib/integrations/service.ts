@@ -2,7 +2,7 @@ import { db } from '../prisma.ts';
 import { Prisma } from '../generated/prisma/client.ts';
 import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
-import { channelSlugFor, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
+import { channelSlugFor, cleanImportedName, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { normalizeCompanyName } from '../dedupe.ts';
 import { currencySettings } from '../settings.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
@@ -836,8 +836,13 @@ export function splitName(
   label: string | undefined,
   fallback: string,
 ): { firstName: string; lastName: string | null } {
-  if (first && last) return { firstName: first, lastName: last };
-  return { firstName: first ?? last ?? label ?? fallback, lastName: null };
+  // Cleaned here rather than at the two call sites, so leads and contacts are both
+  // covered and a third importer cannot forget.
+  const f = cleanImportedName(first);
+  const l = cleanImportedName(last);
+  const lbl = cleanImportedName(label);
+  if (f && l) return { firstName: f, lastName: l };
+  return { firstName: f ?? l ?? lbl ?? fallback, lastName: null };
 }
 
 /**
