@@ -95,6 +95,10 @@ export async function seoOverview() {
     inTop100: ranked.length,
     improved: tracked.filter((k) => (k.move ?? 0) > 0).length,
     declined: tracked.filter((k) => (k.move ?? 0) < 0).length,
+    // Most keywords have a single reading and so no movement at all. Counted here so the
+    // page can say what the up/down figures are out of, rather than implying every
+    // tracked keyword held still.
+    compared: tracked.filter((k) => k.move !== null).length,
     clicks: pages.reduce((t, p) => t + p.clicks, 0),
     impressions: pages.reduce((t, p) => t + p.impressions, 0),
   };
@@ -158,36 +162,48 @@ export async function searchTrend(days = 28) {
   });
   if (!rows.length) return null;
 
+  // Position is kept beside the chart rows, not on them: the chart plots clicks and
+  // impressions, and an extra nullable key on each point does not fit a plotted series.
   const byDay = new Map<string, { date: string; clicks: number; impressions: number }>();
-  let ctrTotal = 0;
-  let ctrDays = 0;
-  let positionTotal = 0;
-  let positionDays = 0;
+  const positionByDay = new Map<string, number>();
 
   for (const r of rows) {
     const key = r.date.toISOString().slice(0, 10);
     const day = byDay.get(key) ?? { date: key, clicks: 0, impressions: 0 };
     if (r.metricKey === 'search_clicks') day.clicks = Number(r.value);
     if (r.metricKey === 'search_impressions') day.impressions = Number(r.value);
-    if (r.metricKey === 'search_ctr') {
-      ctrTotal += Number(r.value);
-      ctrDays += 1;
-    }
-    if (r.metricKey === 'search_position') {
-      positionTotal += Number(r.value);
-      positionDays += 1;
-    }
+    if (r.metricKey === 'search_position') positionByDay.set(key, Number(r.value));
+    // search_ctr is read back off clicks and impressions rather than averaged: see below.
     byDay.set(key, day);
   }
 
   const data = [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const clicks = data.reduce((t, d) => t + d.clicks, 0);
+  const impressions = data.reduce((t, d) => t + d.impressions, 0);
+
+  // Weighted by impressions, not a plain mean of the daily figures. A quiet Sunday with
+  // twelve impressions counted as much as a Tuesday with three thousand, so the period
+  // CTR and average position were both a mean of ratios rather than the site's actual
+  // ratio over the window — the same figure Search Console reports for the period.
+  let positionWeight = 0;
+  let positionTotal = 0;
+  for (const d of data) {
+    const position = positionByDay.get(d.date);
+    if (position === undefined) continue;
+    // A day with no impressions has no position to weight; keep it out entirely rather
+    // than letting a zero weight drop it silently to the same effect.
+    const weight = d.impressions;
+    if (weight <= 0) continue;
+    positionTotal += position * weight;
+    positionWeight += weight;
+  }
 
   return {
     data,
-    clicks: data.reduce((t, d) => t + d.clicks, 0),
-    impressions: data.reduce((t, d) => t + d.impressions, 0),
-    ctr: ctrDays ? ctrTotal / ctrDays : null,
-    position: positionDays ? positionTotal / positionDays : null,
+    clicks,
+    impressions,
+    ctr: rate(clicks, impressions),
+    position: positionWeight ? positionTotal / positionWeight : null,
     days: data.length,
   };
 }

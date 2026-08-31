@@ -55,6 +55,20 @@ export default async function SeoPage() {
   const KEYWORD_ROWS = 100;
   const shown = keywords.slice(0, KEYWORD_ROWS);
 
+  // Same reason as the keyword cap: 243 URLs in a half-width card is a scroll nobody
+  // finishes. Ordered by clicks upstream, so the cap keeps the pages that earn.
+  const PAGE_ROWS = 25;
+  const shownPages = pages.slice(0, PAGE_ROWS);
+
+  // Clicks and impressions come from two places that cover two different windows: the
+  // page table holds whatever the last sync pulled, the daily series holds the last N
+  // days. Printing one in a tile and the other in a chart headline put two different
+  // click counts on the same screen under the same word. The tiles follow the series
+  // whenever there is one, and say which window they mean either way.
+  const period = search
+    ? { clicks: search.clicks, impressions: search.impressions, ctr: search.ctr, note: `last ${search.days} days` }
+    : { clicks: totals.clicks, impressions: totals.impressions, ctr: totals.ctr, note: 'last sync window' };
+
   // Search Console reports no volume, difficulty, CPC or intent. The columns stay in the
   // markup for whenever something that does report them is connected.
   const hasKeywordTool = keywords.some((k) => k.searchVolume !== null || k.difficulty !== null);
@@ -90,12 +104,12 @@ export default async function SeoPage() {
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Top 3" value={fmtNumber(totals.inTop3)} sub={`of ${totals.keywords} tracked`} />
         <Stat label="Top 10" value={fmtNumber(totals.inTop10)} />
-        <Stat label="Clicks" value={fmtNumber(totals.clicks)} sub={`${fmtPercent(totals.ctr ?? 0, 2)} CTR`} />
-        <Stat label="Impressions" value={fmtNumber(totals.impressions)} />
+        <Stat label="Clicks" value={fmtNumber(period.clicks)} sub={`${fmtPercent(period.ctr, 2)} CTR · ${period.note}`} />
+        <Stat label="Impressions" value={fmtNumber(period.impressions)} sub={period.note} />
         <Stat
           label="Movement"
           value={`${totals.improved} up`}
-          sub={`${totals.declined} down since last check`}
+          sub={`${totals.declined} down of ${fmtNumber(totals.compared)} with a prior reading`}
         />
       </div>
 
@@ -230,7 +244,14 @@ export default async function SeoPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="overflow-hidden">
-          <CardHeader><CardTitle>Pages</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Pages</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {shownPages.length === pages.length
+                ? `${fmtNumber(pages.length)} pages, most clicks first`
+                : `Top ${fmtNumber(shownPages.length)} of ${fmtNumber(pages.length)} by clicks`}
+            </p>
+          </CardHeader>
           <TableWrap>
             <Table>
               <THead>
@@ -243,7 +264,7 @@ export default async function SeoPage() {
                 </TR>
               </THead>
               <TBody>
-                {pages.map((p) => (
+                {shownPages.map((p) => (
                   <TR key={p.id}>
                     <TD className="font-mono text-xs">{p.url}</TD>
                     <TD className="text-right tnum">{fmtNumber(p.clicks)}</TD>
