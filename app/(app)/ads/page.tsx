@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
+import { costPer } from '@/lib/calc';
 import { provenance, rangeFor } from '@/lib/metrics';
 import { rangeParam } from '@/lib/range';
 import { cards } from '@/lib/integrations/service';
@@ -60,6 +61,18 @@ export default async function AdsPage({
   const live = adProviders.filter((p) => p.state === 'connected' || p.state === 'syncing');
   // A campaign with no `source` was written by the seeder, not reported by a platform.
   const seeded = active.filter((r) => !r.source);
+
+  // Whether anything downstream of a click is attributed to a campaign. Zoho stamps a
+  // channel on a lead but never a campaign, so leads, CPL and ROAS come back null from
+  // campaignPerformance rather than 0 — three columns of dashes beside a real spend
+  // figure, which is the same empty table with quieter punctuation. Marketing already
+  // drops them on this test; Paid Ads kept them, and they pushed ROAS off the edge of
+  // the card. Derived from the data, so they return the day something stamps a campaign.
+  const attributed = active.some((r) => r.leads !== null || r.revenue !== null);
+
+  // What the platform does bill on, for the two tiles the outcome metrics cannot fill.
+  const cpc = costPer(totals.spend, totals.clicks);
+  const cpm = totals.impressions ? (totals.spend / totals.impressions) * 1000 : null;
 
   return (
     <>
@@ -120,22 +133,40 @@ export default async function AdsPage({
         <Stat
           label="Clicks"
           value={fmtNumber(totals.clicks)}
-          sub={`${fmtPercent(totals.ctr ?? 0, 2)} CTR`}
+          sub={totals.ctr === null ? undefined : `${fmtPercent(totals.ctr, 2)} CTR`}
         />
-        <Stat
-          label="Cost per lead"
-          value={totals.costPerLead === null ? '—' : money(totals.costPerLead)}
-          sub={`${fmtNumber(totals.leads)} leads`}
-        />
-        <Stat label="ROAS" value={totals.roas === null ? '—' : fmtRatio(totals.roas)} />
+        {/* Cost per lead and ROAS are the tiles this page wants, but nothing stamps a
+            campaign on a lead or a payment, so both were headline em dashes on every
+            range. Until something does, the two slots show what Meta actually bills —
+            cost per click and per thousand impressions — and swap back on their own. */}
+        {attributed ? (
+          <>
+            <Stat
+              label="Cost per lead"
+              value={totals.costPerLead === null ? '—' : money(totals.costPerLead)}
+              sub={`${fmtNumber(totals.leads)} leads`}
+            />
+            <Stat label="ROAS" value={totals.roas === null ? '—' : fmtRatio(totals.roas)} />
+          </>
+        ) : (
+          <>
+            <Stat
+              label="Cost per click"
+              value={cpc === null ? '—' : fmtMoney(cpc, true, fx.reporting)}
+            />
+            <Stat label="Cost per 1,000 impr." value={cpm === null ? '—' : money(cpm)} />
+          </>
+        )}
       </div>
 
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Campaigns</CardTitle>
           <p className="text-[11px] text-muted-foreground">
-            Only campaigns with spend in this period. A dash means nothing has been attributed yet,
-            not zero.
+            Only campaigns with spend in this period.
+            {attributed
+              ? ' A dash means nothing has been attributed yet, not zero.'
+              : ' Delivery only: the CRM records which channel a lead came from but never which campaign, so leads, CPL and ROAS cannot be attributed to a campaign here.'}
           </p>
         </CardHeader>
 
@@ -156,9 +187,13 @@ export default async function AdsPage({
                   <TH className="text-right">Impressions</TH>
                   <TH className="text-right">Clicks</TH>
                   <TH className="text-right">CTR</TH>
-                  <TH className="text-right">Leads</TH>
-                  <TH className="text-right">CPL</TH>
-                  <TH className="text-right">ROAS</TH>
+                  {attributed ? (
+                    <>
+                      <TH className="text-right">Leads</TH>
+                      <TH className="text-right">CPL</TH>
+                      <TH className="text-right">ROAS</TH>
+                    </>
+                  ) : null}
                 </TR>
               </THead>
               <TBody>
@@ -175,15 +210,43 @@ export default async function AdsPage({
                     </TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(r.clicks)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {fmtPercent(r.ctr ?? 0, 2)}
+                      {r.ctr === null ? '—' : fmtPercent(r.ctr, 2)}
                     </TD>
-                    <TD className="text-right tnum">{fmtNumber(r.leads)}</TD>
-                    <TD className="text-right tnum">
-                      {r.costPerLead === null ? '—' : money(r.costPerLead)}
-                    </TD>
-                    <TD className="text-right tnum">{r.roas === null ? '—' : fmtRatio(r.roas)}</TD>
+                    {attributed ? (
+                      <>
+                        <TD className="text-right tnum">{fmtNumber(r.leads)}</TD>
+                        <TD className="text-right tnum">
+                          {r.costPerLead === null ? '—' : money(r.costPerLead)}
+                        </TD>
+                        <TD className="text-right tnum">
+                          {r.roas === null ? '—' : fmtRatio(r.roas)}
+                        </TD>
+                      </>
+                    ) : null}
                   </TR>
                 ))}
+                {/* Ratios recomputed from the totals rather than averaged down the rows,
+                    which is how a footer ends up disagreeing with its own columns. */}
+                <TR className="border-t-2 border-border font-semibold hover:bg-transparent">
+                  <TD colSpan={2}>Total</TD>
+                  <TD className="text-right tnum">{money(totals.spend)}</TD>
+                  <TD className="text-right tnum">{fmtNumber(totals.impressions)}</TD>
+                  <TD className="text-right tnum">{fmtNumber(totals.clicks)}</TD>
+                  <TD className="text-right tnum">
+                    {totals.ctr === null ? '—' : fmtPercent(totals.ctr, 2)}
+                  </TD>
+                  {attributed ? (
+                    <>
+                      <TD className="text-right tnum">{fmtNumber(totals.leads)}</TD>
+                      <TD className="text-right tnum">
+                        {totals.costPerLead === null ? '—' : money(totals.costPerLead)}
+                      </TD>
+                      <TD className="text-right tnum">
+                        {totals.roas === null ? '—' : fmtRatio(totals.roas)}
+                      </TD>
+                    </>
+                  ) : null}
+                </TR>
               </TBody>
             </Table>
           </TableWrap>

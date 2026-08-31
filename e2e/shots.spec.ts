@@ -12,6 +12,7 @@ const PAGES: [string, string][] = [
   ['crm-contacts', '/crm?tab=contacts'],
   ['pipeline', '/pipeline'],
   ['marketing', '/marketing'],
+  ['ads', '/ads'],
   ['analytics', '/analytics'],
   ['integrations', '/integrations'],
   ['seo', '/seo'],
