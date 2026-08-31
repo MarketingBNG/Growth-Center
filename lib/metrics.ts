@@ -5,6 +5,7 @@ import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
 import { convert, sumInReporting } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
+import { OPEN_DEAL } from './pipeline.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
 // without pulling the database in. Re-exported here because this is where callers
@@ -322,7 +323,7 @@ export type Funnel = Awaited<ReturnType<typeof funnel>>;
  *  is still in the pipeline today, so this deliberately ignores the date range. */
 export async function openPipeline() {
   const deals = await db().opportunity.findMany({
-    where: { closedAt: null },
+    where: OPEN_DEAL,
     select: { value: true, probability: true, currency: true },
   });
 

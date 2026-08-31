@@ -73,6 +73,7 @@ export default async function PipelinePage({
   const weighted = kpi('weighted');
 
   const columns = data.columns.map((c) => ({
+    total: c.total,
     stage: {
       id: c.stage.id,
       name: c.stage.name,
@@ -108,8 +109,9 @@ export default async function PipelinePage({
 
       {data.truncated ? (
         <p className="mb-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[12.5px] text-muted-foreground">
-          Showing the {BOARD_LIMIT} most recently updated of {fmtNumber(data.openTotal)} open
-          deals. The totals above cover all of them.
+          Each column shows its {BOARD_LIMIT} most recently updated deals, of{' '}
+          {fmtNumber(data.openTotal)} open. The totals above cover all of them, and each
+          column says how many it is holding back.
         </p>
       ) : null}
 

@@ -1,4 +1,5 @@
 import { db } from './prisma.ts';
+import { OPEN_DEAL } from './pipeline.ts';
 import { convert, symbolOf, type CurrencySettings } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor, type Range } from './metrics.ts';
@@ -193,7 +194,7 @@ export async function buildReport(id: ReportId, days: number): Promise<Report> {
     const [stages, won, lost, revenue, pipeline] = await Promise.all([
       db().pipelineStage.findMany({
         orderBy: { position: 'asc' },
-        include: { opportunities: { where: { closedAt: null }, select: { value: true, probability: true, currency: true } } },
+        include: { opportunities: { where: OPEN_DEAL, select: { value: true, probability: true, currency: true } } },
       }),
       db().opportunity.findMany({ where: { closedAt: window, stage: { isWon: true } }, select: { value: true, currency: true } }),
       db().opportunity.findMany({ where: { closedAt: window, stage: { isLost: true } }, select: { value: true, currency: true, lostReason: true } }),

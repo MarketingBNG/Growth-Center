@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
@@ -12,7 +12,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { EmptyState } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { api } from '@/lib/fetcher';
-import { fmtDate, fmtMoney } from '@/lib/format';
+import { fmtDate, fmtMoney, fmtNumber } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
 
 /** Assigned by column position rather than by stage name, so a renamed or added stage
@@ -42,6 +42,9 @@ export type Deal = {
 export type Column = {
   stage: { id: string; name: string; probability: number; isWon: boolean; isLost: boolean };
   cards: Deal[];
+  /** Every open deal in this stage. `cards` is capped, so the two differ on a busy stage
+   *  and the header has to say which number it is showing. */
+  total: number;
 };
 
 export function PipelineViews({
@@ -89,6 +92,12 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
   // router.refresh() reconciles, but a card that visibly snaps back on every drop
   // makes the board feel broken.
   const [local, setLocal] = useState(columns);
+
+  // The board is seeded from the server and then edited in place, so without this it kept
+  // whatever it was first given: a range change, or coming back from a deal you had just
+  // edited, re-rendered the page with fresh columns behind a board still showing the old
+  // cards.
+  useEffect(() => setLocal(columns), [columns]);
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -160,8 +169,14 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                   {col.stage.isWon ? <Badge tone="success">won</Badge> : null}
                   {col.stage.isLost ? <Badge tone="danger">lost</Badge> : null}
                 </div>
+                {/* What this column is actually showing. A capped column used to print the
+                    value of the cards on screen as though it were the stage's total. */}
                 <p className="shrink-0 text-[11.5px] text-muted-foreground tnum">
-                  {sum > 0 ? fmtMoney(sum, false, currency) : col.cards.length}
+                  {col.cards.length < col.total
+                    ? `${fmtNumber(col.cards.length)} of ${fmtNumber(col.total)}`
+                    : sum > 0
+                      ? fmtMoney(sum, false, currency)
+                      : col.cards.length}
                 </p>
               </div>
 
@@ -211,7 +226,14 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
 
                 {col.cards.length === 0 ? (
                   <p className="px-1 py-4 text-center text-[11px] text-muted-foreground">
-                    Drag a deal here
+                    {/* A won or lost column is empty by definition — the board is the open
+                        pipeline — so "Drag a deal here" needed to say what dropping one
+                        there would do, rather than read as a stage with nothing in it. */}
+                    {col.stage.isWon
+                      ? 'Drop a deal here to mark it won'
+                      : col.stage.isLost
+                        ? 'Drop a deal here to mark it lost'
+                        : 'Drag a deal here'}
                   </p>
                 ) : null}
               </div>

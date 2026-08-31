@@ -48,7 +48,28 @@ export async function defaultPipeline() {
 }
 
 /** How many open deals the board will render at once. */
-export const BOARD_LIMIT = 300;
+/**
+ * What counts as an open deal.
+ *
+ * Not `closedAt: null` alone. Zoho leaves Closing_Date empty on 982 of its won deals and
+ * the sync will not invent one — stamping the import date would move that revenue into
+ * whichever month the sync ran. So 1,122 deals sit in "Deal Complete", "Project In
+ * Progress" or "Deal Lost" with no close date, and every query that asked only for a null
+ * one counted them as still in play: the board reported 2,082 open deals worth
+ * Rs.125m when 960 were open.
+ *
+ * A deal in a won or lost stage is not open, whatever its dates say.
+ */
+export const OPEN_DEAL = {
+  closedAt: null,
+  stage: { isWon: false, isLost: false },
+} as const;
+
+/** Per column, not per board. A flat cap took the 300 most recently touched deals across
+ *  the whole pipeline, and 820 of this workspace's 960 open deals sit in the first stage —
+ *  so all 300 came from it and the other five columns rendered empty while holding 140
+ *  deals between them. */
+export const BOARD_LIMIT = 60;
 
 export async function board(pipelineId?: string) {
   const pipeline = pipelineId
@@ -59,32 +80,44 @@ export async function board(pipelineId?: string) {
     : await defaultPipeline();
   if (!pipeline) return null;
 
-  // Capped, and the cap is reported rather than silently applied — the board renders a
-  // draggable card per deal, so an uncapped query is an uncapped page. Most-recently
-  // touched first, because that is the working set. `openPipeline()` in lib/metrics.ts
-  // still counts and values EVERY open deal, so the KPI totals stay complete even when
-  // the board is showing a slice.
-  const [opportunities, openTotal] = await Promise.all([
-    db().opportunity.findMany({
-      where: { pipelineId: pipeline.id, closedAt: null },
-      orderBy: { updatedAt: 'desc' },
-      take: BOARD_LIMIT,
-      include: {
-        company: { select: { id: true, name: true } },
-        contact: { select: { id: true, firstName: true, lastName: true } },
-      },
+  // One query per column rather than one for the board, so every stage shows its own
+  // most-recently-touched deals. The board renders a draggable card each, so the cap
+  // stays — but it is reported per column, and `openPipeline()` in lib/metrics.ts still
+  // counts and values EVERY open deal, so the KPI totals stay complete.
+  const [perStage, counts] = await Promise.all([
+    Promise.all(
+      pipeline.stages.map((stage) =>
+        db().opportunity.findMany({
+          where: { pipelineId: pipeline.id, stageId: stage.id, ...OPEN_DEAL },
+          orderBy: { updatedAt: 'desc' },
+          take: BOARD_LIMIT,
+          include: {
+            company: { select: { id: true, name: true } },
+            contact: { select: { id: true, firstName: true, lastName: true } },
+          },
+        }),
+      ),
+    ),
+    db().opportunity.groupBy({
+      by: ['stageId'],
+      where: { pipelineId: pipeline.id, ...OPEN_DEAL },
+      _count: { _all: true },
     }),
-    db().opportunity.count({ where: { pipelineId: pipeline.id, closedAt: null } }),
   ]);
+
+  const totalFor = new Map(counts.map((c) => [c.stageId, c._count._all]));
+  const columns = pipeline.stages.map((stage, i) => ({
+    stage,
+    cards: perStage[i],
+    /** Every open deal in this stage, which is not always what `cards` holds. */
+    total: totalFor.get(stage.id) ?? 0,
+  }));
 
   return {
     pipeline,
-    openTotal,
-    truncated: openTotal > opportunities.length,
-    columns: pipeline.stages.map((stage) => ({
-      stage,
-      cards: opportunities.filter((o) => o.stageId === stage.id),
-    })),
+    openTotal: columns.reduce((n, c) => n + c.total, 0),
+    truncated: columns.some((c) => c.cards.length < c.total),
+    columns,
   };
 }
 
@@ -222,6 +255,7 @@ export async function convertLead(leadId: string, actorEmail: string, value = 0)
       currency: fx.reporting,
       probability: firstStage.probability,
       ownerEmail: lead.ownerEmail,
+      source: INTERNAL_SOURCE,
       leadId: lead.id,
       contactId: lead.contactId,
       companyId: lead.companyId,
