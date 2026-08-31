@@ -1,19 +1,19 @@
 import { z } from 'zod';
 import { db } from './prisma.ts';
 import { rate } from './calc.ts';
+import { slice, type ListQuery } from './list-query.ts';
 
-export const sequenceInput = z.object({
-  name: z.string().trim().min(1).max(160),
-  ownerEmail: z.string().trim().email().optional(),
+// An unrecognised value drops its filter rather than throwing. These come straight from
+// the query string, and `?status=bogus` is a typo in a shared link, not a reason to
+// replace the page with an error boundary — the same rule pageQuery already applies.
+export const sequenceFilters = z.object({
+  status: z.enum(['draft', 'active', 'paused', 'archived']).optional().catch(undefined),
+  source: z.string().trim().max(40).optional().catch(undefined),
 });
 
-export const stepInput = z.object({
-  sequenceId: z.string().min(1),
-  waitDays: z.number().int().min(0).max(90).default(0),
-  channel: z.enum(['email', 'linkedin', 'call']).default('email'),
-  subject: z.string().trim().max(200).optional(),
-  body: z.string().trim().min(1).max(8000),
-});
+export type SequenceFilters = z.infer<typeof sequenceFilters>;
+
+export const SEQUENCE_STATUSES = ['draft', 'active', 'paused', 'archived'] as const;
 
 const ENTITIES: Record<string, string> = {
   nbsp: ' ',
@@ -52,20 +52,49 @@ export function preview(html: string, max = 500): string {
   return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
 }
 
-export async function sequences() {
-  // Counted in the database, not in memory. Including the prospects to tally them by
-  // status pulled all 23,687 rows into the page on every view, to produce five numbers
-  // per sequence.
-  const [rows, statusCounts] = await Promise.all([
+/**
+ * One page of sequences, each with its steps and its counts.
+ *
+ * Paged because the page renders whole campaigns, not table rows: fifty of them with
+ * every step expanded was a single 24,000-pixel scroll, and it grew by a screenful with
+ * each campaign imported.
+ */
+export async function sequences(filters: SequenceFilters, q: ListQuery) {
+  const where = {
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.source ? { source: filters.source } : {}),
+    ...(q.q ? { name: { contains: q.q, mode: 'insensitive' as const } } : {}),
+  };
+
+  const [total, rows] = await Promise.all([
+    db().sequence.count({ where }),
     db().sequence.findMany({
-      orderBy: { createdAt: 'desc' },
+      where,
+      // `id` breaks the tie, and it has to: the Smartlead import stamps every campaign
+      // with the same createdAt, so ordering on that alone leaves the database free to
+      // return them in a different order per query — which pages that repeat one
+      // sequence and never show another.
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      ...slice(q),
       include: {
         steps: { orderBy: { position: 'asc' } },
         _count: { select: { prospects: true } },
       },
     }),
-    db().prospect.groupBy({ by: ['sequenceId', 'status'], _count: { _all: true } }),
   ]);
+
+  // Counted in the database, not in memory. Including the prospects to tally them by
+  // status pulled all 23,687 rows into the page on every view, to produce five numbers
+  // per sequence. Scoped to the page's sequences, so the tally does not walk the whole
+  // table to describe ten campaigns.
+  const ids = rows.map((r) => r.id);
+  const statusCounts = ids.length
+    ? await db().prospect.groupBy({
+        by: ['sequenceId', 'status'],
+        where: { sequenceId: { in: ids } },
+        _count: { _all: true },
+      })
+    : [];
 
   const statusBySequence = new Map<string, Record<string, number>>();
   for (const row of statusCounts) {
@@ -76,7 +105,7 @@ export async function sequences() {
 
   const reported = await reportedTotals(rows);
 
-  return rows.map((s) => {
+  const list = rows.map((s) => {
     const byStatus = statusBySequence.get(s.id) ?? {};
     const replied = byStatus.replied ?? 0;
     const sending = reported.get(s.id) ?? null;
@@ -110,6 +139,8 @@ export async function sequences() {
       createdAt: s.createdAt,
     };
   });
+
+  return { rows: list, total, page: q.page, perPage: q.perPage };
 }
 
 export type SendingTotals = {

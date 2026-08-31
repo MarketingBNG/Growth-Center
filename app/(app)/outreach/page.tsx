@@ -2,11 +2,14 @@ import { Send, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
+import { FilterBar } from '@/components/patterns/filter-bar';
+import { Pager } from '@/components/patterns/pager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { hasDb } from '@/lib/prisma';
-import { sequences } from '@/lib/outreach';
-import { DEMO_SOURCE } from '@/lib/sources';
+import { SEQUENCE_STATUSES, sequenceFilters, sequences } from '@/lib/outreach';
+import { pageQuery, pick } from '@/lib/query';
+import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { emailStatus } from '@/lib/email';
 import { fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
 
@@ -21,7 +24,18 @@ const STATUS_TONE = {
   completed: 'neutral',
 } as const;
 
-export default async function OutreachPage() {
+const FILTERS = [
+  { name: 'status', label: 'Status', options: SEQUENCE_STATUSES.map((v) => ({ value: v, label: v })) },
+  { name: 'source', label: 'Source', options: [{ value: 'smartlead', label: sourceMeta('smartlead').label }] },
+];
+
+export default async function OutreachPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+
   if (!hasDb()) {
     return (
       <>
@@ -31,7 +45,16 @@ export default async function OutreachPage() {
     );
   }
 
-  const [list, email] = await Promise.all([sequences(), Promise.resolve(emailStatus())]);
+  // Ten to a page, not the shared default of twenty-five: a row on this page is a whole
+  // campaign with its steps, so twenty-five of them is the scroll this pager exists to
+  // end. An explicit ?perPage= still wins.
+  const q = pageQuery({ perPage: '10', ...params });
+  const filters = sequenceFilters.parse(pick(params, ['status', 'source']));
+  const filtered = Boolean(filters.status || filters.source || q.q);
+  const [{ rows: list, total }, email] = await Promise.all([
+    sequences(filters, q),
+    Promise.resolve(emailStatus()),
+  ]);
 
   return (
     <>
@@ -50,12 +73,23 @@ export default async function OutreachPage() {
         </p>
       </div>
 
+      <FilterBar filters={FILTERS} searchPlaceholder="Sequence name…" />
+
       {list.length === 0 ? (
         <Card>
+          {/* Three different nothings, and they need different sentences: no campaigns at
+              all, none matching the filters, and a ?page= past the end — where telling the
+              reader to clear filters they never set explains nothing. */}
           <EmptyState
             icon={<Send className="size-6" />}
-            title="No sequences yet"
-            hint="Connect Smartlead on the Integrations page to import your campaigns."
+            title={total === 0 ? 'No sequences yet' : 'Nothing on this page'}
+            hint={
+              total === 0
+                ? 'Connect Smartlead on the Integrations page to import your campaigns.'
+                : filtered
+                  ? 'No sequence matches these filters. Clear them to see the rest.'
+                  : `There are ${fmtNumber(total)} sequences, but none on page ${q.page}.`
+            }
           />
         </Card>
       ) : (
@@ -134,6 +168,9 @@ export default async function OutreachPage() {
               </CardContent>
             </Card>
           ))}
+          <Card className="overflow-hidden">
+            <Pager page={q.page} perPage={q.perPage} total={total} />
+          </Card>
         </div>
       )}
     </>
