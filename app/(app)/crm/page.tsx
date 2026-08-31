@@ -105,9 +105,13 @@ export default async function CrmPage({
         }
       />
 
-      <Overview data={overview} rangeLabel={rangeLabel} window={window} />
-
+      {/* The band goes first, as it does on every other module screen. The lead-flow
+          panels were inserted above it, which pushed the CRM's own five numbers — the
+          ones this page is named for — below a seventeen-row table, where you had to
+          scroll past everything to reach them. */}
       <MetricsBand {...band} />
+
+      <Overview data={overview} rangeLabel={rangeLabel} window={window} />
 
       <div className="flex flex-wrap items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">
