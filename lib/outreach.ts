@@ -15,6 +15,43 @@ export const stepInput = z.object({
   body: z.string().trim().min(1).max(8000),
 });
 
+const ENTITIES: Record<string, string> = {
+  nbsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  '#39': "'",
+};
+
+/**
+ * A step body as readable text.
+ *
+ * Smartlead stores the composed email, which is HTML — 120 of the 121 imported steps are
+ * markup, one of them 33KB of it. Rendered as text that printed
+ * `<div><strong style="font-weight: 700">` down the card, and the page shipped 2.7MB of
+ * escaped tags for a preview nobody could read. Tags become spacing, entities become
+ * characters, and the result is trimmed, because a card is not an email client.
+ */
+export function preview(html: string, max = 500): string {
+  const text = html
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
+    // Block ends are the only line breaks worth keeping; everything else collapses.
+    .replace(/<\/(p|div|li|tr|h[1-6])\s*>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(#?\w+);/g, (m, e: string) => ENTITIES[e.toLowerCase()] ?? ENTITIES[e] ?? m)
+    .replace(/[^\S\n]+/g, ' ')
+    .split('\n')
+    .map((l) => l.trim())
+    // Blank lines dropped, not kept: the card shows the first few lines of the step, and
+    // an empty one spends a line of that budget on nothing.
+    .filter((l) => l)
+    .join('\n');
+  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
+}
+
 export async function sequences() {
   // Counted in the database, not in memory. Including the prospects to tally them by
   // status pulled all 23,687 rows into the page on every view, to produce five numbers
@@ -42,6 +79,7 @@ export async function sequences() {
   return rows.map((s) => {
     const byStatus = statusBySequence.get(s.id) ?? {};
     const replied = byStatus.replied ?? 0;
+    const sending = reported.get(s.id) ?? null;
     return {
       id: s.id,
       name: s.name,
@@ -55,15 +93,20 @@ export async function sequences() {
         position: st.position,
         waitDays: st.waitDays,
         channel: st.channel,
-        subject: st.subject,
-        body: st.body,
+        subject: st.subject?.trim() || null,
+        body: preview(st.body),
       })),
       prospects: s._count.prospects,
       byStatus,
-      replyRate: rate(replied, s._count.prospects),
+      /// Against what the platform says it sent, whenever it says anything. The imported
+      /// prospect rows are a partial copy of the campaign's list — 220 rows for a
+      /// campaign Smartlead sent 700 times — so dividing by them put "10.0% reply rate"
+      /// in the header above tiles reading 66 replies of 700, and "0.00% reply rate"
+      /// above a tile reading 5. Null, not zero, when there is no denominator either way.
+      replyRate: sending ? rate(sending.replied, sending.sent) : rate(replied, s._count.prospects),
       /// What the sending platform says it did with this campaign. Null for a sequence
       /// this app owns, which has no external totals to report.
-      sending: reported.get(s.id) ?? null,
+      sending,
       createdAt: s.createdAt,
     };
   });

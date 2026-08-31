@@ -70,7 +70,7 @@ export default async function OutreachPage() {
                       <SourceBadge source={s.source ?? DEMO_SOURCE} />
                     </span>
                     <p className="text-xs text-muted-foreground">
-                      {s.steps.length} steps · {s.prospects} prospects
+                      {plural(s.steps.length, 'step')} · {plural(s.prospects, 'prospect')}
                       {s.ownerEmail ? ` · ${s.ownerEmail.split('@')[0]}` : ''} · created{' '}
                       {fmtRelative(s.createdAt)}
                     </p>
@@ -78,7 +78,7 @@ export default async function OutreachPage() {
                   <div className="flex items-center gap-2">
                     <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{s.status}</Badge>
                     <span className="text-xs text-muted-foreground">
-                      {fmtPercent(s.replyRate ?? 0)} reply rate
+                      {fmtPercent(s.replyRate)} reply rate
                     </span>
                   </div>
                 </div>
@@ -90,7 +90,7 @@ export default async function OutreachPage() {
                 {s.sending ? (
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                     <Sent label="Sent" value={s.sending.sent} />
-                    <Sent label="Opened" value={s.sending.opened} note={fmtPercent(s.sending.openRate ?? 0)} />
+                    <Sent label="Opened" value={s.sending.opened} note={fmtPercent(s.sending.openRate)} />
                     <Sent label="Clicked" value={s.sending.clicked} />
                     <Sent label="Replied" value={s.sending.replied} />
                     <Sent label="Bounced" value={s.sending.bounced} />
@@ -107,18 +107,25 @@ export default async function OutreachPage() {
                 </div>
 
                 <div className="space-y-2">
-                  {s.steps.map((step) => (
+                  {/* Numbered by order, not by `position`: Smartlead's positions start at
+                      1, so adding one printed a one-step sequence as step 2. */}
+                  {s.steps.map((step, i) => (
                     <div key={step.id} className="rounded-md border border-border px-3 py-2">
                       <div className="flex items-center gap-2">
                         <span className="grid size-5 shrink-0 place-items-center rounded bg-secondary text-[11px] font-semibold">
-                          {step.position + 1}
+                          {i + 1}
                         </span>
-                        <p className="text-xs font-medium">{step.subject ?? '(no subject)'}</p>
+                        {/* A follow-up in the same thread carries no subject, and 38 of
+                            these steps stored "" rather than null — which is not null, so
+                            the fallback never fired and the row was headed by a blank. */}
+                        <p className={`text-xs font-medium ${step.subject ? '' : 'text-muted-foreground'}`}>
+                          {step.subject ?? '(no subject)'}
+                        </p>
                         <span className="ml-auto text-[11px] text-muted-foreground">
                           {step.waitDays === 0 ? 'immediately' : `wait ${step.waitDays}d`} · {step.channel}
                         </span>
                       </div>
-                      <p className="mt-1 whitespace-pre-wrap pl-7 text-[11px] leading-relaxed text-muted-foreground">
+                      <p className="mt-1 line-clamp-4 whitespace-pre-wrap pl-7 text-[11px] leading-relaxed text-muted-foreground">
                         {step.body}
                       </p>
                     </div>
@@ -131,6 +138,10 @@ export default async function OutreachPage() {
       )}
     </>
   );
+}
+
+function plural(n: number, noun: string): string {
+  return `${fmtNumber(n)} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 /** One reported total. Deliberately plain — six of these sit in a row and a card each
