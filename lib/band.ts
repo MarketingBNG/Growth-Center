@@ -166,11 +166,15 @@ export async function pipelineBand(days: number, bucket: 'day' | 'month'): Promi
   };
 }
 
-export async function marketingBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
+export async function marketingBand(
+  days: number,
+  bucket: 'day' | 'month',
+  channelId?: string,
+): Promise<BandData> {
   const { current } = rangeFor(days);
   const [{ cards, current: f, budgetPacing: pacing, weekday }, series] = await Promise.all([
-    marketingKpis(days),
-    trend(current, bucket),
+    marketingKpis(days, channelId),
+    trend(current, bucket, channelId),
   ]);
 
   const fx = currencyOf(cards);

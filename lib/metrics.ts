@@ -252,32 +252,59 @@ export async function siteMetric(metricKey: string, range: Range): Promise<numbe
  * current status, or any later stage — so it stays above `qualified` and cannot leak
  * backwards either.
  */
-export async function funnel(range: Range) {
+export async function funnel(range: Range, channelId?: string) {
   const window = { gte: range.from, lte: range.to };
+
+  // Scoped to one channel when the page asks for it, so the Marketing band describes the
+  // channel its filter is set to rather than the whole business. Blended, a ROAS of 225x
+  // sat above a table of Meta campaigns that had earned none of it.
+  //
+  // Every entity below carries its own channel except sessions, which arrive from GA4 for
+  // the site as a whole and cannot be attributed to one. Filtered, visitors is therefore 0
+  // and visitorToLead falls to null rather than dividing a channel's leads by the whole
+  // site's traffic.
+  const byChannel = channelId ? { channelId } : {};
+  const customerWhere = channelId
+    ? {
+        wonAt: window,
+        // Lead first, deal second — the same precedence channelPerformance and the revenue
+        // insert use, so a customer lands on the channel their money did.
+        OR: [
+          { opportunity: { is: { lead: { is: { channelId } } } } },
+          { opportunity: { is: { lead: { is: null }, channelId } } },
+        ],
+      }
+    : { wonAt: window };
 
   const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg] =
     await Promise.all([
-      sessions(range),
-      db().lead.count({ where: { createdAt: window } }),
+      channelId ? Promise.resolve(0) : sessions(range),
+      db().lead.count({ where: { createdAt: window, ...byChannel } }),
       db().lead.count({
         where: {
           createdAt: window,
+          ...byChannel,
           OR: [{ status: 'semi_qualified' }, { qualifiedAt: { not: null } }],
         },
       }),
-      db().lead.count({ where: { createdAt: window, qualifiedAt: { not: null } } }),
-      db().opportunity.count({ where: { createdAt: window } }),
-      db().customer.count({ where: { wonAt: window } }),
+      db().lead.count({ where: { createdAt: window, qualifiedAt: { not: null }, ...byChannel } }),
+      db().opportunity.count({ where: { createdAt: window, ...byChannel } }),
+      db().customer.count({ where: customerWhere }),
       // Grouped by currency rather than summed flat. This account's deals are written in
       // both USD and INR and its ad spend is billed in INR, and adding those together
       // produced a revenue figure roughly half of which was rupees counted as dollars.
-      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
+      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, ...byChannel }, _sum: { amount: true } }),
       // New business only. Recurring income from customers won in earlier periods is
       // real revenue but it is NOT a return on this period's marketing spend — counting
       // it produced an 18x blended ROAS on a month where new business was a third of
       // the total.
-      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
-      db().marketingSpend.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
+      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, kind: 'one_time', ...byChannel }, _sum: { amount: true } }),
+      // Spend reaches a channel through its campaign; there is no channel on a spend row.
+      db().marketingSpend.groupBy({
+        by: ['currency'],
+        where: { date: window, ...(channelId ? { campaign: { is: { channelId } } } : {}) },
+        _sum: { amount: true },
+      }),
     ]);
 
   const money = await currencySettings();
@@ -377,8 +404,14 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
  * date column is a DATE and grouping by month needs a cast that differs per driver,
  * and at 365 rows the cost is irrelevant.
  */
-export async function trend(range: Range, bucket: 'day' | 'month') {
+export async function trend(range: Range, bucket: 'day' | 'month', channelId?: string) {
   const demo = await excludeDemo('sessions');
+
+  // Scoped to a channel when asked. Sessions are site-wide and carry no channel, so a
+  // filtered series has no visitors rather than the whole site's — the marketing chart
+  // plots revenue and spend only, and a visitor count that ignored the filter would be
+  // the one number on it that meant something else.
+  const chan = channelId ? [channelId] : [];
 
   // Bucketed by Postgres rather than in JavaScript.
   //
@@ -401,38 +434,47 @@ export async function trend(range: Range, bucket: 'day' | 'month') {
   type Money = { bucket: string; currency: string | null; total: number | string | null };
 
   const [sessionRows, leadRows, revenueRows, spendRows] = await Promise.all([
-    db().$queryRawUnsafe<Counted[]>(
-      `SELECT ${at('date')} AS bucket, SUM(value) AS total
-         FROM metric_snapshot
-        WHERE "metricKey" = 'sessions' AND date >= $1 AND date <= $2
-          ${demo ? `AND source <> 'demo'` : ''}
-        GROUP BY 1`,
-      range.from,
-      range.to,
-    ),
+    channelId
+      ? Promise.resolve([] as Counted[])
+      : db().$queryRawUnsafe<Counted[]>(
+          `SELECT ${at('date')} AS bucket, SUM(value) AS total
+             FROM metric_snapshot
+            WHERE "metricKey" = 'sessions' AND date >= $1 AND date <= $2
+              ${demo ? `AND source <> 'demo'` : ''}
+            GROUP BY 1`,
+          range.from,
+          range.to,
+        ),
     db().$queryRawUnsafe<Counted[]>(
       `SELECT ${at('"createdAt"')} AS bucket, COUNT(*) AS total
          FROM lead
         WHERE "createdAt" >= $1 AND "createdAt" <= $2
+          ${channelId ? `AND "channelId" = $3` : ''}
         GROUP BY 1`,
       range.from,
       range.to,
+      ...chan,
     ),
     db().$queryRawUnsafe<Money[]>(
       `SELECT ${at('date')} AS bucket, currency, SUM(amount) AS total
          FROM revenue_entry
         WHERE date >= $1 AND date <= $2
+          ${channelId ? `AND "channelId" = $3` : ''}
         GROUP BY 1, 2`,
       range.from,
       range.to,
+      ...chan,
     ),
+    // Spend has no channel of its own; it reaches one through its campaign.
     db().$queryRawUnsafe<Money[]>(
       `SELECT ${at('date')} AS bucket, currency, SUM(amount) AS total
          FROM marketing_spend
         WHERE date >= $1 AND date <= $2
+          ${channelId ? `AND "campaignId" IN (SELECT id FROM campaign WHERE "channelId" = $3)` : ''}
         GROUP BY 1, 2`,
       range.from,
       range.to,
+      ...chan,
     ),
   ]);
 
@@ -737,7 +779,10 @@ export async function avgCycleDays(range: Range): Promise<number | null> {
 
 /** Leads per weekday for the band's bar chart. Indexed Monday-first, because a week that
  *  starts on Sunday puts the quietest two days at opposite ends of the chart. */
-export async function leadsByWeekday(range: Range): Promise<{ label: string; value: number }[]> {
+export async function leadsByWeekday(
+  range: Range,
+  channelId?: string,
+): Promise<{ label: string; value: number }[]> {
   // Counted in SQL. This pulled every lead's createdAt — 16,517 rows over a year — to
   // produce seven numbers. Postgres' EXTRACT(DOW) and JavaScript's getUTCDay() both
   // number Sunday 0, and `createdAt` is `timestamp without time zone` holding UTC, so
@@ -746,9 +791,9 @@ export async function leadsByWeekday(range: Range): Promise<{ label: string; val
     `SELECT EXTRACT(DOW FROM "createdAt") AS dow, COUNT(*) AS total
        FROM lead
       WHERE "createdAt" >= $1 AND "createdAt" <= $2
+        ${channelId ? `AND "channelId" = $3` : ''}
       GROUP BY 1`,
-    range.from,
-    range.to,
+    ...(channelId ? [range.from, range.to, channelId] : [range.from, range.to]),
   );
 
   const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -812,14 +857,19 @@ export async function customerShare(): Promise<number | null> {
  *
  * Null when no live campaign carries a budget: pacing against nothing is not 0%.
  */
-export async function budgetPacing(range: Range): Promise<number | null> {
+export async function budgetPacing(range: Range, channelId?: string): Promise<number | null> {
   const window = { gte: range.from, lte: range.to };
 
   const [spendRows, budgetRows] = await Promise.all([
-    db().marketingSpend.groupBy({ by: ['currency'], where: { date: window }, _sum: { amount: true } }),
+    db().marketingSpend.groupBy({
+      by: ['currency'],
+      where: { date: window, ...(channelId ? { campaign: { is: { channelId } } } : {}) },
+      _sum: { amount: true },
+    }),
     db().campaign.findMany({
       where: {
         budget: { not: null },
+        ...(channelId ? { channelId } : {}),
         // Overlap, treating an open-ended campaign as still running.
         AND: [
           { OR: [{ startDate: null }, { startDate: { lte: range.to } }] },
@@ -979,21 +1029,34 @@ export async function pipelineKpis(days: number) {
 }
 
 /** Marketing: Spend · Leads · CPL · ROAS · CAC. */
-export async function marketingKpis(days: number) {
+export async function marketingKpis(days: number, channelId?: string) {
   const { current, previous } = rangeFor(days);
   const [now, before, pacing, weekday] = await Promise.all([
-    funnel(current),
-    funnel(previous),
-    budgetPacing(current),
-    leadsByWeekday(current),
+    funnel(current, channelId),
+    funnel(previous, channelId),
+    budgetPacing(current, channelId),
+    leadsByWeekday(current, channelId),
   ]);
 
   const cards: Kpi[] = [
     { key: 'spend', label: 'Spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'cpl', label: 'CPL', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return' },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over every new customer, however they arrived' },
+    // The blended wording is only true unfiltered. Scoped to a channel these ARE that
+    // channel's own figures, and calling them blended would describe the opposite of what
+    // is on screen.
+    {
+      key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true,
+      hint: channelId
+        ? 'This channel’s new business over its own spend'
+        : 'Blended: new business over all paid spend. Meta is the only paid channel, and most revenue arrives by referral and inbound — this is not Meta’s return',
+    },
+    {
+      key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false,
+      hint: channelId
+        ? 'This channel’s spend over the customers it brought'
+        : 'Blended: all paid spend over every new customer, however they arrived',
+    },
   ];
 
   return { cards: await comparableDeltas(cards, current, previous), current: now, budgetPacing: pacing, weekday };

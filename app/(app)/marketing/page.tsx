@@ -52,7 +52,7 @@ export default async function MarketingPage({
       orderBy: { name: 'asc' },
     }),
     campaignPerformance(current, channelId),
-    marketingBand(days, bucket),
+    marketingBand(days, bucket, channelId),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot
@@ -75,6 +75,14 @@ export default async function MarketingPage({
   // bar it was nine times the largest real one — every channel the chart exists to compare
   // rendered as the same one-pixel sliver. Split out and stated in the subtitle instead of
   // dropped, so the money is still accounted for.
+  // The channel filter now scopes the band and the trend as well as the table, so the
+  // page describes one channel rather than showing its campaigns under the whole
+  // business's headline numbers — blended, a ROAS of 225x sat above a table of Meta
+  // campaigns that had earned none of it.
+  //
+  // The source filter deliberately does not reach them: a lead, deal or payment carries
+  // no integration source, so there is nothing to scope a funnel by. It narrows the
+  // campaign table only, and the note under the band says which figures moved.
   const withRevenue = channels.filter((c) => c.revenue > 0);
   const unattributed = withRevenue.find((c) => c.id === 'unattributed')?.revenue ?? 0;
   const named = withRevenue.filter((c) => c.id !== 'unattributed');
@@ -113,21 +121,38 @@ export default async function MarketingPage({
 
       <MetricsBand {...band} />
 
-      <div className="pb-[18px]">
-        <BarChart
-          title="Revenue by channel"
-          subtitle={
-            unattributed > 0
-              ? `${fmtMoneyCompact(unattributed, band.currency)} reached no channel and is not plotted`
-              : undefined
-          }
-          data={named.map((c) => ({ label: c.name, value: c.revenue }))}
-          kind="money"
-          // Without this the axis labelled rupees with a dollar sign, while every other
-          // figure on the page was already in the workspace's own currency.
-          currency={band.currency}
-        />
-      </div>
+      {channelId || source ? (
+        <p className="-mt-2 pb-3 text-[11px] text-muted-foreground">
+          {channelId
+            ? `Every figure on this page covers ${allChannels.find((c) => c.id === channelId)?.name ?? 'this channel'} only.`
+            : null}
+          {channelId && source ? ' ' : null}
+          {source
+            ? 'The source filter narrows the campaign table alone — leads, deals and payments carry no integration source to scope the rest by.'
+            : null}
+        </p>
+      ) : null}
+
+      {/* A chart that compares channels answers nothing once you have picked one, and a
+          single bar next to an axis is a worse way to read one number than the band above
+          it already is. */}
+      {channelId ? null : (
+        <div className="pb-[18px]">
+          <BarChart
+            title="Revenue by channel"
+            subtitle={
+              unattributed > 0
+                ? `${fmtMoneyCompact(unattributed, band.currency)} reached no channel and is not plotted`
+                : undefined
+            }
+            data={named.map((c) => ({ label: c.name, value: c.revenue }))}
+            kind="money"
+            // Without this the axis labelled rupees with a dollar sign, while every other
+            // figure on the page was already in the workspace's own currency.
+            currency={band.currency}
+          />
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <CardHeader>
