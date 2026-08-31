@@ -440,7 +440,17 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
     { key: 'opportunities', label: 'Opportunities', value: now.opportunities, previous: before.opportunities, format: 'number', higherIsBetter: true },
     { key: 'customers', label: 'New customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
-    { key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'All revenue booked, including recurring' },
+    // The "including recurring" promise is only true where recurring rows exist. Nothing
+    // in the sync writes one — writeRevenueFromWonDeals books every entry as one_time —
+    // so on this workspace the two cards carry the same figure, and the hint says why
+    // rather than leaving the reader to assume one of them is broken.
+    {
+      key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true,
+      hint:
+        now.revenue === now.newRevenue
+          ? 'All revenue booked. No recurring entries are recorded, so this equals new business'
+          : 'All revenue booked, including recurring',
+    },
     { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Deals won in this period' },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend' },

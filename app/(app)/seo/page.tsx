@@ -12,10 +12,15 @@ import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Sparkline } from '@/components/charts/Sparkline';
+import { Pager } from '@/components/patterns/pager';
 
 export const metadata = { title: 'SEO · Growth Center' };
 
-export default async function SeoPage() {
+export default async function SeoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!hasDb()) {
     return (
       <>
@@ -50,10 +55,18 @@ export default async function SeoPage() {
 
   const { totals, keywords, pages, issues, website, liveness } = data;
 
-  // Capped: 1,760 rows in one table is a page nobody scrolls and a DOM nobody needs.
-  // Ordered by impressions upstream, so the cap keeps the keywords that matter.
-  const KEYWORD_ROWS = 100;
-  const shown = keywords.slice(0, KEYWORD_ROWS);
+  // Paged rather than capped. The cap kept the top 100 by impressions, which is still 100
+  // sparkline rows — a 9,100px page — and the other 1,660 keywords were unreachable. Same
+  // 25-a-page treatment as Leads and CRM, so every keyword can be read and the page stays
+  // one screenful of table.
+  const KEYWORD_ROWS = 25;
+  const params = await searchParams;
+  const rawPage = Number(typeof params.page === 'string' ? params.page : '1');
+  const lastPage = Math.max(1, Math.ceil(keywords.length / KEYWORD_ROWS));
+  // Clamped, so a hand-edited ?page=999 lands on the last page rather than an empty table
+  // under a working pager.
+  const page = Number.isFinite(rawPage) ? Math.min(Math.max(1, Math.trunc(rawPage)), lastPage) : 1;
+  const shown = keywords.slice((page - 1) * KEYWORD_ROWS, page * KEYWORD_ROWS);
 
   // Same reason as the keyword cap: 243 URLs in a half-width card is a scroll nobody
   // finishes. Ordered by clicks upstream, so the cap keeps the pages that earn.
@@ -179,9 +192,7 @@ export default async function SeoPage() {
         <CardHeader>
           <CardTitle>Tracked keywords</CardTitle>
           <p className="text-xs text-muted-foreground">
-            {shown.length === keywords.length
-              ? `${fmtNumber(keywords.length)} keywords, most impressions first`
-              : `Top ${fmtNumber(shown.length)} of ${fmtNumber(keywords.length)} by impressions`}
+            {fmtNumber(keywords.length)} keywords, most impressions first
           </p>
         </CardHeader>
         <TableWrap>
@@ -240,6 +251,7 @@ export default async function SeoPage() {
             </TBody>
           </Table>
         </TableWrap>
+        <Pager page={page} perPage={KEYWORD_ROWS} total={keywords.length} />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
