@@ -6,6 +6,8 @@ import { companyDomainFromEmail, normalizeCompanyName, normalizeEmail } from './
 import type { ListQuery } from './api.ts';
 import { LEAD_STATUSES, SOURCE_TYPES } from './enums.ts';
 import { channelSlugFor } from './integrations/crm-mapping.ts';
+import { INTERNAL_SOURCE } from './sources.ts';
+import { phoneMatches } from './phone.ts';
 
 
 export const leadInput = z.object({
@@ -61,7 +63,7 @@ const SORTABLE = [
  * An explicit `from`/`to` still wins — the CRM page's owner links carry one, and the list
  * it opens must match the number that was clicked.
  */
-export function leadWhere(filters: LeadFilters, q: ListQuery, window?: { from: Date; to: Date }) {
+export async function leadWhere(filters: LeadFilters, q: ListQuery, window?: { from: Date; to: Date }) {
   const where: Record<string, unknown> = {};
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
@@ -86,6 +88,10 @@ export function leadWhere(filters: LeadFilters, q: ListQuery, window?: { from: D
       { lastName: { contains: q.q, mode: 'insensitive' } },
       { email: { contains: q.q, mode: 'insensitive' } },
       { companyName: { contains: q.q, mode: 'insensitive' } },
+      // 7,267 leads carry a phone number and none of them could be found by it, though
+      // the CRM's lists have searched on one since they were fixed.
+      { phone: { contains: q.q, mode: 'insensitive' } },
+      ...(await phoneMatches('lead', q.q)).map((id) => ({ id })),
     ];
   }
   return where;
@@ -101,7 +107,7 @@ export async function listLeads(
   q: ListQuery,
   window?: { from: Date; to: Date },
 ) {
-  const where = leadWhere(filters, q, window);
+  const where = await leadWhere(filters, q, window);
   const key = (SORTABLE as readonly string[]).includes(q.sort ?? '') ? q.sort! : 'createdAt';
   const orderBy = NULLABLE_SORTS.has(key)
     ? { [key]: { sort: q.dir, nulls: 'last' as const } }
@@ -285,6 +291,9 @@ export async function createLead(
       ...input,
       email: normalizeEmail(input.email),
       ownerEmail: input.ownerEmail ?? null,
+      // Stamped, because a null source is read as the seeder's and badged amber "never
+      // real". A lead from the site's own form is as real as one Zoho sent.
+      source: INTERNAL_SOURCE,
       campaignId: attribution.campaignId ?? input.campaignId ?? null,
       channelId,
     },
@@ -336,6 +345,7 @@ async function linkToCrm(leadId: string, input: LeadInput) {
         name: input.companyName?.trim() || domain,
         nameKey: normalizeCompanyName(input.companyName?.trim() || domain),
         domain,
+        source: INTERNAL_SOURCE,
       },
       update: {},
       select: { id: true },
@@ -355,7 +365,10 @@ async function linkToCrm(leadId: string, input: LeadInput) {
 
     companyId =
       existing?.id ??
-      (await db().company.create({ data: { name, nameKey }, select: { id: true } })).id;
+      (await db().company.create({
+        data: { name, nameKey, source: INTERNAL_SOURCE },
+        select: { id: true },
+      })).id;
   }
 
   let contactId: string | null = null;
@@ -369,6 +382,7 @@ async function linkToCrm(leadId: string, input: LeadInput) {
         phone: input.phone ?? null,
         title: input.title ?? null,
         companyId,
+        source: INTERNAL_SOURCE,
       },
       update: { companyId: companyId ?? undefined },
       select: { id: true },

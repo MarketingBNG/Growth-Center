@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { recordId } from './id.ts';
+import { INTERNAL_SOURCE } from './sources.ts';
 import { db } from './prisma.ts';
 import { currencySettings } from './settings.ts';
 import { dispatch } from './events.ts';
@@ -100,6 +101,9 @@ export async function createOpportunity(input: OpportunityInput, actorEmail: str
   const opp = await db().opportunity.create({
     data: {
       ...input,
+      // Same reason as leads and companies: a null source is the seeder's, and a deal
+      // someone opened here would carry its amber "never real" badge across the board.
+      source: INTERNAL_SOURCE,
       // The workspace's currency unless the caller named one.
       currency: input.currency ?? fx.reporting,
       expectedCloseDate: input.expectedCloseDate ? new Date(input.expectedCloseDate) : null,

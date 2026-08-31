@@ -102,7 +102,7 @@ export default async function LeadsPage({
 
       <MetricsBand {...band} />
 
-      <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email or company…" />
+      <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email, company or phone…" />
 
       <Card className="overflow-hidden">
         {rows.length === 0 ? (

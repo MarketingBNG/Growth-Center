@@ -8,7 +8,6 @@ import { hasDb } from '@/lib/prisma';
 import { pipelineBand } from '@/lib/band';
 import { rangeParam } from '@/lib/range';
 import { board, BOARD_LIMIT } from '@/lib/pipeline';
-import { pipelineValue } from '@/lib/calc';
 import { fmtMoney, fmtNumber } from '@/lib/format';
 import { convert } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
@@ -59,8 +58,19 @@ export default async function PipelinePage({
     );
   }
 
-  const open = data.columns.flatMap((c) => c.cards);
-  const { total, weighted } = pipelineValue(open);
+  // Read off the KPI cards rather than summed from the board.
+  //
+  // The board loads the 300 most recently touched deals, and this workspace has 2,082
+  // open — so the subtitle summed a seventh of the pipeline and printed it as the whole
+  // thing, directly above a note promising that "the totals above cover all of them".
+  // The cards come from openPipeline(), which values every open deal.
+  const kpi = (key: string) => {
+    const value = band.kpis.find((k) => k.key === key)?.value;
+    return typeof value === 'number' ? value : 0;
+  };
+  const openCount = kpi('openDeals');
+  const total = kpi('totalValue');
+  const weighted = kpi('weighted');
 
   const columns = data.columns.map((c) => ({
     stage: {
@@ -91,7 +101,7 @@ export default async function PipelinePage({
     <>
       <PageHeader
         title="Pipeline"
-        subtitle={`${open.length} open · ${money(total)} total · ${money(weighted)} weighted`}
+        subtitle={`${fmtNumber(openCount)} open · ${money(total)} total · ${money(weighted)} weighted`}
         actions={<RangePicker current={value} />}
       />
       <MetricsBand {...band} />
