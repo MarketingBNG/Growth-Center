@@ -17,9 +17,14 @@ export function PageHeader({
           <p className="mt-1 text-[13.5px] text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
-      {/* whitespace-nowrap on the action row, or the button labels wrap at narrow widths. */}
+      {/* whitespace-nowrap keeps individual button labels intact; flex-wrap lets the row
+          itself break. Without the wrap the range picker and the page's own action formed
+          one unbreakable row that ran past the right edge on a phone and scrolled the
+          whole document sideways. */}
       {actions ? (
-        <div className="ml-auto flex items-center gap-2 [&_button]:whitespace-nowrap">{actions}</div>
+        <div className="ml-auto flex flex-wrap items-center gap-2 [&_button]:whitespace-nowrap">
+          {actions}
+        </div>
       ) : null}
     </div>
   );

@@ -44,7 +44,7 @@ export function RangePicker({ current }: { current: string }) {
   const days = Number(String(selected.value).replace(/\D/g, '')) || 30;
 
   return (
-    <div className="flex items-center gap-2" data-pending={pending || undefined}>
+    <div className="flex flex-wrap items-center gap-2" data-pending={pending || undefined}>
       {/* The resolved dates, so the range is never ambiguous. Display only. */}
       <span className="inline-flex h-[38px] items-center gap-2 whitespace-nowrap rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium">
         <Calendar className="size-[15px] text-muted-foreground" />
