@@ -145,6 +145,29 @@ export function rangeFor(days: number, now = new Date()): { current: Range; prev
   return { current: { from, to }, previous: { from: prevFrom, to: prevTo } };
 }
 
+/** The equally-long period ending the instant before `range` starts. The comparison
+ *  window for a hand-picked one, derived the same way `rangeFor` derives its own. */
+export function previousOf(range: Range): Range {
+  const span = range.to.getTime() - range.from.getTime();
+  const to = new Date(range.from.getTime() - 1);
+  return { from: new Date(to.getTime() - span), to };
+}
+
+/**
+ * A window and the period to compare it against, from either a preset day count or a
+ * window someone picked on a calendar.
+ *
+ * The KPI functions took a day count alone, so a `?from=&to=` window reached the figures
+ * a page computed for itself but never the cards and chart beside them: the CRM screen
+ * could show June's leads over the last thirty days' companies, each labelled as though
+ * it were the range in the picker.
+ */
+export function windowFor(spec: number | Range, now = new Date()): { current: Range; previous: Range } {
+  return typeof spec === 'number'
+    ? rangeFor(spec, now)
+    : { current: spec, previous: previousOf(spec) };
+}
+
 
 /**
  * Seeded rows carry source 'demo'. Real ones carry the integration id.
@@ -837,8 +860,8 @@ async function convertedLeads(range: Range): Promise<number> {
 }
 
 /** Leads: New · Converted · Qualified · Cost per lead · Median response · Unassigned. */
-export async function leadsKpis(days: number) {
-  const { current, previous } = rangeFor(days);
+export async function leadsKpis(spec: number | Range) {
+  const { current, previous } = windowFor(spec);
   const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday, convNow, convBefore] =
     await Promise.all([
       funnel(current),
@@ -882,8 +905,8 @@ export async function leadsKpis(days: number) {
 }
 
 /** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */
-export async function crmKpis(days: number) {
-  const { current, previous } = rangeFor(days);
+export async function crmKpis(spec: number | Range) {
+  const { current, previous } = windowFor(spec);
   const [now, before, dupNow, dupBefore, share, weekday] = await Promise.all([
     accountMetrics(current),
     accountMetrics(previous),

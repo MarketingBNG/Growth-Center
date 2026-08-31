@@ -10,12 +10,13 @@ import {
   pipelineTrend,
   rangeFor,
   repeatCustomerRate,
+  windowFor,
   sessionsStart,
   spendStart,
   trend,
 } from './metrics.ts';
 import type { Kpi } from './kpi.ts';
-import type { Funnel } from './metrics.ts';
+import type { Funnel, Range } from './metrics.ts';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent, fmtRatio } from './format.ts';
 
 // Assembles the analytics band for one screen. Lives here rather than in the pages so
@@ -67,10 +68,10 @@ function targetNote(value: number | null, target: number | null, subject: string
 const by = (bucket: 'day' | 'month', rest = '') =>
   `By ${bucket === 'month' ? 'month' : 'day'}${rest}`;
 
-export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
-  const { current } = rangeFor(days);
+export async function leadsBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
+  const { current } = windowFor(spec);
   const [{ cards, current: f, weekday, qualificationRate }, series] = await Promise.all([
-    leadsKpis(days),
+    leadsKpis(spec),
     trend(current, bucket),
   ]);
 
@@ -100,10 +101,10 @@ export async function leadsBand(days: number, bucket: 'day' | 'month'): Promise<
   };
 }
 
-export async function crmBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
-  const { current } = rangeFor(days);
+export async function crmBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
+  const { current } = windowFor(spec);
   const [{ cards, customerShare: share, weekday }, series] = await Promise.all([
-    crmKpis(days),
+    crmKpis(spec),
     accountsTrend(current, bucket),
   ]);
 

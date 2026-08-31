@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
-import { customRange, rangeParam } from '@/lib/range';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { pageQuery } from '@/lib/query';
 import { listCompanies, listContacts } from '@/lib/crm';
-import { fmtDate } from '@/lib/format';
+import { fmtDate, fmtNumber } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { NewCrmRecordButton } from './NewCrmRecordButton';
 import { Overview } from './Overview';
@@ -65,7 +65,7 @@ export default async function CrmPage({
   };
 
   const q = pageQuery(params);
-  const { value, days, bucket } = rangeParam(params);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
 
   // A hand-picked window wins over the preset when both are in the URL; the picker clears
   // the other, so having both means someone edited the link.
@@ -76,10 +76,14 @@ export default async function CrmPage({
     : value === 'today'
       ? 'Today'
       : `Last ${days} days`;
+  // The chart buckets by the window actually being drawn, not by the preset behind it.
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   const [data, band, overview] = await Promise.all([
     tab === 'companies' ? listCompanies(q) : listContacts(q),
-    crmBand(days, bucket),
+    // The picked window, not the preset day count: the cards and the chart now describe
+    // the same period as the panel and the label above them.
+    crmBand(picked ?? days, bucket),
     crmOverview(window),
   ]);
 
@@ -105,13 +109,21 @@ export default async function CrmPage({
 
       <MetricsBand {...band} />
 
-      <div className="flex items-center gap-1 pb-4">
+      <div className="flex flex-wrap items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">
           <Link href={tabHref('companies')}>Companies</Link>
         </Button>
         <Button asChild variant={tab === 'contacts' ? 'secondary' : 'ghost'} size="sm">
           <Link href={tabHref('contacts')}>Contacts</Link>
         </Button>
+        {/* The date range drives the panels above and nothing below. Windowing the book
+            as well would leave 88 of 2,953 companies on screen and make the one place
+            you can look a client up useless for looking anyone up. That is the right
+            behaviour, but the picker gave no hint of it — so the list says so itself. */}
+        <p className="ml-auto text-xs text-muted-foreground">
+          {q.q ? `${fmtNumber(data.total)} matching` : `All ${fmtNumber(data.total)} ${tab}`} · the
+          date range applies to the panels above
+        </p>
       </div>
 
       <FilterBar

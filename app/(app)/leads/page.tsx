@@ -13,7 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { leadsBand } from '@/lib/band';
-import { customRange, rangeParam } from '@/lib/range';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
 import { pageQuery, pick } from '@/lib/query';
 import { leadFilters, listLeads } from '@/lib/leads';
@@ -71,17 +71,20 @@ export default async function LeadsPage({
 
   const [people, owners] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
   const q = pageQuery(params);
-  const { value, days, bucket } = rangeParam(params);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
   // The window the picker resolved, handed to the list as well as the band so the table
   // and the cards above it describe the same period. A hand-picked ?from=&to= wins, which
   // is what the CRM page's owner links carry.
   const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   const [{ rows, total }, band] = await Promise.all([
     listLeads(filters, q, window),
-    leadsBand(days, bucket),
+    // Arriving from a CRM owner link carries ?from=&to=; the band has to honour it, or
+    // the cards describe the last thirty days over a table that does not.
+    leadsBand(picked ?? days, bucket),
   ]);
 
   return (

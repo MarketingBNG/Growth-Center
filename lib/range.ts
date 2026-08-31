@@ -15,7 +15,14 @@ export function rangeParam(params: Record<string, string | string[] | undefined>
   const raw = typeof params.range === 'string' ? params.range : '';
   const value = ALLOWED.includes(raw) ? raw : '30';
   const days = value === 'today' ? 1 : Number(value);
-  return { value, days, bucket: days > 120 ? 'month' : 'day' };
+  return { value, days, bucket: bucketFor(days) };
+}
+
+/** Daily points up to four months, monthly beyond — a two-year window plotted by day is
+ *  730 unreadable pixels. Shared so a hand-picked range buckets like a preset of the
+ *  same length. */
+export function bucketFor(days: number): 'day' | 'month' {
+  return days > 120 ? 'month' : 'day';
 }
 
 /** ISO calendar day, `YYYY-MM-DD`, and nothing else — the shape a date input produces. */
@@ -27,7 +34,7 @@ function utcDay(value: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export type CustomRange = { from: Date; to: Date; label: string };
+export type CustomRange = { from: Date; to: Date; label: string; days: number };
 
 /**
  * `?from=&to=` for a hand-picked window, validated the same way `?range=` is.
@@ -54,5 +61,5 @@ export function customRange(params: Record<string, string | string[] | undefined
   if (spanDays > MAX_DAYS) return null;
 
   const iso = (d: Date) => d.toISOString().slice(0, 10);
-  return { from: start, to, label: `${iso(start)} – ${iso(end)}` };
+  return { from: start, to, label: `${iso(start)} – ${iso(end)}`, days: spanDays };
 }

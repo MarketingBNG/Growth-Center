@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/calc.ts';
-import { bucketKey, rangeFor } from '../lib/metrics.ts';
+import { bucketKey, previousOf, rangeFor, windowFor } from '../lib/metrics.ts';
 
 // Rates return null, not 0, when there is no denominator. A 0% CTR on a campaign that
 // served no impressions is a false statement, and it would drag any average down.
@@ -86,4 +86,29 @@ test('bucketKey reads dates in UTC, never local time', () => {
   assert.equal(bucketKey(new Date('2026-12-31T23:59:59.999Z'), 'day'), '2026-12-31');
   assert.equal(bucketKey(new Date('2026-12-31T23:59:59.999Z'), 'month'), '2026-12');
   assert.equal(bucketKey(new Date('2027-01-01T00:00:00.000Z'), 'day'), '2027-01-01');
+});
+
+// A hand-picked window has to reach the KPI cards, not just the figures a page computes
+// for itself — the CRM band showed the last thirty days beside a panel showing June.
+test('windowFor passes a picked range through untouched', () => {
+  const picked = { from: new Date('2026-06-01T00:00:00Z'), to: new Date('2026-06-30T23:59:59.999Z') };
+  const { current, previous } = windowFor(picked);
+  assert.equal(current.from.toISOString(), '2026-06-01T00:00:00.000Z');
+  assert.equal(current.to.toISOString(), '2026-06-30T23:59:59.999Z');
+  // The comparison period is the same length, ending the instant before it starts.
+  assert.equal(previous.to.toISOString(), '2026-05-31T23:59:59.999Z');
+  assert.equal(previous.from.toISOString(), '2026-05-02T00:00:00.000Z');
+});
+
+test('windowFor still resolves a day count the way rangeFor does', () => {
+  const now = new Date('2026-08-31T12:00:00Z');
+  assert.deepEqual(windowFor(7, now), rangeFor(7, now));
+});
+
+test('previousOf never overlaps the range it precedes', () => {
+  const range = { from: new Date('2026-08-01T00:00:00Z'), to: new Date('2026-08-31T23:59:59.999Z') };
+  const prev = previousOf(range);
+  assert.ok(prev.to < range.from);
+  assert.equal(prev.to.getTime() + 1, range.from.getTime());
+  assert.equal(prev.to.getTime() - prev.from.getTime(), range.to.getTime() - range.from.getTime());
 });
