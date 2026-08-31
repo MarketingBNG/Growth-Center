@@ -7,6 +7,9 @@ const STATE: Record<string, { label: string; tone: 'neutral' | 'info' | 'success
   connecting: { label: 'Connecting…', tone: 'info' },
   connected: { label: 'Connected', tone: 'success' },
   syncing: { label: 'Syncing…', tone: 'info' },
+  // Not a stored state: cards() derives it when a run has held the sync lock past its
+  // lease and is therefore dead rather than slow. The next sync will take the lock.
+  sync_stalled: { label: 'Sync stalled', tone: 'warning' },
   error: { label: 'Error', tone: 'danger' },
   demo_data: { label: 'Demo data', tone: 'warning' },
 };

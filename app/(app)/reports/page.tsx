@@ -150,7 +150,7 @@ export default async function ReportsPage({
 
       <p className="flex items-center gap-1.5 pt-4 text-[11px] text-muted-foreground">
         <ClipboardList className="size-3" />
-        Export is not built yet. Until it is, this renders in the browser only.
+        Export CSV downloads this report for the range above, section by section.
       </p>
     </>
   );

@@ -1047,7 +1047,10 @@ export async function crmKpis(spec: number | Range) {
   const cards: Kpi[] = [
     { key: 'companies', label: 'Companies', value: now.companies, previous: before.companies, format: 'number', higherIsBetter: true },
     { key: 'contacts', label: 'Contacts', value: now.contacts, previous: before.contacts, format: 'number', higherIsBetter: true },
-    { key: 'customers', label: 'Customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
+    // "Customers" read as a subset of the Companies card beside it, and it is not: these
+    // are the accounts WON in the window, and a company added in 2024 can be won today.
+    // The card said 100 next to Companies 88 and looked like an arithmetic fault.
+    { key: 'customers', label: 'Customers won', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true, hint: 'Accounts won in this period, whenever the company was first added' },
     { key: 'avgAccount', label: 'Avg account value', value: now.avgAccountValue, previous: before.avgAccountValue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Averaged over accounts that billed this period' },
     { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded into an existing lead' },
   ];

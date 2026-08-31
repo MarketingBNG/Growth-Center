@@ -97,8 +97,10 @@ export function Sidebar({ user }: { user: CurrentUser }) {
         )}
       </div>
 
-      {/* overflow-x-hidden, or the 72px column grows a horizontal scrollbar. */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2 pt-3">
+      {/* overflow-x-hidden, or the 72px column grows a horizontal scrollbar. scroll-y-hint
+          shows a shadow when the nav runs past the fold — below 780px of viewport the last
+          item sits under it, sliced, and nothing said the list continued. */}
+      <div className="scroll-y-hint flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2 pt-3">
         <SidebarNav collapsed={!open} />
       </div>
 

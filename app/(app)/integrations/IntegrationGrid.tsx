@@ -60,8 +60,16 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   // prompt to type the key again, even though the working key was still in the database.
   // `cards()` already downgrades a credential-less `connected` row to `error`, so an
   // error carrying a credential is a sync failure, not a lost connection.
+  //
+  // 'sync_stalled' is on the same footing for exactly that reason: it is a connected row
+  // whose last run died holding the lock. Offering Connect there would ask someone to
+  // re-authorise a connection that is fine; what they need is Sync now, which will take
+  // the abandoned lease.
   const connected =
-    card.state === 'connected' || card.state === 'syncing' || (card.state === 'error' && card.hasCredential);
+    card.state === 'connected' ||
+    card.state === 'syncing' ||
+    card.state === 'sync_stalled' ||
+    (card.state === 'error' && card.hasCredential);
 
   async function connectOauth() {
     setBusy('connect');

@@ -65,6 +65,9 @@ export async function cards(): Promise<Card[]> {
       lastErrorAt: true,
       connectedByEmail: true,
       config: true,
+      // For the stalled-sync test below. `state` alone cannot tell a run in progress from
+      // one that died holding the lock.
+      updatedAt: true,
       credential: { select: { id: true, expiresAt: true } },
     },
   });
@@ -76,8 +79,21 @@ export async function cards(): Promise<Card[]> {
     const config = (row?.config as Record<string, unknown> | null) ?? {};
     const missingEnv = p.requiredEnv.filter((e) => !process.env[e.name]);
 
-    let state = row?.state ?? 'disconnected';
+    // Widened deliberately: Card.state is a string because not every state the badge can
+    // show is one the database stores. 'sync_stalled' below is derived, never persisted.
+    let state: string = row?.state ?? 'disconnected';
     if (state === 'connected' && !hasCredential) state = 'error';
+    // A run that died without clearing `state` leaves the card saying "Syncing…" forever.
+    // claimSync already treats a lease this old as abandoned and lets the next run take
+    // it, so the row is not actually busy — only the badge claimed it was. Zoho CRM sat on
+    // "Syncing…" for 17 hours next to "0 rows" and nothing on the page explained it.
+    if (
+      state === 'syncing' &&
+      row &&
+      Date.now() - row.updatedAt.getTime() > SYNC_LEASE_MS
+    ) {
+      state = 'sync_stalled';
+    }
 
     return {
       id: p.id,

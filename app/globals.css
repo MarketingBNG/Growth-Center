@@ -247,3 +247,40 @@
     transform: translateY(-8px);
   }
 }
+
+/*
+ * Scroll shadows for containers whose content runs past the edge.
+ *
+ * A scrollable region with no affordance reads as a broken one. The Dashboard's channel
+ * table lost its CAC and ROAS columns at the card edge, and the sidebar lost its last nav
+ * item below 780px of viewport, with nothing in either case to say the content continued.
+ *
+ * The whole effect is four backgrounds and no JavaScript. The two `local` gradients are
+ * painted in the content's coordinate space, so they scroll away with it; the two `scroll`
+ * gradients are fixed to the frame. A cover sitting on top of a shadow hides it, which is
+ * why a shadow only appears on an edge that actually has content beyond it — nothing to
+ * scroll means both shadows stay covered, and no shadow is drawn.
+ */
+.scroll-x-hint {
+  background-image:
+    linear-gradient(to right, var(--card), transparent),
+    linear-gradient(to left, var(--card), transparent),
+    linear-gradient(to right, rgb(0 0 0 / 0.13), transparent),
+    linear-gradient(to left, rgb(0 0 0 / 0.13), transparent);
+  background-position: left center, right center, left center, right center;
+  background-repeat: no-repeat;
+  background-size: 28px 100%, 28px 100%, 10px 100%, 10px 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+.scroll-y-hint {
+  background-image:
+    linear-gradient(to bottom, var(--sidebar), transparent),
+    linear-gradient(to top, var(--sidebar), transparent),
+    linear-gradient(to bottom, rgb(0 0 0 / 0.13), transparent),
+    linear-gradient(to top, rgb(0 0 0 / 0.13), transparent);
+  background-position: center top, center bottom, center top, center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 24px, 100% 24px, 100% 8px, 100% 8px;
+  background-attachment: local, local, scroll, scroll;
+}

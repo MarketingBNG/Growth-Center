@@ -4,7 +4,9 @@ import { cn } from '@/lib/utils';
 /** Wraps the table in its own horizontal scroll container so a wide table never makes
  *  the page scroll sideways. */
 export function TableWrap({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('w-full overflow-x-auto', className)} {...props} />;
+  // scroll-x-hint draws an edge shadow only while there is content past that edge, so a
+  // table wider than its card says so instead of silently losing its last column.
+  return <div className={cn('w-full overflow-x-auto scroll-x-hint', className)} {...props} />;
 }
 
 /** The card the table sits in: rounded, bordered, clipped, with `TableWrap` scrolling
