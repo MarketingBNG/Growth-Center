@@ -106,7 +106,9 @@ export async function socialOverview() {
     accounts: rows,
     recent,
     totals: { ...totals, engagementRate: rate(totals.engagements, totals.reach) },
-    /** Networks whose figures are still seeded. Empty means the page can drop its warning. */
-    seededNetworks: rows.filter((r) => !r.live).map((r) => r.network),
+    /** Networks whose figures are still seeded. Empty means the page can drop its warning.
+     *  De-duplicated: a workspace can hold two accounts on one network, and the warning
+     *  named it twice. */
+    seededNetworks: [...new Set(rows.filter((r) => !r.live).map((r) => r.network))],
   };
 }
