@@ -255,7 +255,11 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
                 '—'
               )}
             </TD>
-            <TD className="text-muted-foreground">{c.email ?? '—'}</TD>
+            {/* Truncated, not wrapped: the Zoho-generated addresses run to sixty
+                characters and shoved the Added column off the right edge of the card. */}
+            <TD className="max-w-[280px] truncate text-muted-foreground" title={c.email ?? undefined}>
+              {c.email ?? '—'}
+            </TD>
             <TD className="text-muted-foreground">
               {c.ownerEmail ? c.ownerEmail.split('@')[0] : '—'}
             </TD>

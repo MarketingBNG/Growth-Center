@@ -54,7 +54,10 @@ export function Overview({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+      {/* Lead status is five short bars and needs a fixed, modest width; the allocation
+          table has eight columns and takes whatever is left. Splitting the row 1:2 left
+          the Total column hanging off the right edge of its card. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Lead status</CardTitle>
@@ -94,7 +97,11 @@ export function Overview({
               <p className="text-xs text-muted-foreground">No leads in this window.</p>
             ) : (
               <TableWrap>
-                <Table>
+                {/* Eight columns in a half-width card: the shared 20px cell padding alone
+                    came to 320px and pushed Total out past the scroll edge, where nobody
+                    would look for it. Tightened here rather than in the shared table,
+                    which is right for the full-width lists. */}
+                <Table className="[&_td]:px-2 [&_th]:px-2">
                   <THead>
                     <TR>
                       <TH>Owner</TH>
@@ -110,8 +117,13 @@ export function Overview({
                     {data.owners.map((o) => (
                       <TR key={o.owner}>
                         <TD className="whitespace-nowrap">
-                          <Link href={leadsHref(o.owner)} className="hover:underline">
-                            {o.owner}
+                          {/* The local part, as every other owner column on the site shows
+                              it. Sixteen full addresses at @usaindiacfo.com pushed the
+                              table past the card: Untouched was clipped mid-word and the
+                              Total column — the one the eye goes to first — was off the
+                              right edge entirely. The full address stays in the title. */}
+                          <Link href={leadsHref(o.owner)} className="hover:underline" title={o.owner}>
+                            {o.owner.includes('@') ? o.owner.split('@')[0] : o.owner}
                           </Link>
                         </TD>
                         {columns.map((s) => (
