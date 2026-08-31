@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Timeline } from '@/components/patterns/timeline';
 import { NoteBox } from '../../leads/[id]/NoteBox';
 import { db, hasDb } from '@/lib/prisma';
+import { convert } from '@/lib/currency';
+import { currencySettings } from '@/lib/settings';
 import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
 import { StageMover } from './StageMover';
 
@@ -29,6 +31,14 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
     },
   });
   if (!deal) notFound();
+
+  // The board shows every card converted into the reporting currency, because a column
+  // cannot sum rupees and dollars. This page shows the deal as billed. Both are right and
+  // together they read as a contradiction — the same deal at $150 here and Rs.14,313
+  // there — so when the two differ this says what the other number is.
+  const fx = await currencySettings();
+  const reported =
+    deal.currency === fx.reporting ? null : convert(Number(deal.value), deal.currency, fx);
 
   return (
     <>
@@ -66,7 +76,20 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               <CardTitle>Details</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-              <Detail label="Value" value={fmtMoney(Number(deal.value), true, deal.currency)} />
+              <Detail
+                label="Value"
+                value={
+                  <>
+                    {fmtMoney(Number(deal.value), true, deal.currency)}
+                    {reported !== null ? (
+                      <span className="text-muted-foreground">
+                        {' '}
+                        · {fmtMoney(reported, false, fx.reporting)} reported
+                      </span>
+                    ) : null}
+                  </>
+                }
+              />
               <Detail label="Probability" value={`${deal.probability}%`} />
               <Detail label="Owner" value={deal.ownerEmail ?? 'Unassigned'} />
               <Detail label="Expected close" value={fmtDate(deal.expectedCloseDate)} />
