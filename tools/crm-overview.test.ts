@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { recordId } from '../lib/id.ts';
 import { test } from 'node:test';
 import { stateOf } from '../lib/crm-overview.ts';
 
@@ -38,4 +39,18 @@ test('an unrecognised or missing status is counted, not dropped', () => {
   assert.equal(stateOf('Looking For Job'), 'other');
   assert.equal(stateOf(null), 'other');
   assert.equal(stateOf(''), 'other');
+});
+
+// The ids in this database come from two places: Prisma's cuid() for rows this app
+// writes, and Postgres' gen_random_uuid() for everything the sync inserts. A validator
+// that took only the first rejected every note and task aimed at a synced record.
+test('recordId accepts both the ids this database actually holds', () => {
+  assert.equal(recordId.safeParse('cmtgw9v3a00019kbnfzq693bu').success, true);
+  assert.equal(recordId.safeParse('bfd6be4c-55d5-4344-8cd3-91a819b63ec5').success, true);
+});
+
+test('recordId still refuses what is not an id', () => {
+  assert.equal(recordId.safeParse('').success, false);
+  assert.equal(recordId.safeParse("x'; drop table company; --").success, false);
+  assert.equal(recordId.safeParse('a'.repeat(65)).success, false);
 });

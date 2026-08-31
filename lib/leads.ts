@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordId } from './id.ts';
 import { db } from './prisma.ts';
 import { dispatch } from './events.ts';
 import { companyDomainFromEmail, normalizeCompanyName, normalizeEmail } from './dedupe.ts';
@@ -16,8 +17,8 @@ export const leadInput = z.object({
   title: z.string().trim().max(120).optional(),
   message: z.string().trim().max(4000).optional(),
   sourceType: z.enum(SOURCE_TYPES).default('manual'),
-  campaignId: z.string().cuid().optional(),
-  channelId: z.string().cuid().optional(),
+  campaignId: recordId.optional(),
+  channelId: recordId.optional(),
   ownerEmail: z.string().trim().email().optional(),
   utmSource: z.string().trim().max(120).optional(),
   utmMedium: z.string().trim().max(120).optional(),
@@ -35,8 +36,8 @@ export const leadFilters = z.object({
   status: z.enum(LEAD_STATUSES).optional(),
   sourceType: z.enum(SOURCE_TYPES).optional(),
   ownerEmail: z.string().trim().optional(),
-  campaignId: z.string().cuid().optional(),
-  channelId: z.string().cuid().optional(),
+  campaignId: recordId.optional(),
+  channelId: recordId.optional(),
   from: z.string().date().optional(),
   to: z.string().date().optional(),
 });

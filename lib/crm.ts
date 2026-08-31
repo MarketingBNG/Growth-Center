@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordId } from './id.ts';
 import { db } from './prisma.ts';
 import { normalizeCompanyName, normalizeDomain, normalizeEmail } from './dedupe.ts';
 import { INTERNAL_SOURCE } from './sources.ts';
@@ -24,17 +25,17 @@ export const contactInput = z.object({
   phone: z.string().trim().max(40).optional(),
   title: z.string().trim().max(120).optional(),
   linkedin: z.string().trim().max(300).optional(),
-  companyId: z.string().cuid().optional(),
+  companyId: recordId.optional(),
   ownerEmail: z.string().trim().email().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
 });
 
 export const noteInput = z.object({
   body: z.string().trim().min(1).max(8000),
-  leadId: z.string().cuid().optional(),
-  contactId: z.string().cuid().optional(),
-  companyId: z.string().cuid().optional(),
-  opportunityId: z.string().cuid().optional(),
+  leadId: recordId.optional(),
+  contactId: recordId.optional(),
+  companyId: recordId.optional(),
+  opportunityId: recordId.optional(),
 });
 
 export const taskInput = z.object({
@@ -43,10 +44,10 @@ export const taskInput = z.object({
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   dueDate: z.string().date().optional(),
   assigneeEmail: z.string().trim().email().optional(),
-  leadId: z.string().cuid().optional(),
-  contactId: z.string().cuid().optional(),
-  companyId: z.string().cuid().optional(),
-  opportunityId: z.string().cuid().optional(),
+  leadId: recordId.optional(),
+  contactId: recordId.optional(),
+  companyId: recordId.optional(),
+  opportunityId: recordId.optional(),
 });
 
 /** Every field optional: a PATCH that renames a company must not have to resend it all. */

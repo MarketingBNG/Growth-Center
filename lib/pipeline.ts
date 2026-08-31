@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordId } from './id.ts';
 import { db } from './prisma.ts';
 import { currencySettings } from './settings.ts';
 import { dispatch } from './events.ts';
@@ -20,8 +21,8 @@ export const opportunityPatch = z.object({
 
 export const opportunityInput = z.object({
   name: z.string().trim().min(1).max(160),
-  pipelineId: z.string().cuid(),
-  stageId: z.string().cuid(),
+  pipelineId: recordId,
+  stageId: recordId,
   value: z.number().nonnegative().max(1_000_000_000),
   // Optional, not defaulted to USD: this workspace reports in rupees, and a deal typed
   // into the app would otherwise be recorded in a currency nobody chose and converted on
@@ -30,10 +31,10 @@ export const opportunityInput = z.object({
   probability: z.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().date().optional(),
   ownerEmail: z.string().trim().email().optional(),
-  leadId: z.string().cuid().optional(),
-  contactId: z.string().cuid().optional(),
-  companyId: z.string().cuid().optional(),
-  campaignId: z.string().cuid().optional(),
+  leadId: recordId.optional(),
+  contactId: recordId.optional(),
+  companyId: recordId.optional(),
+  campaignId: recordId.optional(),
 });
 
 export type OpportunityInput = z.infer<typeof opportunityInput>;

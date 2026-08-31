@@ -37,7 +37,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>Details</CardTitle>
@@ -146,7 +146,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <TaskList tasks={contact.tasks} />
 
           <Card>

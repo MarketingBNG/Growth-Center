@@ -62,7 +62,11 @@ export function Overview({
           table has eight columns and takes whatever is left. Splitting the row 1:2 left
           the Total column hanging off the right edge of its card. */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-        <Card>
+        {/* min-w-0 on both: a grid child defaults to min-width:auto, so the allocation
+            table's own width became the card's floor and the card ran 190px past a phone
+            screen, taking the whole page's horizontal scrollbar with it. The minmax(0,…)
+            above only does this for the columns, which exist from lg up. */}
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Lead status</CardTitle>
             <p className="text-xs text-muted-foreground">As the owners marked them</p>
@@ -91,7 +95,7 @@ export function Overview({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Lead allocation</CardTitle>
             <p className="text-xs text-muted-foreground">Who holds them, and what they marked</p>

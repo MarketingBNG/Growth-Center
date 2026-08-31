@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordId } from '@/lib/id';
 import { body, route } from '@/lib/api';
 import { db } from '@/lib/prisma';
 
@@ -22,7 +23,7 @@ export const GET = route(null, async (user) => {
 });
 
 export const PATCH = route(null, async (user, req) => {
-  const { id } = await body(req, z.object({ id: z.string().cuid().optional() }));
+  const { id } = await body(req, z.object({ id: recordId.optional() }));
   const mine = { OR: [{ forEmail: null }, { forEmail: user.email }] };
 
   // No id means "mark everything read" — the usual action on opening the panel.

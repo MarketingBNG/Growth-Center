@@ -23,11 +23,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   // The individual entries below are shown in the currency each was billed in; this
   // total adds them up, so it has to convert first or it is rupees plus dollars.
   const fx = await currencySettings();
-  const revenue =
-    company.customer?.revenue.reduce(
-      (t, r) => t + (convert(Number(r.amount), r.currency, fx) ?? 0),
-      0,
-    ) ?? 0;
+  const entries = company.customer?.revenue ?? [];
+  const revenue = entries.reduce((t, r) => t + (convert(Number(r.amount), r.currency, fx) ?? 0), 0);
+  // The header total is in the reporting currency and the entries below it are each in
+  // the one they were billed in, so a company billed in dollars showed a rupee total
+  // above a column of dollar amounts with nothing to explain the jump.
+  const converted = entries.some((r) => r.currency !== fx.reporting);
 
   return (
     <>
@@ -58,12 +59,15 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <div className="text-right">
             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Revenue</p>
             <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
+            {converted ? (
+              <p className="text-[11px] text-muted-foreground">Converted to {fx.reporting}</p>
+            ) : null}
           </div>
         ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           {/* The contact page had a Details card and the company page had none, so
               everything the sync does carry about an account — phone, website, size,
               country, owner — had nowhere to appear. */}
@@ -187,7 +191,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <TaskList tasks={company.tasks} />
 
           {company.customer ? (
@@ -198,6 +202,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <CardContent className="space-y-1.5">
                 <p className="text-xs text-muted-foreground">
                   Customer since {fmtDate(company.customer.wonAt)}
+                  {converted ? ' · each entry as billed' : ''}
                 </p>
                 {company.customer.revenue.map((r) => (
                   <div key={r.id} className="flex justify-between text-sm">
