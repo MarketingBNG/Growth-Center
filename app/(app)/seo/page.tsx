@@ -80,7 +80,7 @@ export default async function SeoPage() {
     <>
       <PageHeader
         title="SEO"
-        subtitle={`${website.domain} — ${totals.keywords} tracked keywords`}
+        subtitle={`${website.domain} — ${fmtNumber(totals.keywords)} tracked keywords`}
         actions={searchConsole ? <StateBadge state={searchConsole.state} /> : null}
       />
 
@@ -102,7 +102,7 @@ export default async function SeoPage() {
       ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Top 3" value={fmtNumber(totals.inTop3)} sub={`of ${totals.keywords} tracked`} />
+        <Stat label="Top 3" value={fmtNumber(totals.inTop3)} sub={`of ${fmtNumber(totals.keywords)} tracked`} />
         <Stat label="Top 10" value={fmtNumber(totals.inTop10)} />
         <Stat label="Clicks" value={fmtNumber(period.clicks)} sub={`${fmtPercent(period.ctr, 2)} CTR · ${period.note}`} />
         <Stat label="Impressions" value={fmtNumber(period.impressions)} sub={period.note} />
