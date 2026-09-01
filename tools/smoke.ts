@@ -64,9 +64,24 @@ check(
   !!theBoard && theBoard.columns.every((c) => c.cards.every((d) => d.stageId === c.stage.id)),
   'every card sits in its own stage column',
 );
+// Not "the board shows only open deals" any more. That assertion outlived the behaviour
+// it described: the won and lost columns are where closed deals live, and filtering them
+// out left those columns permanently empty under a 98.7% win rate. Open is only a
+// meaningful question on the in-play stages, so that is where it is asked.
+const inPlay = theBoard?.columns.filter((c) => !c.stage.isWon && !c.stage.isLost) ?? [];
+const closedStages = theBoard?.columns.filter((c) => c.stage.isWon || c.stage.isLost) ?? [];
 check(
-  !!theBoard && theBoard.columns.flatMap((c) => c.cards).every((d) => d.closedAt === null),
-  'the board shows only open deals',
+  inPlay.length > 0 && inPlay.flatMap((c) => c.cards).every((d) => d.closedAt === null),
+  'in-play columns hold only open deals',
+);
+// Deliberately not "and every card there is closed". A deal in a won stage whose CRM
+// record carries no Closing_Date keeps closedAt null on purpose — see the sync in
+// lib/integrations/service.ts, which refuses to stamp the import date on 982 won deals
+// and scatter them across the wrong months. What matters here is that the columns are
+// populated at all, which is the regression a038771 fixed.
+check(
+  closedStages.length > 0 && closedStages.some((c) => c.cards.length > 0),
+  'won and lost columns render their deals rather than sitting empty',
 );
 
 console.log('\nWrite path: create -> dedupe -> qualify -> convert -> win');
