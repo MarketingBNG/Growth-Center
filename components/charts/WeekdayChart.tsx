@@ -17,7 +17,8 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export const WeekdayChart = dynamic(() => import('./WeekdayChartImpl').then((m) => m.WeekdayChart), {
   ssr: false,
-  loading: () => <Skeleton className="h-[200px] w-full rounded-xl" />,
+  // The 118px bar row plus its headline.
+  loading: () => <Skeleton className="h-[146px] w-full rounded-xl" />,
 });
 
 export type { WeekdayPoint } from './WeekdayChartImpl';

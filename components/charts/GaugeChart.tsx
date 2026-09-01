@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export const GaugeChart = dynamic(() => import('./GaugeChartImpl').then((m) => m.GaugeChart), {
   ssr: false,
-  loading: () => <Skeleton className="h-[180px] w-full rounded-xl" />,
+  // The gauge is a 200x96 viewBox capped at max-w-[200px], not a full-width block.
+  loading: () => <Skeleton className="h-[96px] w-full max-w-[200px] rounded-xl" />,
 });
 

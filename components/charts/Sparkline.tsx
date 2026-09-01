@@ -17,6 +17,8 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export const Sparkline = dynamic(() => import('./SparklineImpl').then((m) => m.Sparkline), {
   ssr: false,
-  loading: () => <Skeleton className="h-[28px] w-[110px] w-full rounded-xl" />,
+  // Matches SparklineImpl's own 76x20 default, so a table row does not resize
+  // under the reader when the real line arrives.
+  loading: () => <Skeleton className="h-[20px] w-[76px] rounded-sm" />,
 });
 

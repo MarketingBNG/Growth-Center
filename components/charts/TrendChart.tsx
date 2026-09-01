@@ -17,7 +17,8 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export const TrendChart = dynamic(() => import('./TrendChartImpl').then((m) => m.TrendChart), {
   ssr: false,
-  loading: () => <Skeleton className="h-[280px] w-full rounded-xl" />,
+  // TrendChartImpl's own default height.
+  loading: () => <Skeleton className="h-[220px] w-full rounded-xl" />,
 });
 
 export type { TrendPoint } from './TrendChartImpl';

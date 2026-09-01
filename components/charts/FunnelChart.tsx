@@ -12,12 +12,13 @@ import { Skeleton } from '@/components/ui/skeleton';
  *
  * `ssr: false` because these render nothing useful on the server anyway: Recharts
  * measures its container before it can lay an axis out, so the server pass produced
- * markup the client immediately threw away. The skeleton holds the same box, so nothing
- * below it jumps when the chart arrives.
+ * markup the client immediately threw away. The skeleton holds roughly the same box —
+ * this chart sizes itself to its data, so the height cannot be known before the data is.
  */
 export const FunnelChart = dynamic(() => import('./FunnelChartImpl').then((m) => m.FunnelChart), {
   ssr: false,
-  loading: () => <Skeleton className="h-[280px] w-full rounded-xl" />,
+  // Roughly five stage rows at ~50px. Stage count varies, so this is an estimate.
+  loading: () => <Skeleton className="h-[260px] w-full rounded-xl" />,
 });
 
 export type { Stage } from './FunnelChartImpl';
