@@ -37,7 +37,20 @@ export type Range = { from: Date; to: Date };
  *
  * Which series feeds which card lives in lib/kpi.ts, where it can be unit-tested.
  */
-async function comparableDeltas(cards: Kpi[], current: Range, previous: Range): Promise<Kpi[]> {
+/**
+ * When each series begins, and which systems wrote it.
+ *
+ * Ten queries that answer the same ten questions on every band render — the first lead
+ * ever created, the distinct sources on the deals table, and so on. None of them depend
+ * on the range or the cards being rendered, and none change until a sync writes, so they
+ * sit in the tag cache with the rest of the metrics reads rather than being asked again
+ * for every KPI row. This was ten of pipelineBand's eighteen queries.
+ *
+ * Dates cross the cache as epoch milliseconds. The cache serialises what it stores, and a
+ * Date that goes in comes back as a string — which still passes `Date | null` at the type
+ * level while failing at `.getTime()`, so the conversion is done explicitly here.
+ */
+const seriesProvenance = cached('metrics:series-provenance', [TAGS.metrics], async () => {
   const [sessions, spend, leads, deals, revenue, customers, sessionSources, spendSources, leadSources, dealSources] =
     await Promise.all([
       db().metricSnapshot.findFirst({ where: { metricKey: 'sessions' }, orderBy: { date: 'asc' }, select: { date: true } }),
@@ -54,27 +67,50 @@ async function comparableDeltas(cards: Kpi[], current: Range, previous: Range): 
       db().opportunity.findMany({ select: { source: true }, distinct: ['source'] }),
     ]);
 
-  const starts = {
-    sessions: sessions?.date ?? null,
-    spend: spend?.date ?? null,
-    leads: leads?.createdAt ?? null,
-    deals: deals?.createdAt ?? null,
-    revenue: revenue?.date ?? null,
-    customers: customers?.wonAt ?? null,
-  };
-
   const ids = (rows: { source: string | null }[]) =>
     [...new Set(rows.map((r) => r.source ?? INTERNAL_SOURCE))];
+  const ms = (d: Date | null | undefined) => d?.getTime() ?? null;
+
+  return {
+    starts: {
+      sessions: ms(sessions?.date),
+      spend: ms(spend?.date),
+      leads: ms(leads?.createdAt),
+      deals: ms(deals?.createdAt),
+      revenue: ms(revenue?.date),
+      customers: ms(customers?.wonAt),
+    },
+    sources: {
+      sessions: ids(sessionSources),
+      spend: ids(spendSources),
+      leads: ids(leadSources),
+      deals: ids(dealSources),
+    },
+  };
+});
+
+async function comparableDeltas(cards: Kpi[], current: Range, previous: Range): Promise<Kpi[]> {
+  const { starts: startMs, sources: sourceIds } = await seriesProvenance();
+  const asDate = (ms: number | null) => (ms === null ? null : new Date(ms));
+
+  const starts = {
+    sessions: asDate(startMs.sessions),
+    spend: asDate(startMs.spend),
+    leads: asDate(startMs.leads),
+    deals: asDate(startMs.deals),
+    revenue: asDate(startMs.revenue),
+    customers: asDate(startMs.customers),
+  };
 
   // Revenue and customers are derived from won deals rather than imported, so they carry
   // the deals' provenance — that is genuinely where the money figures come from.
   const sourcesFor: Record<KpiSeries, string[]> = {
-    sessions: ids(sessionSources),
-    spend: ids(spendSources),
-    leads: ids(leadSources),
-    deals: ids(dealSources),
-    revenue: ids(dealSources),
-    customers: ids(dealSources),
+    sessions: sourceIds.sessions,
+    spend: sourceIds.spend,
+    leads: sourceIds.leads,
+    deals: sourceIds.deals,
+    revenue: sourceIds.deals,
+    customers: sourceIds.deals,
   };
 
   const fmtDate = (d: Date) =>
@@ -864,42 +900,70 @@ export async function duplicatesMerged(range: Range): Promise<number> {
  * rate toward zero on any period where the pipeline grew, which is the opposite of what
  * a growing pipeline means.
  */
-export async function winRate(range: Range): Promise<number | null> {
+/**
+ * Win rate and average cycle for one period, from a single read.
+ *
+ * These were two functions asking the same question — which deals closed in this range —
+ * as two round trips, each pulling the stage relation as a third and fourth. The pipeline
+ * band calls both for the current period and both for the previous one, so one KPI row
+ * cost eight queries over a table it had already read.
+ *
+ * The stage flags are looked up from a map rather than joined per row: `select: { stage:
+ * { ... } }` makes Prisma issue a second query for the relation, which is the same
+ * multiplication the board's `include` was doing.
+ */
+export async function decidedDeals(
+  range: Range,
+  stageFlags: Map<string, { isWon: boolean; isLost: boolean }>,
+): Promise<{ winRate: number | null; avgCycleDays: number | null }> {
   const closed = await db().opportunity.findMany({
     where: { closedAt: { gte: range.from, lte: range.to } },
-    select: { stage: { select: { isWon: true, isLost: true } } },
+    select: { stageId: true, createdAt: true, closedAt: true },
   });
 
   let won = 0;
   let decided = 0;
+  const spans: number[] = [];
+
   for (const o of closed) {
-    if (o.stage.isWon) {
+    const flags = stageFlags.get(o.stageId);
+    if (!flags) continue;
+    if (flags.isWon) {
       won += 1;
       decided += 1;
-    } else if (o.stage.isLost) {
+      // Lost deals are left out of the cycle: an abandoned deal's "cycle" measures
+      // neglect, not sales speed.
+      const days = (o.closedAt!.getTime() - o.createdAt.getTime()) / 86_400_000;
+      if (days >= 0) spans.push(days);
+    } else if (flags.isLost) {
       decided += 1;
     }
   }
-  return rate(won, decided);
+
+  return {
+    winRate: rate(won, decided),
+    avgCycleDays: spans.length ? spans.reduce((a, b) => a + b, 0) / spans.length : null,
+  };
+}
+
+/** Every stage's won/lost flags, read once per render. */
+export const stageFlags = cache(
+  async (): Promise<Map<string, { isWon: boolean; isLost: boolean }>> => {
+    const stages = await db().pipelineStage.findMany({
+      select: { id: true, isWon: true, isLost: true },
+    });
+    return new Map(stages.map((s) => [s.id, { isWon: s.isWon, isLost: s.isLost }]));
+  },
+);
+
+export async function winRate(range: Range): Promise<number | null> {
+  return (await decidedDeals(range, await stageFlags())).winRate;
 }
 
 /** Mean days from a deal being created to being won, over deals won in the period. Lost
  *  deals are left out — an abandoned deal's "cycle" measures neglect, not sales speed. */
 export async function avgCycleDays(range: Range): Promise<number | null> {
-  const won = await db().opportunity.findMany({
-    where: {
-      closedAt: { gte: range.from, lte: range.to },
-      stage: { isWon: true },
-    },
-    select: { createdAt: true, closedAt: true },
-  });
-
-  const spans = won
-    .map((o) => (o.closedAt!.getTime() - o.createdAt.getTime()) / 86_400_000)
-    .filter((d) => d >= 0);
-
-  if (!spans.length) return null;
-  return spans.reduce((a, b) => a + b, 0) / spans.length;
+  return (await decidedDeals(range, await stageFlags())).avgCycleDays;
 }
 
 /** Leads per weekday for the band's bar chart. Indexed Monday-first, because a week that
@@ -1136,14 +1200,17 @@ export async function crmKpis(spec: number | Range) {
  *  fabricated comparison. */
 export async function pipelineKpis(days: number) {
   const { current, previous } = rangeFor(days);
-  const [open, rateNow, ratePrev, cycleNow, cyclePrev, weekday] = await Promise.all([
+  // One read per period rather than four: win rate and cycle come from the same set of
+  // closed deals, and the stage flags they need are fetched once for both.
+  const flags = await stageFlags();
+  const [open, decidedNow, decidedPrev, weekday] = await Promise.all([
     openPipeline(),
-    winRate(current),
-    winRate(previous),
-    avgCycleDays(current),
-    avgCycleDays(previous),
+    decidedDeals(current, flags),
+    decidedDeals(previous, flags),
     leadsByWeekday(current),
   ]);
+  const { winRate: rateNow, avgCycleDays: cycleNow } = decidedNow;
+  const { winRate: ratePrev, avgCycleDays: cyclePrev } = decidedPrev;
 
   const cards: Kpi[] = [
     { key: 'openDeals', label: 'Open deals', value: open.count, previous: null, format: 'number', higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
