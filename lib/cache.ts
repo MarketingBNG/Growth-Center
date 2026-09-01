@@ -83,5 +83,8 @@ export function cached<A extends unknown[], R>(
 export async function invalidate(...tags: CacheTag[]) {
   const mod = await nextCache();
   if (!mod) return;
-  for (const tag of tags) mod.revalidateTag(tag);
+  // Next 16 requires a cache-life profile alongside the tag. 'max' is the built-in that
+  // expires the entry outright, which is what a write means here — the figure the reader
+  // is about to see has changed, so no staleness is acceptable.
+  for (const tag of tags) mod.revalidateTag(tag, 'max');
 }
