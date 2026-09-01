@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
 import { signOut } from 'next-auth/react';
+import { LinkProgress } from './NavProgress';
 import { ACCOUNT_NAV, NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import type { CurrentUser } from '@/lib/auth';
@@ -209,6 +210,8 @@ export function SidebarNav({
                         {collapsed ? null : (
                           <span className="truncate whitespace-nowrap">{item.label}</span>
                         )}
+                        {/* Reports this link's pending state to the top bar. Draws nothing. */}
+                        <LinkProgress />
                       </Link>
                     </li>
                   );

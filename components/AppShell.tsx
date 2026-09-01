@@ -6,6 +6,7 @@ import { Menu, TriangleAlert, TrendingUp, X } from 'lucide-react';
 import { Sidebar, SidebarNav, UserCard } from './Sidebar';
 import { ThemeToggle } from './ThemeToggle';
 import { Notifications } from './Notifications';
+import { NavProgressProvider } from './NavProgress';
 import { Button } from './ui/button';
 import type { CurrentUser } from '@/lib/auth';
 
@@ -23,7 +24,10 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <NavProgressProvider>
+      {/* The bar lives here rather than in the root layout so it sits inside the
+          authenticated shell, alongside the nav whose clicks it reports. */}
+      <div className="flex min-h-screen bg-background">
       <Sidebar user={user} />
 
       {mobileOpen ? (
@@ -93,6 +97,7 @@ export function AppShell({
 
         <main className="min-w-0 flex-1 px-6 pb-10 pt-6">{children}</main>
       </div>
-    </div>
+      </div>
+    </NavProgressProvider>
   );
 }
