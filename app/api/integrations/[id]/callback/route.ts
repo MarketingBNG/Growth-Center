@@ -5,6 +5,7 @@ import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
 import { verifyState } from '@/lib/oauth-state';
 import { can } from '@/lib/roles';
+import { TAGS, invalidate } from '@/lib/cache';
 
 // The provider redirects the browser here, so this returns a redirect rather than JSON.
 
@@ -38,6 +39,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   try {
     const redirectUri = `${url.origin}/api/integrations/${id}/callback`;
     await connect(id, { kind: 'oauth2', code, redirectUri }, user.email);
+    await invalidate(TAGS.integrations);
     return back({ connected: provider.name });
   } catch (e) {
     const message = e instanceof IntegrationError ? e.message : 'Connection failed.';

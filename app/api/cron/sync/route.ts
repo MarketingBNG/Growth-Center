@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { hasDb } from '@/lib/prisma';
+import { TAGS, invalidate } from '@/lib/cache';
 
 /**
  * Nightly refresh of every connected integration. Scheduled in vercel.json.
@@ -34,6 +35,9 @@ export async function GET(req: Request) {
   const currency = await refreshRatesIfStale();
 
   const results = await syncAll();
+  // A sync rewrites metrics, SEO rows and social rows, and can move an integration off
+  // demo data. Without this the dashboard would show yesterday's numbers until the TTL.
+  await invalidate(TAGS.integrations, TAGS.metrics, TAGS.seo, TAGS.social, TAGS.settings);
 
   // Logged as well as returned: the response goes to the scheduler, which nobody reads
   // unless something breaks. The log is where a failure is actually noticed.

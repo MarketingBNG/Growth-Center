@@ -1,5 +1,6 @@
 import { db } from './prisma.ts';
 import { rate } from './calc.ts';
+import { TAGS, cached } from './cache.ts';
 
 /**
  * Every deliberate action on a post, whichever network reported it.
@@ -15,7 +16,7 @@ function engagementsOf(p: { likes: number; comments: number; shares: number; sav
 /** Posts listed under the accounts. Twelve is what the page renders. */
 const RECENT_POSTS = 12;
 
-export async function socialOverview() {
+async function readSocialOverview() {
   // Totals from the database, and only the posts the page actually lists. Including
   // every post to add them up loaded an account's whole history on each view — fine at
   // zero posts, and the same shape of mistake that pulled 23,687 prospects into the
@@ -135,3 +136,7 @@ export async function socialOverview() {
     seededNetworks: [...new Set(rows.filter((r) => !r.live).map((r) => r.network))],
   };
 }
+
+/** Follower counts and post metrics land once a day from the sync, so a page view does
+ *  not need to re-read them. Invalidated by the `social` tag when a sync writes. */
+export const socialOverview = cached('social:overview', [TAGS.social], readSocialOverview);

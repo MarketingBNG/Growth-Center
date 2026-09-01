@@ -16,6 +16,7 @@ import {
   type SyncCursor,
   type SyncResult,
 } from './types.ts';
+import { TAGS, cached } from '../cache.ts';
 
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.
@@ -54,7 +55,7 @@ export type Card = {
  * credential exists, the card reports `error` rather than the claim — a connected badge
  * with nothing behind it is the exact lie this module exists to prevent.
  */
-export async function cards(): Promise<Card[]> {
+async function readCards(): Promise<Card[]> {
   const rows = await db().integration.findMany({
     select: {
       provider: true,
@@ -2211,3 +2212,11 @@ export async function syncAll(days = 30): Promise<SyncAllResult[]> {
 
   return results;
 }
+
+/**
+ * Integration states change only when someone connects, disconnects or syncs — each of
+ * which invalidates the `integrations` tag — so re-reading them on every navigation was
+ * a round trip spent to learn nothing had changed. Four pages and the app shell call
+ * this, so it was the single most repeated query in the app.
+ */
+export const cards = cached('integrations:cards', [TAGS.integrations], readCards);

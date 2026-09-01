@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { db } from '@/lib/prisma';
 import { CURRENCIES, currencySettings, refreshRatesIfStale, saveCurrencySettings } from '@/lib/settings';
+import { TAGS, invalidate } from '@/lib/cache';
 
 const codes = CURRENCIES.map((c) => c.code) as [string, ...string[]];
 
@@ -36,6 +37,10 @@ export const PUT = route('settings:manage', async (user, req) => {
     currency = await refreshRatesIfStale(true);
   }
 
+  // The reporting currency sits behind every money figure in the app, so the cached read
+  // has to go the moment it changes rather than at the end of its TTL.
+  await invalidate(TAGS.settings);
+
   await db().auditEvent.create({
     data: {
       actorEmail: user.email,
@@ -51,5 +56,7 @@ export const PUT = route('settings:manage', async (user, req) => {
 
 /** The settings page's Refresh button. */
 export const POST = route('settings:manage', async () => {
-  return { currency: await refreshRatesIfStale(true) };
+  const currency = await refreshRatesIfStale(true);
+  await invalidate(TAGS.settings);
+  return { currency };
 });

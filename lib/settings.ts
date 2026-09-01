@@ -8,6 +8,7 @@ import {
   type CurrencySettings,
 } from './currency.ts';
 import { fetchRates } from './fx.ts';
+import { TAGS, cached } from './cache.ts';
 
 // Workspace preferences. One row per key in app_setting, read as a block.
 //
@@ -23,7 +24,7 @@ const CURRENCY_KEY = 'currency';
  * version, or by hand, falls back to the defaults rather than putting NaN through every
  * money figure on the dashboard.
  */
-export async function currencySettings(): Promise<CurrencySettings> {
+async function readCurrencySettings(): Promise<CurrencySettings> {
   if (!hasDb()) return defaultCurrencySettings();
   const row = await db().appSetting.findUnique({ where: { key: CURRENCY_KEY } });
   return parseCurrencySettings(row?.value);
@@ -54,7 +55,11 @@ export type { CurrencySettings };
  * constant would put a figure nobody chose behind every total.
  */
 export async function refreshRatesIfStale(force = false): Promise<CurrencySettings> {
-  const settings = await currencySettings();
+  // Deliberately the uncached read: this function writes what it reads back, and a
+  // cached value from before a currency change would save the previous reporting
+  // currency over the new one. Correctness beats the round trip here, and the settings
+  // page is the only screen that calls it on render.
+  const settings = await readCurrencySettings();
   if (settings.mode !== 'live') return settings;
 
   const age = rateAgeHours(settings);
@@ -72,3 +77,11 @@ export async function refreshRatesIfStale(force = false): Promise<CurrencySettin
 }
 
 export { rateAgeHours, RATE_STALE_HOURS };
+
+/**
+ * Called upwards of a dozen times in a single page render — every money figure needs the
+ * reporting currency and its rates — and each call was its own query. One cached read
+ * now serves all of them, and `saveCurrencySettings` drops it on write so a changed
+ * currency shows up on the next screen rather than five minutes later.
+ */
+export const currencySettings = cached('settings:currency', [TAGS.settings], readCurrencySettings);

@@ -5,6 +5,7 @@ import { authUrlFor, connect } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
 import { signState } from '@/lib/oauth-state';
+import { TAGS, invalidate } from '@/lib/cache';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -31,6 +32,7 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, req,
 
     if (!parsed.apiKey) throw new IntegrationError('An API key is required.');
     await connect(id, { kind: 'apiKey', apiKey: parsed.apiKey, config: parsed.config }, user.email);
+    await invalidate(TAGS.integrations);
     return { ok: true };
   } catch (e) {
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);

@@ -1,4 +1,5 @@
 import { db } from './prisma.ts';
+import { TAGS, cached } from './cache.ts';
 import { num, rate } from './calc.ts';
 
 // SEO reads its own tables rather than MetricSnapshot: a keyword's position on a date is
@@ -24,11 +25,24 @@ export function seoLiveness(rows: { source: string | null }[]) {
  *  show a direction and small enough to load for every keyword at once. */
 const HISTORY_POINTS = 30;
 
-export async function seoOverview() {
-  const website = await db().website.findFirst({ select: { id: true, domain: true, name: true } });
+async function readSeoOverview() {
+  // The traffic totals key off `entityType: 'seo_keyword'`, not off the website, so they
+  // do not need to wait for the website lookup — issuing them together turns three
+  // sequential round trips into two. At ~250ms a trip that is a third of the page's wait.
+  const [website, traffic] = await Promise.all([
+    db().website.findFirst({ select: { id: true, domain: true, name: true } }),
+    // What each keyword actually earned. Search Console reports it per query and the
+    // table showed none of it, while four columns it cannot report — volume, difficulty,
+    // CPC, intent — took up half the width printing an em dash on every row.
+    db().metricSnapshot.groupBy({
+      by: ['entityId', 'metricKey'],
+      where: { entityType: 'seo_keyword', metricKey: { in: ['clicks', 'impressions'] } },
+      _sum: { value: true },
+    }),
+  ]);
   if (!website) return null;
 
-  const [keywords, pages, traffic] = await Promise.all([
+  const [keywords, pages] = await Promise.all([
     db().seoKeyword.findMany({
       where: { websiteId: website.id },
       include: {
@@ -38,14 +52,6 @@ export async function seoOverview() {
       },
     }),
     db().seoPage.findMany({ where: { websiteId: website.id }, orderBy: { clicks: 'desc' } }),
-    // What each keyword actually earned. Search Console reports it per query and the
-    // table showed none of it, while four columns it cannot report — volume, difficulty,
-    // CPC, intent — took up half the width printing an em dash on every row.
-    db().metricSnapshot.groupBy({
-      by: ['entityId', 'metricKey'],
-      where: { entityType: 'seo_keyword', metricKey: { in: ['clicks', 'impressions'] } },
-      _sum: { value: true },
-    }),
   ]);
 
   const earned = new Map<string, { clicks: number; impressions: number }>();
@@ -144,7 +150,7 @@ export async function seoOverview() {
  * not, and are returned as period figures rather than being forced onto the same axis:
  * position is an average, never a sum, and lower is better.
  */
-export async function searchTrend(days = 28) {
+async function readSearchTrend(days = 28) {
   const to = new Date();
   to.setUTCHours(23, 59, 59, 999);
   const from = new Date(to);
@@ -207,3 +213,11 @@ export async function searchTrend(days = 28) {
     days: data.length,
   };
 }
+
+/**
+ * Keywords, rankings and pages are written once a day by the Search Console sync, so the
+ * SEO page was paying three round trips per view to redraw figures that had not moved.
+ * Both reads drop on the `seo` tag when a sync writes.
+ */
+export const seoOverview = cached('seo:overview', [TAGS.seo], readSeoOverview);
+export const searchTrend = cached('seo:search-trend', [TAGS.seo], readSearchTrend);
