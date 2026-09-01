@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { CircleCheck } from 'lucide-react';
 import { Suspense } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -14,6 +13,7 @@ import { db, hasDb } from '@/lib/prisma';
 import { pageQuery } from '@/lib/query';
 import { listAssignable, peopleOn, personOptions } from '@/lib/users';
 import { TASK_STATUSES } from '@/lib/enums';
+import { ProgressLink } from '@/components/NavProgress';
 import { fmtDate } from '@/lib/format';
 import { CompleteButton } from './CompleteButton';
 
@@ -122,17 +122,17 @@ async function TasksBody({
                         </TD>
                         <TD className="text-muted-foreground">
                           {t.lead ? (
-                            <Link href={`/leads/${t.lead.id}`} className="hover:text-primary">
+                            <ProgressLink href={`/leads/${t.lead.id}`} className="hover:text-primary">
                               {[t.lead.firstName, t.lead.lastName].filter(Boolean).join(' ')}
-                            </Link>
+                            </ProgressLink>
                           ) : t.opportunity ? (
-                            <Link href={`/pipeline/${t.opportunity.id}`} className="hover:text-primary">
+                            <ProgressLink href={`/pipeline/${t.opportunity.id}`} className="hover:text-primary">
                               {t.opportunity.name}
-                            </Link>
+                            </ProgressLink>
                           ) : t.company ? (
-                            <Link href={`/crm/companies/${t.company.id}`} className="hover:text-primary">
+                            <ProgressLink href={`/crm/companies/${t.company.id}`} className="hover:text-primary">
                               {t.company.name}
-                            </Link>
+                            </ProgressLink>
                           ) : (
                             '—'
                           )}

@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +9,7 @@ import { convert } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
 import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
 import { StageMover } from './StageMover';
+import { ProgressLink } from '@/components/NavProgress';
 
 export const metadata = { title: 'Deal · Growth Center' };
 
@@ -46,12 +46,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <Link
+      <ProgressLink
         href="/pipeline"
         className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" /> Pipeline
-      </Link>
+      </ProgressLink>
 
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
@@ -116,9 +116,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 label="Company"
                 value={
                   deal.company ? (
-                    <Link href={`/crm/companies/${deal.company.id}`} className="hover:text-primary">
+                    <ProgressLink href={`/crm/companies/${deal.company.id}`} className="hover:text-primary">
                       {deal.company.name}
-                    </Link>
+                    </ProgressLink>
                   ) : null
                 }
               />
@@ -126,9 +126,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 label="Contact"
                 value={
                   deal.contact ? (
-                    <Link href={`/crm/contacts/${deal.contact.id}`} className="hover:text-primary">
+                    <ProgressLink href={`/crm/contacts/${deal.contact.id}`} className="hover:text-primary">
                       {[deal.contact.firstName, deal.contact.lastName].filter(Boolean).join(' ')}
-                    </Link>
+                    </ProgressLink>
                   ) : null
                 }
               />
@@ -137,10 +137,10 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                 label="Originating lead"
                 value={
                   deal.lead ? (
-                    <Link href={`/leads/${deal.lead.id}`} className="hover:text-primary">
+                    <ProgressLink href={`/leads/${deal.lead.id}`} className="hover:text-primary">
                       {[deal.lead.firstName, deal.lead.lastName].filter(Boolean).join(' ')} (
                       {deal.lead.sourceType.replaceAll('_', ' ')})
-                    </Link>
+                    </ProgressLink>
                   ) : null
                 }
               />

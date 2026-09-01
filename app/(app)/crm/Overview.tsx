@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { LEAD_STATES, type CrmOverview } from '@/lib/crm-overview';
 import { fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
+import { ProgressLink } from '@/components/NavProgress';
 
 /**
  * The lead-flow half of the CRM screen: what came in, what the owners marked it as, and
@@ -130,9 +130,9 @@ export function Overview({
                               table past the card: Untouched was clipped mid-word and the
                               Total column — the one the eye goes to first — was off the
                               right edge entirely. The full address stays in the title. */}
-                          <Link href={leadsHref(o.owner)} className="hover:underline" title={o.owner}>
+                          <ProgressLink href={leadsHref(o.owner)} className="hover:underline" title={o.owner}>
                             {o.owner.includes('@') ? o.owner.split('@')[0] : o.owner}
-                          </Link>
+                          </ProgressLink>
                         </TD>
                         {columns.map((s) => (
                           <TD key={s.key} className="text-right tnum">

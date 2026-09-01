@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { Kanban as KanbanIcon, Rows3 } from 'lucide-react';
@@ -14,6 +13,7 @@ import { SourceBadge } from '@/components/patterns/source-badge';
 import { api } from '@/lib/fetcher';
 import { fmtDate, fmtMoney, fmtNumber } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
+import { ProgressLink } from '@/components/NavProgress';
 
 /** Assigned by column position rather than by stage name, so a renamed or added stage
  *  still gets a colour instead of falling back to nothing. */
@@ -209,11 +209,11 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                         dragging === deal.id ? 'opacity-40' : ''
                       }`}
                     >
-                      <Link href={`/pipeline/${deal.id}`} className="block hover:text-primary">
+                      <ProgressLink href={`/pipeline/${deal.id}`} className="block hover:text-primary">
                         <p className="break-words text-[12.5px] font-bold leading-[1.35]">
                           {deal.name}
                         </p>
-                      </Link>
+                      </ProgressLink>
                       {deal.companyName ? (
                         <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                           {deal.companyName}
@@ -288,9 +288,9 @@ function DealTable({ columns, currency }: { columns: Column[]; currency?: string
               <TR key={d.id}>
                 <TD>
                   <span className="inline-flex items-center gap-1.5">
-                    <Link href={`/pipeline/${d.id}`} className="font-medium hover:text-primary">
+                    <ProgressLink href={`/pipeline/${d.id}`} className="font-medium hover:text-primary">
                       {d.name}
-                    </Link>
+                    </ProgressLink>
                     <SourceBadge source={d.source ?? DEMO_SOURCE} />
                   </span>
                 </TD>

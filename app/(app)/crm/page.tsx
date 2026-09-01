@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { DateRangePicker } from '@/components/patterns/date-range-picker';
@@ -14,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
+import { ProgressLink } from '@/components/NavProgress';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm';
@@ -155,10 +155,10 @@ export default async function CrmPage({
 
       <div className="flex flex-wrap items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">
-          <Link href={tabHref('companies')}>Companies</Link>
+          <ProgressLink href={tabHref('companies')}>Companies</ProgressLink>
         </Button>
         <Button asChild variant={tab === 'contacts' ? 'secondary' : 'ghost'} size="sm">
-          <Link href={tabHref('contacts')}>Contacts</Link>
+          <ProgressLink href={tabHref('contacts')}>Contacts</ProgressLink>
         </Button>
         {/* The date range drives the panels above and nothing below. Windowing the book
             as well would leave 88 of 2,953 companies on screen and make the one place
@@ -244,9 +244,9 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
           <TR key={c.id}>
             <TD>
               <span className="inline-flex items-center gap-1.5">
-                <Link href={`/crm/companies/${c.id}`} className="font-medium hover:text-primary">
+                <ProgressLink href={`/crm/companies/${c.id}`} className="font-medium hover:text-primary">
                   {c.name}
-                </Link>
+                </ProgressLink>
                 <SourceBadge source={c.source ?? DEMO_SOURCE} />
               </span>
               {c.domain ? <p className="text-xs text-muted-foreground">{c.domain}</p> : null}
@@ -301,20 +301,20 @@ function ContactTable({ rows }: { rows: ContactRow[] }) {
           <TR key={c.id}>
             <TD>
               <span className="inline-flex items-center gap-1.5">
-                <Link href={`/crm/contacts/${c.id}`} className="font-medium hover:text-primary">
+                <ProgressLink href={`/crm/contacts/${c.id}`} className="font-medium hover:text-primary">
                   {[c.firstName, c.lastName].filter(Boolean).join(' ')}
-                </Link>
+                </ProgressLink>
                 <SourceBadge source={c.source ?? DEMO_SOURCE} />
               </span>
             </TD>
             <TD>
               {c.company ? (
-                <Link
+                <ProgressLink
                   href={`/crm/companies/${c.company.id}`}
                   className="text-muted-foreground hover:text-primary"
                 >
                   {c.company.name}
-                </Link>
+                </ProgressLink>
               ) : (
                 '—'
               )}

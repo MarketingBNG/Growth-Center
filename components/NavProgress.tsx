@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLinkStatus } from "next/link";
+import Link, { useLinkStatus } from "next/link";
 
 /**
  * The thin bar across the top of the window while a navigation is in flight.
@@ -116,6 +116,30 @@ function NavProgressBar({ active }: { active: boolean }) {
           CSS attribute selectors match on presence. */}
       <div className="nav-progress h-full bg-primary" data-active={active || undefined} />
     </div>
+  );
+}
+
+/**
+ * A Link that reports its own pending state to the bar.
+ *
+ * The alternative was dropping `<LinkProgress />` inside every Link by hand, which works
+ * until the next one is added without it — and the links that most need the bar are the
+ * ones into detail pages, which cannot carry a `loading.tsx` at all because a loading
+ * boundary on those segments would flush a 200 over the 404s they raise. A row click into
+ * a lead had no acknowledgement of any kind.
+ *
+ * Not applied to the sidebar, which renders LinkProgress directly: those links also carry
+ * hover prefetching and their own active styling, and are better read as what they are.
+ */
+export function ProgressLink({
+  children,
+  ...props
+}: React.ComponentProps<typeof Link>) {
+  return (
+    <Link {...props}>
+      {children}
+      <LinkProgress />
+    </Link>
   );
 }
 

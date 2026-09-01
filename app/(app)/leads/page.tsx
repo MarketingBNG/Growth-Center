@@ -1,5 +1,4 @@
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
@@ -14,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
+import { ProgressLink } from '@/components/NavProgress';
 import { leadsBand } from '@/lib/band';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
@@ -188,9 +188,9 @@ async function LeadsTable({
                     <TR key={lead.id}>
                       <TD>
                         <span className="inline-flex items-center gap-1.5">
-                          <Link href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
+                          <ProgressLink href={`/leads/${lead.id}`} className="font-medium hover:text-primary">
                             {[lead.firstName, lead.lastName].filter(Boolean).join(' ')}
-                          </Link>
+                          </ProgressLink>
                           {/* Which system wrote the row, distinct from the `sourceType`
                               column beside it — that says how the lead found us, this
                               says whether the record is real or the seeder's. */}
