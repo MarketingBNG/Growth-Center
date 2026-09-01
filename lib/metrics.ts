@@ -5,6 +5,7 @@ import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
 import { convert, sumInReporting } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
+import { cache } from 'react';
 import { OPEN_DEAL } from './pipeline.ts';
 import { TAGS, cached } from './cache.ts';
 
@@ -181,13 +182,31 @@ export function windowFor(spec: number | Range, now = new Date()): { current: Ra
  * Scoped per metric, not globally, so a live Meta connection does not blank out the
  * seeded figures on pages nothing real writes to yet.
  */
-export async function excludeDemo(metricKey: string): Promise<{ not: 'demo' } | undefined> {
-  const live = await db().metricSnapshot.findFirst({
-    where: { metricKey, source: { not: 'demo' } },
-    select: { id: true },
-  });
-  return live ? { not: 'demo' } : undefined;
-}
+/**
+ * Wrapped in React's `cache` so one render asks once.
+ *
+ * `siteMetric` and `sessionsStart` both call this before every read, so a KPI band that
+ * touches seven metric keys asked the same question seven times — measured as 54 queries
+ * for analyticsBand, of which 24 were repeats. Keyed on the metric name, so the seven
+ * distinct keys still cost seven queries; it is the repeats that go.
+ *
+ * Note this dedupes per render, not across requests — that is what the tag cache in
+ * lib/cache.ts is for. The two stack: `cache` collapses the duplicates within one page,
+ * `cached` keeps the result between pages.
+ *
+ * Only the reads taking no arguments or a primitive one are wrapped. React's cache keys
+ * on argument identity, so a helper taking a freshly built `Range` object would miss on
+ * every call and buy nothing — those need their queries batched instead, not memoised.
+ */
+export const excludeDemo = cache(
+  async (metricKey: string): Promise<{ not: 'demo' } | undefined> => {
+    const live = await db().metricSnapshot.findFirst({
+      where: { metricKey, source: { not: 'demo' } },
+      select: { id: true },
+    });
+    return live ? { not: 'demo' } : undefined;
+  },
+);
 
 async function sessions(range: Range): Promise<number> {
   return siteMetric('sessions', range);
@@ -206,23 +225,64 @@ async function sessions(range: Range): Promise<number> {
  * `comparableDeltas` reads the same row for the same reason, but only to blank a change
  * chip. This is the funnel's own version of that question.
  */
-export async function sessionsStart(): Promise<Date | null> {
+export const sessionsStart = cache(async (): Promise<Date | null> => {
   const first = await db().metricSnapshot.findFirst({
     where: { metricKey: 'sessions', source: await excludeDemo('sessions') },
     orderBy: { date: 'asc' },
     select: { date: true },
   });
   return first?.date ?? null;
-}
+});
 
 /** The first day ad spend was recorded, or null if none ever was. The same question
  *  `sessionsStart` answers, for the series that makes CAC and ROAS a ratio. */
-export async function spendStart(): Promise<Date | null> {
+export const spendStart = cache(async (): Promise<Date | null> => {
   const first = await db().marketingSpend.findFirst({
     orderBy: { date: 'asc' },
     select: { date: true },
   });
   return first?.date ?? null;
+});
+
+/**
+ * Several site-wide daily metrics, each summed over the same range.
+ *
+ * Two queries for the whole set rather than two per metric. `siteMetric` costs an
+ * existence check and an aggregate every time it is called, so the analytics band asking
+ * for pageviews and users across two windows was eight round trips against one table.
+ *
+ * The demo-exclusion rule is unchanged and still per metric: a key with any live row
+ * anywhere drops its seeded rows, a key with none keeps them. That question is asked once
+ * for the whole set here instead of once per key.
+ */
+export async function siteMetrics(
+  metricKeys: string[],
+  range: Range,
+): Promise<Record<string, number>> {
+  const keys = [...new Set(metricKeys)];
+  if (!keys.length) return {};
+
+  const [liveKeys, rows] = await Promise.all([
+    db().metricSnapshot.groupBy({
+      by: ['metricKey'],
+      where: { metricKey: { in: keys }, source: { not: 'demo' } },
+    }),
+    db().metricSnapshot.groupBy({
+      by: ['metricKey', 'source'],
+      where: { metricKey: { in: keys }, date: { gte: range.from, lte: range.to } },
+      _sum: { value: true },
+    }),
+  ]);
+
+  const hasLive = new Set(liveKeys.map((r) => r.metricKey));
+  const totals: Record<string, number> = Object.fromEntries(keys.map((k) => [k, 0]));
+  for (const row of rows) {
+    // Same rule `excludeDemo` applies, decided per row now that source is in hand.
+    if (hasLive.has(row.metricKey) && row.source === 'demo') continue;
+    totals[row.metricKey] += num(row._sum.value);
+  }
+  for (const k of keys) totals[k] = Math.round(totals[k]);
+  return totals;
 }
 
 /** Any site-wide daily metric, summed over a range. GA4 and Search Console both report
@@ -1141,12 +1201,14 @@ export async function analyticsKpis(days: number) {
 
   // Pageviews and users were synced daily from GA4 and never read — the band showed
   // sessions alone while two of the three metrics the provider fetches sat unused.
-  const [views, viewsBefore, people, peopleBefore] = await Promise.all([
-    siteMetric('pageviews', current),
-    siteMetric('pageviews', previous),
-    siteMetric('users', current),
-    siteMetric('users', previous),
+  const [nowMetrics, beforeMetrics] = await Promise.all([
+    siteMetrics(['pageviews', 'users'], current),
+    siteMetrics(['pageviews', 'users'], previous),
   ]);
+  const views = nowMetrics.pageviews;
+  const viewsBefore = beforeMetrics.pageviews;
+  const people = nowMetrics.users;
+  const peopleBefore = beforeMetrics.users;
 
   const cards: Kpi[] = [
     { key: 'sessions', label: 'Sessions', value: now.visitors, previous: before.visitors, format: 'number', higherIsBetter: true },

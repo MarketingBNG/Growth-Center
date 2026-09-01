@@ -92,34 +92,85 @@ export async function board(pipelineId?: string) {
       ? { pipelineId: pipeline.id, stageId: stage.id }
       : { pipelineId: pipeline.id, stageId: stage.id, ...OPEN_DEAL };
 
-  // One query per column rather than one for the board, so every stage shows its own
-  // most-recently-touched deals. The board renders a draggable card each, so the cap
-  // stays — but it is reported per column, and `openPipeline()` in lib/metrics.ts still
-  // counts and values EVERY open deal, so the KPI totals stay complete.
-  const [perStage, counts] = await Promise.all([
+  // One query per column, because every stage shows its own most-recently-touched deals
+  // and a per-group limit is not something the query builder can express. The board
+  // renders a draggable card each, so the cap stays — but it is reported per column, and
+  // `openPipeline()` in lib/metrics.ts still counts and values EVERY open deal, so the
+  // KPI totals stay complete.
+  //
+  // What is NOT one query per column any more: the company and contact behind each card,
+  // and the totals underneath them.
+  //
+  // Prisma issues a separate query per relation per findMany, so `include` here meant six
+  // column queries became eighteen — the same company lookup fired six times, and the
+  // same contact lookup six times. Measured at 26 queries for one board. The ids are
+  // collected and fetched once instead, and the six counts collapse into two groupBys:
+  // one for the terminal columns, which hold everything, and one for the in-play columns,
+  // which hold only what is still open.
+  const openStages = pipeline.stages.filter((s) => !s.isWon && !s.isLost);
+  const closedStages = pipeline.stages.filter((s) => s.isWon || s.isLost);
+
+  const [perStage, openCounts, closedCounts] = await Promise.all([
     Promise.all(
       pipeline.stages.map((stage) =>
         db().opportunity.findMany({
           where: scopeFor(stage),
           orderBy: { updatedAt: 'desc' },
           take: BOARD_LIMIT,
-          include: {
-            company: { select: { id: true, name: true } },
-            contact: { select: { id: true, firstName: true, lastName: true } },
-          },
         }),
       ),
     ),
-    Promise.all(
-      pipeline.stages.map((stage) => db().opportunity.count({ where: scopeFor(stage) })),
-    ),
+    openStages.length
+      ? db().opportunity.groupBy({
+          by: ['stageId'],
+          where: { pipelineId: pipeline.id, stageId: { in: openStages.map((s) => s.id) }, closedAt: null },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    closedStages.length
+      ? db().opportunity.groupBy({
+          by: ['stageId'],
+          where: { pipelineId: pipeline.id, stageId: { in: closedStages.map((s) => s.id) } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  // Two lookups for the whole board rather than two per column. Only the ids actually on
+  // a card are fetched, so this stays proportional to what is rendered.
+  const cardDeals = perStage.flat();
+  const companyIds = [...new Set(cardDeals.map((d) => d.companyId).filter((id) => id !== null))];
+  const contactIds = [...new Set(cardDeals.map((d) => d.contactId).filter((id) => id !== null))];
+
+  const [companies, contacts] = await Promise.all([
+    companyIds.length
+      ? db().company.findMany({ where: { id: { in: companyIds } }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+    contactIds.length
+      ? db().contact.findMany({
+          where: { id: { in: contactIds } },
+          select: { id: true, firstName: true, lastName: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const companyById = new Map(companies.map((c) => [c.id, c]));
+  const contactById = new Map(contacts.map((c) => [c.id, c]));
+  const countByStage = new Map(
+    [...openCounts, ...closedCounts].map((r) => [r.stageId, r._count._all]),
+  );
 
   const columns = pipeline.stages.map((stage, i) => ({
     stage,
-    cards: perStage[i],
+    // Reattached rather than joined by the database, so the card keeps the exact shape
+    // the board component already reads.
+    cards: perStage[i].map((deal) => ({
+      ...deal,
+      company: deal.companyId ? (companyById.get(deal.companyId) ?? null) : null,
+      contact: deal.contactId ? (contactById.get(deal.contactId) ?? null) : null,
+    })),
     /** Everything this column stands for, which is not always what `cards` holds. */
-    total: counts[i],
+    total: countByStage.get(stage.id) ?? 0,
   }));
 
   return {
