@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { StateBadge, stateLabel } from '@/components/patterns/integration-state';
 import { db, hasDb } from '@/lib/prisma';
+import { TAGS, cached } from '@/lib/cache';
 import { channelPerformance, rangeFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
 import { rangeParam } from '@/lib/range';
@@ -19,6 +20,25 @@ import { analyticsBand } from '@/lib/band';
 import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/format';
 
 export const metadata = { title: 'Analytics · Growth Center' };
+
+/**
+ * What is actually in the metrics layer, grouped by who wrote it. This is the honest
+ * answer to "where do these numbers come from".
+ *
+ * Grouped by entityType as well as metricKey. Without it "clicks" collapsed the
+ * per-keyword rows and the per-page rows into one 6,142-row line, and sat in the table
+ * beside "search clicks" with nothing to say what either one counted.
+ *
+ * Cached with the rest of the metrics reads: it aggregates the whole snapshot table on
+ * every view, and it was the last uncached query left on this page.
+ */
+const metricsInventory = cached('analytics:inventory', [TAGS.metrics], () =>
+  db().metricSnapshot.groupBy({
+    by: ['source', 'metricKey', 'entityType'],
+    _count: { _all: true },
+    _max: { date: true },
+  }),
+);
 
 /** What one row of a metric counts. The stored entityType is an internal enum-ish
  *  string; this is the reader's word for it. */
@@ -59,16 +79,7 @@ export default async function AnalyticsPage({
     analyticsBand(days, bucket),
     channelPerformance(current),
     cards(),
-    // What is actually in the metrics layer, grouped by who wrote it. This is the
-    // honest answer to "where do these numbers come from".
-    // Grouped by entityType as well as metricKey. Without it "clicks" collapsed the
-    // per-keyword rows and the per-page rows into one 6,142-row line, and sat in the
-    // table beside "search clicks" with nothing to say what either one counted.
-    db().metricSnapshot.groupBy({
-      by: ['source', 'metricKey', 'entityType'],
-      _count: { _all: true },
-      _max: { date: true },
-    }),
+    metricsInventory(),
   ]);
 
   // Every provider that actually writes into the metrics layer, plus the reporting

@@ -3,6 +3,7 @@ import { cac, costPer, num, rate, roas } from './calc.ts';
 import { convert } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import type { Range } from './metrics.ts';
+import { TAGS, cached } from './cache.ts';
 
 /**
  * Campaign performance. Marketing, Paid Ads and the dashboard's campaign table all
@@ -12,7 +13,7 @@ import type { Range } from './metrics.ts';
  * intention, and reporting it as cost would overstate ROAS on every under-spending
  * campaign.
  */
-export async function campaignPerformance(range: Range, channelId?: string) {
+async function readCampaignPerformance(range: Range, channelId?: string) {
   const window = { gte: range.from, lte: range.to };
 
   const campaigns = await db().campaign.findMany({
@@ -180,3 +181,7 @@ export function campaignTotals(rows: CampaignRow[]) {
     roas: t.revenue === null ? null : roas(t.revenue, t.spend),
   };
 }
+
+/** Spend and conversions per campaign, from the same daily snapshots. `campaignTotals`
+ *  is pure arithmetic over these rows, so caching the read covers it too. */
+export const campaignPerformance = cached('campaigns:performance', [TAGS.metrics], readCampaignPerformance);

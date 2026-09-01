@@ -18,6 +18,7 @@ import {
 import type { Kpi } from './kpi.ts';
 import type { Funnel, Range } from './metrics.ts';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent, fmtRatio } from './format.ts';
+import { TAGS, cached } from './cache.ts';
 
 // Assembles the analytics band for one screen. Lives here rather than in the pages so
 // the band's figures come from lib/metrics.ts like every other number, and so five
@@ -166,7 +167,7 @@ export async function pipelineBand(days: number, bucket: 'day' | 'month'): Promi
   };
 }
 
-export async function marketingBand(
+async function readMarketingBand(
   days: number,
   bucket: 'day' | 'month',
   channelId?: string,
@@ -209,7 +210,7 @@ export async function marketingBand(
   };
 }
 
-export async function analyticsBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
+async function readAnalyticsBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
   const { current } = rangeFor(days);
   const [{ cards, current: f, weekday }, series, repeat] = await Promise.all([
     analyticsKpis(days),
@@ -314,3 +315,18 @@ export async function dashboardBand(
     },
   };
 }
+
+/**
+ * The KPI rows on Analytics and Marketing.
+ *
+ * Caching `trend` and `channelPerformance` underneath these was not enough — each band
+ * also runs its own KPI batch, a weekday breakdown and a repeat-customer rate, and those
+ * were still going to the database on every view. /analytics stayed at roughly 1.5s warm
+ * with everything below it cached, which is what pointed here.
+ *
+ * Both read the same daily snapshots as the charts they sit above, so they carry the
+ * same tag and go stale at the same moment. The leads, CRM and pipeline bands are
+ * deliberately left uncached: those count records a user edits and expects to see move.
+ */
+export const analyticsBand = cached('band:analytics', [TAGS.metrics], readAnalyticsBand);
+export const marketingBand = cached('band:marketing', [TAGS.metrics], readMarketingBand);

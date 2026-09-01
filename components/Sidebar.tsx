@@ -1,14 +1,43 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { ACCOUNT_NAV, NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
 import type { CurrentUser } from '@/lib/auth';
+
+/**
+ * Warm a route when the pointer reaches its link, rather than when it scrolls into view.
+ *
+ * Every page in this app is a dynamic server component, so Next's default prefetch only
+ * fetches the loading boundary — the data still waits for the click, which is the whole
+ * of the pause between clicking a tab and seeing it. Prefetching the route on hover
+ * spends that wait while the cursor is still travelling.
+ *
+ * Deliberately not `prefetch` on the Link itself: that fires for every link in the
+ * viewport, and the whole nav is always in view, so all seventeen routes would render on
+ * the server at once — each one a database read for pages that are not cached. Hover is
+ * the cheap signal, and one route at a time.
+ *
+ * Prefetches once per route per mount. Repeating it on every re-entry would re-request a
+ * payload the router is already holding.
+ */
+function usePrefetchOnHover() {
+  const router = useRouter();
+  const seen = useRef(new Set<string>());
+  return useCallback(
+    (href: string) => {
+      if (seen.current.has(href)) return;
+      seen.current.add(href);
+      router.prefetch(href);
+    },
+    [router],
+  );
+}
 
 const OPEN_KEY = 'gc.sidebar.open';
 const SECTIONS_KEY = 'gc.sidebar.sections';
@@ -117,6 +146,7 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const prefetch = usePrefetchOnHover();
   const [folded, setFolded] = usePersisted<Record<string, boolean>>(SECTIONS_KEY, {});
 
   return (
@@ -161,6 +191,9 @@ export function SidebarNav({
                       <Link
                         href={item.href}
                         onClick={onNavigate}
+                        onMouseEnter={() => prefetch(item.href)}
+                        onFocus={() => prefetch(item.href)}
+                        prefetch={false}
                         aria-current={active ? 'page' : undefined}
                         title={collapsed ? item.label : undefined}
                         aria-label={collapsed ? item.label : undefined}

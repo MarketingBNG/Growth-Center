@@ -6,6 +6,7 @@ import { convert, sumInReporting } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { OPEN_DEAL } from './pipeline.ts';
+import { TAGS, cached } from './cache.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
 // without pulling the database in. Re-exported here because this is where callers
@@ -468,7 +469,7 @@ export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funne
  * date column is a DATE and grouping by month needs a cast that differs per driver,
  * and at 365 rows the cost is irrelevant.
  */
-export async function trend(range: Range, bucket: 'day' | 'month', channelId?: string) {
+async function readTrend(range: Range, bucket: 'day' | 'month', channelId?: string) {
   const demo = await excludeDemo('sessions');
 
   // Scoped to a channel when asked. Sessions are site-wide and carry no channel, so a
@@ -584,7 +585,7 @@ export async function trend(range: Range, bucket: 'day' | 'month', channelId?: s
 
 /** Per-channel performance. Leads and revenue join through channelId, which every
  *  lead and revenue row carries, so this needs no walk up the funnel. */
-export async function channelPerformance(range: Range) {
+async function readChannelPerformance(range: Range) {
   const window = { gte: range.from, lte: range.to };
 
   const [channels, leadsByChannel, revenueByChannel, spendByCampaign, campaigns, customersByChannel] =
@@ -1307,3 +1308,15 @@ export async function provenance(range: Range): Promise<Record<string, string[]>
     revenue: revenueCount ? [INTERNAL_SOURCE] : [],
   };
 }
+
+/**
+ * The two reads behind the dashboard, analytics and marketing charts.
+ *
+ * Both aggregate MetricSnapshot rows that a sync writes once a day, and both were the
+ * reason those pages still took one to two seconds warm after the first round of caching
+ * — measured at 2.5s on /analytics with everything else already cached. The range and
+ * bucket are ordinary arguments, so each window gets its own entry rather than the last
+ * one viewed serving all of them.
+ */
+export const trend = cached('metrics:trend', [TAGS.metrics], readTrend);
+export const channelPerformance = cached('metrics:channel-performance', [TAGS.metrics], readChannelPerformance);

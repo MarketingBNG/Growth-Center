@@ -1,66 +1,23 @@
 'use client';
 
-import { fmtNumber } from '@/lib/format';
-import { cn } from '@/lib/utils';
-
-export type WeekdayPoint = { label: string; value: number };
+import dynamic from 'next/dynamic';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Seven bars, one per weekday. Hand-drawn rather than a chart library: at seven fixed
- * categories a library buys nothing, and the peak-vs-rest emphasis wants direct control
- * over each bar's fill.
+ * Recharts, loaded when the chart is, not when the page is.
  *
- * The peak bar carries the accent and the rest sit in --track. --track is deliberately
- * not --background, or the bars would vanish on a sunken surface.
+ * The library is around a hundred kilobytes and every screen that draws anything pulled
+ * it into its first-load bundle — /pipeline was 276kB, /leads and /crm not far behind —
+ * even though the charts sit below the fold and the page is readable without them.
+ *
+ * `ssr: false` because these render nothing useful on the server anyway: Recharts
+ * measures its container before it can lay an axis out, so the server pass produced
+ * markup the client immediately threw away. The skeleton holds the same box, so nothing
+ * below it jumps when the chart arrives.
  */
-export function WeekdayChart({
-  data,
-  caption,
-  className,
-}: {
-  data: WeekdayPoint[];
-  /** Overrides the generated "214 leads on Tuesday" line. */
-  caption?: string;
-  className?: string;
-}) {
-  const max = Math.max(...data.map((d) => d.value), 0);
-  const peak = max > 0 ? data.reduce((a, b) => (b.value > a.value ? b : a), data[0]) : null;
+export const WeekdayChart = dynamic(() => import('./WeekdayChartImpl').then((m) => m.WeekdayChart), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[200px] w-full rounded-xl" />,
+});
 
-  const headline =
-    caption ??
-    (peak && max > 0
-      ? `${fmtNumber(peak.value)} leads on ${peak.label}`
-      : 'No leads in this period');
-
-  return (
-    <div className={cn('flex flex-col', className)}>
-      <p className="pb-3 text-xs font-bold text-muted-foreground">{headline}</p>
-
-      <div className="flex h-[118px] items-end gap-2">
-        {data.map((d) => {
-          const isPeak = peak !== null && d.label === peak.label && d.value === peak.value;
-          // A floor keeps a zero day visible as a sliver, so the axis reads as seven
-          // days rather than as four.
-          const height = max > 0 ? Math.max((d.value / max) * 96, 3) : 3;
-          return (
-            <div key={d.label} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-              <div
-                className={cn('w-full rounded-lg', isPeak ? 'bg-chart-1' : 'bg-track')}
-                style={{ height }}
-                title={`${d.label}: ${fmtNumber(d.value)}`}
-              />
-              <span
-                className={cn(
-                  'text-[11px]',
-                  isPeak ? 'font-bold text-chart-1' : 'font-medium text-muted-foreground',
-                )}
-              >
-                {d.label}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+export type { WeekdayPoint } from './WeekdayChartImpl';

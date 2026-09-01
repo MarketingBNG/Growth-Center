@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
@@ -10,6 +11,7 @@ import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { leadsBand } from '@/lib/band';
@@ -69,7 +71,6 @@ export default async function LeadsPage({
     );
   }
 
-  const [people, owners] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
   const q = pageQuery(params);
   const { value, days, bucket: presetBucket } = rangeParam(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
@@ -80,13 +81,15 @@ export default async function LeadsPage({
   const window = picked ?? rangeFor(days).current;
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
-  const [{ rows, total }, band] = await Promise.all([
-    listLeads(filters, q, window),
-    // Arriving from a CRM owner link carries ?from=&to=; the band has to honour it, or
-    // the cards describe the last thirty days over a table that does not.
-    leadsBand(picked ?? days, bucket),
-  ]);
-
+  // Nothing is awaited before the header goes out. Leads reads live data on every view —
+  // a stale lead list would be a bug, not an invisible delay, so it cannot be cached the
+  // way the metrics pages are — and it cannot take a `loading.tsx` either, because a
+  // loading boundary on this segment would flush a 200 over the 404s that `leads/[id]`
+  // raises for a lead that does not exist.
+  //
+  // Streaming inside the page is the way to have both: the boundary lives here rather
+  // than on the segment, so the detail route keeps its status code while the title, range
+  // picker and New Lead button paint immediately and the slow reads fill in behind them.
   return (
     <>
       <PageHeader
@@ -100,10 +103,58 @@ export default async function LeadsPage({
         }
       />
 
-      <MetricsBand {...band} />
+      <Suspense fallback={<BandSkeleton />}>
+        {/* Arriving from a CRM owner link carries ?from=&to=; the band has to honour it,
+            or the cards describe the last thirty days over a table that does not. */}
+        <Band spec={picked ?? days} bucket={bucket} />
+      </Suspense>
 
-      <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email, company or phone…" />
+      <Suspense fallback={<Skeleton className="mb-[18px] h-[38px] w-full rounded-xl" />}>
+        <Filters />
+      </Suspense>
 
+      <Suspense fallback={<Skeleton className="h-[420px] rounded-2xl" />}>
+        <LeadsTable filters={filters} q={q} window={window} />
+      </Suspense>
+    </>
+  );
+}
+
+function BandSkeleton() {
+  return (
+    <div className="grid gap-3.5 pb-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+      {Array.from({ length: 5 }, (_, i) => (
+        <Skeleton key={i} className="h-[104px] rounded-2xl" />
+      ))}
+    </div>
+  );
+}
+
+async function Band({ spec, bucket }: { spec: number | ReturnType<typeof customRange>; bucket: 'day' | 'month' }) {
+  return <MetricsBand {...(await leadsBand(spec as Parameters<typeof leadsBand>[0], bucket))} />;
+}
+
+/** Its own boundary: the roster and the owner list are two more queries, and the filter
+ *  bar does not need to hold up the table behind it. */
+async function Filters() {
+  const [people, owners] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
+  return (
+    <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email, company or phone…" />
+  );
+}
+
+async function LeadsTable({
+  filters,
+  q,
+  window,
+}: {
+  filters: Parameters<typeof listLeads>[0];
+  q: ReturnType<typeof pageQuery>;
+  window: Parameters<typeof listLeads>[2];
+}) {
+  const { rows, total } = await listLeads(filters, q, window);
+
+  return (
       <Card className="overflow-hidden">
         {rows.length === 0 ? (
           <EmptyState
@@ -176,6 +227,5 @@ export default async function LeadsPage({
           </>
         )}
       </Card>
-    </>
   );
 }
