@@ -28,7 +28,7 @@ export default function TasksPage({
     <>
       <PageHeader
         title="Tasks"
-        subtitle="Created by hand, or automatically when a lead is qualified."
+        subtitle="Everything outstanding across the CRM, newest deadlines last."
       />
       <Suspense fallback={<PageSkeleton headless />}>
         <TasksBody searchParams={searchParams} />
@@ -56,7 +56,9 @@ async function TasksBody({
   if (assignee) where.assigneeEmail = assignee === 'unassigned' ? null : assignee;
   if (q.q) where.title = { contains: q.q, mode: 'insensitive' };
 
-  const [rows, total] = await Promise.all([
+  const filtered = Boolean(status || assignee || q.q);
+
+  const [rows, total, everything] = await Promise.all([
     db().task.findMany({
       where,
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'desc' }],
@@ -64,11 +66,17 @@ async function TasksBody({
       take: q.perPage,
       include: {
         lead: { select: { id: true, firstName: true, lastName: true } },
+        contact: { select: { id: true, firstName: true, lastName: true } },
         company: { select: { id: true, name: true } },
         opportunity: { select: { id: true, name: true } },
       },
     }),
     db().task.count({ where }),
+    // The unfiltered count, so an empty result can tell "you have no tasks" apart from
+    // "your filter matches none". `total` is the filtered count and answers neither:
+    // choosing Cancelled — a status this CRM never uses — used to say tasks would appear
+    // once a lead was qualified, with 6,228 of them sitting behind the filter.
+    filtered ? db().task.count() : Promise.resolve(0),
   ]);
 
   const today = new Date();
@@ -79,7 +87,14 @@ async function TasksBody({
       <FilterBar
         searchPlaceholder="Task title…"
         filters={[
-          { name: 'status', label: 'Status', options: TASK_STATUSES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })) },
+          {
+            name: 'status',
+            label: 'Status',
+            // Untouched, this page shows unfinished work only — so the empty option must
+            // not read "all" over a table with 1,518 completed tasks hidden from it.
+            allLabel: 'Status: open & in progress',
+            options: TASK_STATUSES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
+          },
           {
             name: 'assigneeEmail',
             label: 'Assignee',
@@ -95,7 +110,13 @@ async function TasksBody({
           <EmptyState
             icon={<CircleCheck className="size-6" />}
             title="Nothing to do"
-            hint={total === 0 ? 'Tasks appear here when a lead is qualified, or when someone adds one to a record.' : 'Clear the filters to see the rest.'}
+            hint={
+              filtered
+                ? everything > 0
+                  ? 'No task matches these filters. Clear them to see the rest.'
+                  : 'Tasks arrive with the CRM sync, or when someone adds one to a record.'
+                : 'Nothing open. Finished tasks are behind the status filter.'
+            }
           />
         ) : (
           <>
@@ -128,6 +149,10 @@ async function TasksBody({
                           ) : t.opportunity ? (
                             <ProgressLink href={`/pipeline/${t.opportunity.id}`} className="hover:text-primary">
                               {t.opportunity.name}
+                            </ProgressLink>
+                          ) : t.contact ? (
+                            <ProgressLink href={`/crm/contacts/${t.contact.id}`} className="hover:text-primary">
+                              {[t.contact.firstName, t.contact.lastName].filter(Boolean).join(' ')}
                             </ProgressLink>
                           ) : t.company ? (
                             <ProgressLink href={`/crm/companies/${t.company.id}`} className="hover:text-primary">

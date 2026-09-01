@@ -10,6 +10,10 @@ export type FilterDef = {
   name: string;
   label: string;
   options: { value: string; label: string }[];
+  /** What the empty option says. Defaults to "<label>: all" — which is a lie wherever the
+   *  page narrows the list before the filter is touched, as Tasks does by hiding finished
+   *  work. Naming the real default stops "Status: all" sitting over a filtered table. */
+  allLabel?: string;
 };
 
 /**
@@ -75,7 +79,7 @@ export function FilterBar({
           value={params.get(f.name) ?? ''}
           onChange={(e) => update(f.name, e.target.value)}
         >
-          <option value="">{f.label}: all</option>
+          <option value="">{f.allLabel ?? `${f.label}: all`}</option>
           {f.options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
