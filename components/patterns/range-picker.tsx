@@ -143,8 +143,11 @@ export function RangePicker({ current }: { current?: string }) {
             aria-pressed={!picked && active === o.value}
             className={cn(
               'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+              // The same blue the pill wears when a hand-picked window is in force. A grey
+              // highlight here and a blue outline there said "this is your selection" in
+              // two different colours for what is one setting.
               !picked && active === o.value
-                ? 'bg-secondary font-semibold text-foreground'
+                ? 'bg-primary-soft font-semibold text-primary'
                 : 'font-medium text-muted-foreground hover:text-foreground',
             )}
           >
