@@ -30,23 +30,82 @@ function url(path: string, apiKey: string, params: Record<string, string> = {}):
   return `${API}${path}?${q}`;
 }
 
+/**
+ * Raised when Smartlead is still refusing after the retries below.
+ *
+ * Deliberately not an IntegrationError: that propagates out of the sync and marks the
+ * whole run failed, which threw away every row the slice had gathered and reported "0
+ * rows" for a run that had in fact fetched thousands. `syncPaged` catches this instead and
+ * returns what it has with its cursor intact, so the run ends the way a run out of time
+ * ends — partial, saved, and resumed on the next pass.
+ */
+class RateLimited extends Error {
+  constructor() {
+    // Carries a message despite being caught by type, because `connect()` calls the same
+    // `get()` and turns this into an IntegrationError the user actually reads. A bare
+    // Error would have surfaced there as an empty string.
+    super('Smartlead is rate-limiting requests. Try again in a moment.');
+  }
+}
+
+/**
+ * Smartlead allows roughly ten requests every two seconds. This sync walks every campaign's
+ * leads and per-lead statistics a hundred at a time — on this workspace that is hundreds of
+ * requests — and it made them as fast as the event loop allowed, so it was rate-limited
+ * within the first second of a run and every run reported an error.
+ *
+ * Requests are spaced instead. Slower than the limit rather than faster: at 10 per 2s the
+ * ceiling is 200ms apart, and pacing exactly at a published limit leaves nothing for the
+ * clock disagreeing between here and their side.
+ */
+const MIN_REQUEST_GAP_MS = 240;
+
+/** Module scope, so the gap holds across every call in a run rather than per call site. */
+let nextSlotAt = 0;
+
+async function pace() {
+  const wait = nextSlotAt - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  nextSlotAt = Math.max(Date.now(), nextSlotAt) + MIN_REQUEST_GAP_MS;
+}
+
+/** Two retries, backing off. A 429 despite the pacing is usually another sync of the same
+ *  workspace overlapping, which clears in a second or two. Beyond that, waiting longer
+ *  inside a run with a deadline just spends the budget on sleeping. */
+const RATE_LIMIT_RETRIES = 2;
+
 async function get(path: string, apiKey: string, params?: Record<string, string>): Promise<unknown> {
-  const res = await fetch(url(path, apiKey, params), {
-    headers: { accept: 'application/json' },
-    signal: httpTimeout(),
-  });
+  for (let attempt = 0; ; attempt++) {
+    await pace();
 
-  if (res.status === 401 || res.status === 403) {
-    throw new IntegrationError('Smartlead rejected the API key.');
-  }
-  // Nothing to return is a complete answer, not a failure.
-  if (res.status === 204 || res.status === 404) return null;
-  if (res.status === 429) {
-    throw new IntegrationError('Smartlead is rate-limiting this sync. It will resume on the next run.');
-  }
-  if (!res.ok) throw new IntegrationError(`Smartlead request failed (${res.status}).`);
+    const res = await fetch(url(path, apiKey, params), {
+      headers: { accept: 'application/json' },
+      signal: httpTimeout(),
+    });
 
-  return res.json();
+    if (res.status === 401 || res.status === 403) {
+      throw new IntegrationError('Smartlead rejected the API key.');
+    }
+    // Nothing to return is a complete answer, not a failure.
+    if (res.status === 204 || res.status === 404) return null;
+
+    if (res.status === 429) {
+      if (attempt >= RATE_LIMIT_RETRIES) throw new RateLimited();
+
+      // Their own number when they send one, capped: a Retry-After of several minutes
+      // would eat the whole sync budget waiting.
+      const after = Number(res.headers.get('retry-after'));
+      const wait = Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 5_000) : 1_000 * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, wait));
+      // Nothing else may go out until the wait is served, or the next call races past it.
+      nextSlotAt = Date.now() + MIN_REQUEST_GAP_MS;
+      continue;
+    }
+
+    if (!res.ok) throw new IntegrationError(`Smartlead request failed (${res.status}).`);
+
+    return res.json();
+  }
 }
 
 /** Smartlead returns a bare array from some endpoints and `{ data: [...] }` from others. */
@@ -169,7 +228,13 @@ export const smartlead: IntegrationProvider = {
 
     // Validated against a real call rather than a format check: a key that looks right and
     // does not work would otherwise be stored and only fail on the first sync.
-    const payload = await get('/campaigns/', apiKey);
+    //
+    // A rate limit here is not a bad key, and must not be reported as one — the reader
+    // would go and reissue a key that was fine.
+    const payload = await get('/campaigns/', apiKey).catch((e) => {
+      if (e instanceof RateLimited) throw new IntegrationError(e.message);
+      throw e;
+    });
     if (payload == null) throw new IntegrationError('Smartlead returned nothing for this key.');
 
     return { secret: JSON.stringify({ apiKey } satisfies Stored) };
@@ -181,12 +246,53 @@ export const smartlead: IntegrationProvider = {
 
     let cursor = readCursor(ctx.cursor);
 
+    /**
+     * The campaign ids as soon as they are known, before `cursor` is assigned.
+     *
+     * Without this a limit hit during the first slice returned `cursor: null`, and null is
+     * not "stopped early" — it is "the pass finished". runPaged stamps `syncedThrough` on
+     * a null cursor, so a throttled first slice would have claimed completion and the next
+     * run would have skipped every prospect it never reached. The unit test for this is
+     * what found it.
+     */
+    let discovered: number[] | null = null;
+
+    /**
+     * Being rate-limited is treated exactly as running out of time is: stop, hand back
+     * what has been gathered and where to resume.
+     *
+     * It used to throw, which failed the run — so a sync that had walked twelve thousand
+     * prospects saved none of them and the page reported "0 rows" beside a red error. The
+     * cursor already makes a partial pass the normal case; a rate limit is just another
+     * reason to end one early.
+     */
+    const stopHere = () => {
+      const resume = cursor ?? (discovered ? { ids: discovered, index: 0, stage: 'sequences' as const, offset: 0 } : null);
+      // Refused before a single campaign could be listed, so there is no progress to keep
+      // and nothing to resume from. That is a failed run, and it should say so rather than
+      // report a successful pass over nothing.
+      if (!resume) throw new IntegrationError('Smartlead is rate-limiting this sync. It will resume on the next run.');
+      return { points, cursor: resume as unknown as SyncCursor };
+    };
+
+    try {
+      return await walk();
+    } catch (e) {
+      if (e instanceof RateLimited) return stopHere();
+      throw e;
+    }
+
+    async function walk(): Promise<{ points: MetricPoint[]; cursor: SyncCursor | null }> {
+
     // A fresh pull starts by listing the campaigns and recording their stats. Those are
     // cheap and few, so they are all done in the first slice — which means the Outreach
     // page has real sequences on it after one pass, before the long walk through leads.
     if (!cursor) {
       const campaigns = rows(await get('/campaigns/', apiKey));
       const ids: number[] = [];
+      // Published to the enclosing scope as they are found, so a rate limit anywhere below
+      // still has somewhere to resume from. See `discovered`.
+      discovered = ids;
 
       for (const c of campaigns) {
         const id = text(c.id);
@@ -346,6 +452,7 @@ export const smartlead: IntegrationProvider = {
     }
 
     return { points, cursor: null };
+    }
   },
 };
 
