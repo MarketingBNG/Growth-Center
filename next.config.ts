@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+
   // pg reaches for node:fs/net/tls at require time. Without this, webpack tries to
   // bundle it for every runtime and `next dev` returns 500 on every route with
   // "Can't resolve 'fs'" — the production build does not catch it.

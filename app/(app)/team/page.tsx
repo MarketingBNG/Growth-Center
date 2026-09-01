@@ -1,4 +1,7 @@
+import { Suspense } from 'react';
+import { connection } from 'next/server';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NoDatabaseState } from '@/components/patterns/state';
@@ -15,28 +18,44 @@ export const metadata = { title: 'Team · Growth Center' };
 // Access is not an allow-list any more. Anyone with a Google account on an allowed
 // domain can sign in, and their row appears here on first arrival. This page exists to
 // show who has actually been in, and to switch an account off.
-export default async function TeamPage() {
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Team" subtitle="Everyone who has signed in." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
-  }
-
-  // So the admin accounts are on the page from the start, signed in or not.
-  await ensureAdmins();
-  const [people, me] = await Promise.all([listUsers(), currentUser()]);
-  const active = people.filter((p) => p.active).length;
-
+export default function TeamPage() {
   return (
     <>
       <PageHeader
         title="Team"
-        subtitle={`${active} active ${active === 1 ? 'account' : 'accounts'}. Anyone with a company Google account can sign in — accounts are created on first use.`}
+        subtitle={
+          <Suspense fallback="Everyone who has signed in.">
+            <TeamSubtitle />
+          </Suspense>
+        }
       />
+      <Suspense fallback={<PageSkeleton headless />}>
+        <TeamBody />
+      </Suspense>
+    </>
+  );
+}
 
+async function TeamSubtitle() {
+  if (!hasDb()) return 'Everyone who has signed in.';
+  const active = (await listUsers()).filter((p) => p.active).length;
+  return `${active} active ${active === 1 ? 'account' : 'accounts'}. Anyone with a company Google account can sign in — accounts are created on first use.`;
+}
+
+async function TeamBody() {
+  if (!hasDb()) return <Card><NoDatabaseState /></Card>;
+
+  // Request time, not build time. ensureAdmins() writes rows stamped with the current
+  // date, and a prerender has no "now" it is allowed to invent — connection() is how a
+  // component says it must wait for a real request.
+  await connection();
+
+  // So the admin accounts are on the page from the start, signed in or not.
+  await ensureAdmins();
+  const [people, me] = await Promise.all([listUsers(), currentUser()]);
+
+  return (
+    <>
       {!ROLES_ENFORCED ? (
         <Card className="mb-4 border-warning/40 bg-warning/5">
           <CardHeader>

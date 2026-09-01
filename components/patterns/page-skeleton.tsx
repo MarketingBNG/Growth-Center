@@ -11,15 +11,24 @@ import { Skeleton } from '@/components/ui/skeleton';
  * `pipeline`, and the dashboard at the group root) therefore have no skeleton; correct
  * status wins over a nicer wait.
  */
-export function PageSkeleton() {
+/**
+ * `headless` leaves out the title block.
+ *
+ * Pages migrated to a prerendered shell render their own PageHeader outside the Suspense
+ * boundary — that is the part that no longer waits — so a skeleton standing in for the
+ * body must not draw a second title beneath the real one.
+ */
+export function PageSkeleton({ headless = false }: { headless?: boolean }) {
   return (
     <div aria-busy="true" aria-live="polite">
       <span className="sr-only">Loading…</span>
 
-      <div className="pb-5">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="mt-2 h-4 w-96" />
-      </div>
+      {headless ? null : (
+        <div className="pb-5">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="mt-2 h-4 w-96" />
+        </div>
+      )}
 
       <div className="grid gap-3.5 pb-[18px] [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
         {Array.from({ length: 5 }, (_, i) => (

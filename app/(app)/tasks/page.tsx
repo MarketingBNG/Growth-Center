@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { CircleCheck } from 'lucide-react';
+import { Suspense } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -17,19 +19,30 @@ import { CompleteButton } from './CompleteButton';
 
 export const metadata = { title: 'Tasks · Growth Center' };
 
-export default async function TasksPage({
+export default function TasksPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Tasks" subtitle="Follow-ups across leads, deals and accounts." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
-  }
+  return (
+    <>
+      <PageHeader
+        title="Tasks"
+        subtitle="Created by hand, or automatically when a lead is qualified."
+      />
+      <Suspense fallback={<PageSkeleton headless />}>
+        <TasksBody searchParams={searchParams} />
+      </Suspense>
+    </>
+  );
+}
+
+async function TasksBody({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  if (!hasDb()) return <Card><NoDatabaseState /></Card>;
 
   const params = await searchParams;
   const [people, assignees] = await Promise.all([listAssignable(), peopleOn('task', 'assigneeEmail')]);
@@ -63,11 +76,6 @@ export default async function TasksPage({
 
   return (
     <>
-      <PageHeader
-        title="Tasks"
-        subtitle="Created by hand, or automatically when a lead is qualified."
-      />
-
       <FilterBar
         searchPlaceholder="Task title…"
         filters={[

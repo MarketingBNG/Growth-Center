@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Share2, TriangleAlert } from 'lucide-react';
+import { Suspense } from 'react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,14 +14,43 @@ import { fmtCompact, fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
 
 export const metadata = { title: 'Social · Growth Center' };
 
-export default async function SocialPage() {
+/**
+ * The title and subtitle are the prerendered shell: they are the same on every request,
+ * so under cacheComponents they are served from the edge while the data behind them is
+ * still being fetched. Everything that touches the database sits in the body below,
+ * inside a Suspense boundary, which is what lets the shell go out first.
+ */
+export default function SocialPage() {
+  return (
+    <>
+      <PageHeader
+        title="Social"
+        // The count is data, so it streams in behind the generic line rather than holding
+        // the whole header back. socialOverview is cached, so asking for it here and in
+        // the body below is one read, not two.
+        subtitle={
+          <Suspense fallback="Accounts, reach and engagement.">
+            <SocialSubtitle />
+          </Suspense>
+        }
+      />
+      <Suspense fallback={<PageSkeleton headless />}>
+        <SocialBody />
+      </Suspense>
+    </>
+  );
+}
+
+async function SocialSubtitle() {
+  if (!hasDb()) return 'Accounts, reach and engagement.';
+  const { accounts, totals } = await socialOverview();
+  if (accounts.length === 0) return 'Accounts, reach and engagement.';
+  return `${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'} · ${fmtCompact(totals.followers)} followers`;
+}
+
+async function SocialBody() {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Social" subtitle="Accounts, reach and engagement." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return <Card><NoDatabaseState /></Card>;
   }
 
   const { accounts, reportedAccounts, recent, totals, seededNetworks } = await socialOverview();
@@ -31,7 +62,6 @@ export default async function SocialPage() {
     const reporting = reportedAccounts.length > 0;
     return (
       <>
-        <PageHeader title="Social" subtitle="Accounts, reach and engagement." />
         <Card>
           <EmptyState
             icon={reporting ? <TriangleAlert className="size-6" /> : <Share2 className="size-6" />}
@@ -70,11 +100,6 @@ export default async function SocialPage() {
 
   return (
     <>
-      <PageHeader
-        title="Social"
-        subtitle={`${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'} · ${fmtCompact(totals.followers)} followers`}
-      />
-
       {seededNetworks.length > 0 ? (
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" />

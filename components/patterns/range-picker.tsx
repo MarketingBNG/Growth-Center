@@ -30,10 +30,20 @@ function label(days: number) {
 }
 
 /** The date range lives in the URL, so a shared link shows the same numbers. */
-export function RangePicker({ current }: { current: string }) {
+/**
+ * `current` is optional and read from the URL when it is not given.
+ *
+ * The page used to resolve it server-side and pass it down, which made the header depend
+ * on searchParams — and under cacheComponents that is a dynamic read, so the whole header
+ * had to sit behind a Suspense boundary and could not be part of the prerendered shell.
+ * This component is already a client component holding the same query string, so it can
+ * answer the question itself and let the header be static.
+ */
+export function RangePicker({ current }: { current?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const active = current ?? params.get('range') ?? '30';
 
   function set(value: string) {
     const next = new URLSearchParams(params.toString());
@@ -45,7 +55,7 @@ export function RangePicker({ current }: { current: string }) {
     startTransition(() => router.replace(`?${next.toString()}`));
   }
 
-  const selected = RANGE_OPTIONS.find((o) => o.value === current) ?? RANGE_OPTIONS[0];
+  const selected = RANGE_OPTIONS.find((o) => o.value === active) ?? RANGE_OPTIONS[0];
   const days = Number(String(selected.value).replace(/\D/g, '')) || 30;
 
   return (
@@ -61,10 +71,10 @@ export function RangePicker({ current }: { current: string }) {
           <button
             key={o.value}
             onClick={() => set(o.value)}
-            aria-pressed={current === o.value}
+            aria-pressed={active === o.value}
             className={cn(
               'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-              current === o.value
+              active === o.value
                 ? 'bg-secondary font-semibold text-foreground'
                 : 'font-medium text-muted-foreground hover:text-foreground',
             )}
