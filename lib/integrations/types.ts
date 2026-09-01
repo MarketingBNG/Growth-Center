@@ -168,6 +168,18 @@ export interface IntegrationProvider {
   refresh?(credential: string): Promise<ConnectResult | null>;
 
   getEntities?(credential: string, config: Record<string, unknown>, type: string): Promise<Entity[]>;
+
+  /**
+   * Pushes a task's completion back to the system of record.
+   *
+   * Only for providers that own tasks Growth Center displays. Without it, ticking a task
+   * off here is a local edit the next sync overwrites from the vendor's copy — the task
+   * comes back open and nothing says why.
+   *
+   * Throws IntegrationError when the vendor refuses, so the caller can leave the local
+   * row alone and tell the person the CRM did not accept it.
+   */
+  updateTaskStatus?(credential: string, externalId: string, done: boolean): Promise<void>;
 }
 
 export type ConnectInput =

@@ -255,13 +255,36 @@ export async function createTask(input: TaskInput, createdByEmail: string) {
   });
 }
 
+/**
+ * Sends a task's new state to the system that owns it, before this database records it.
+ *
+ * The order matters. Every task here came from a CRM sync, and the sync writes `status`
+ * back over the local row from the vendor's copy — so a tick saved only here survived
+ * until Zoho next touched that record and then quietly vanished. Pushing first means a
+ * refused write leaves the task exactly as it was and the person is told, rather than
+ * seeing it succeed and silently revert days later.
+ *
+ * Imported lazily: lib/integrations/service.ts pulls in next/cache, which bare Node
+ * cannot resolve, and that would put this whole module out of reach of `npm test`.
+ */
+async function pushToSource(
+  task: { source: string | null; externalId: string | null },
+  done: boolean,
+): Promise<void> {
+  if (!task.source || !task.externalId || task.source === INTERNAL_SOURCE) return;
+  const { pushTaskStatus } = await import('./integrations/service.ts');
+  await pushTaskStatus(task.source, task.externalId, done);
+}
+
 export async function completeTask(id: string, actorEmail: string) {
   const task = await db().task.findUnique({
     where: { id },
-    select: { status: true, title: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
+    select: { status: true, title: true, source: true, externalId: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
   });
   if (!task) return null;
   if (task.status === 'done') return { unchanged: true as const };
+
+  await pushToSource(task, true);
 
   await db().task.update({
     where: { id },
@@ -291,10 +314,12 @@ export async function completeTask(id: string, actorEmail: string) {
 export async function reopenTask(id: string, actorEmail: string) {
   const task = await db().task.findUnique({
     where: { id },
-    select: { status: true, title: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
+    select: { status: true, title: true, source: true, externalId: true, leadId: true, contactId: true, companyId: true, opportunityId: true },
   });
   if (!task) return null;
   if (task.status !== 'done' && task.status !== 'cancelled') return { unchanged: true as const };
+
+  await pushToSource(task, false);
 
   await db().task.update({
     where: { id },

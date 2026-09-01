@@ -2105,6 +2105,41 @@ function describe(c: Counts): string {
 }
 
 /**
+ * Pushes a completed or reopened task back to the integration that owns it.
+ *
+ * Every task in this database came from a CRM sync, and writeCrmActivity upserts `status`
+ * and `completedAt` from the vendor on every run — so a tick that only landed here was
+ * undone the moment Zoho next touched that record, with nothing on screen saying so.
+ *
+ * Returns false when the provider owns no write path or is not connected: an internally
+ * created task has nowhere to push to, and that is not a failure. Throws only when the
+ * vendor was asked and refused, which the caller must not paper over.
+ */
+export async function pushTaskStatus(
+  providerId: string,
+  externalId: string,
+  done: boolean,
+): Promise<boolean> {
+  const provider = getProvider(providerId);
+  if (!provider?.updateTaskStatus) return false;
+
+  const integration = await db().integration.findUnique({
+    where: { provider: providerId },
+    select: {
+      id: true,
+      credential: { select: { ciphertext: true, iv: true, authTag: true, expiresAt: true } },
+    },
+  });
+  if (!integration?.credential) return false;
+
+  let credential = open(integration.credential);
+  credential = await renewIfNearExpiry(provider, integration.id, credential, integration.credential.expiresAt);
+
+  await provider.updateTaskStatus(credential, externalId, done);
+  return true;
+}
+
+/**
  * Saves the non-secret settings a provider needs to sync — the ad account id, the GA4
  * property id. Separate from connect() because these are routinely corrected after the
  * OAuth handshake, and re-authorising to change a property id would be absurd.

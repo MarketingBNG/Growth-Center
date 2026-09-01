@@ -15,7 +15,12 @@ const DC = (process.env.ZOHO_DC ?? 'in').replace(/[^a-z.]/gi, '').toLowerCase() 
 
 const ACCOUNTS = `https://accounts.zoho.${DC}`;
 const API = `https://www.zohoapis.${DC}/crm/v6`;
-const SCOPE = 'ZohoCRM.modules.READ,ZohoCRM.settings.READ';
+// tasks.UPDATE is the one write this app asks for: ticking a task off here has to reach
+// Zoho, or the next sync pulls the vendor's copy back over it. Everything else stays
+// read-only. An existing connection was authorised before this was added and does NOT
+// carry it — Zoho fixes scope at authorisation — so completing a task returns
+// OAUTH_SCOPE_MISMATCH until the integration is reconnected.
+const SCOPE = 'ZohoCRM.modules.READ,ZohoCRM.settings.READ,ZohoCRM.modules.tasks.UPDATE';
 
 /** Zoho caps per_page at 200.
  *
@@ -529,6 +534,44 @@ export const zohoCrm: IntegrationProvider = {
     } while (Date.now() < ctx.deadline);
 
     return { points, cursor: { module: moduleName, page, pageToken } };
+  },
+
+  /**
+   * Zoho's own words for the two states, taken from this org's Tasks picklist rather
+   * than the documentation: "Completed" and "Not Started". Reopening cannot restore
+   * whatever the task said before it was finished — Zoho keeps no history of it — so it
+   * goes back to Not Started, which is what the CRM itself does.
+   */
+  async updateTaskStatus(credential, externalId, done) {
+    const { refreshToken } = JSON.parse(credential) as Stored;
+    const token = await accessToken(refreshToken);
+
+    const res = await fetch(`${API}/Tasks`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Zoho-oauthtoken ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ data: [{ id: externalId, Status: done ? 'Completed' : 'Not Started' }] }),
+      signal: httpTimeout(),
+    });
+
+    const json = (await res.json().catch(() => null)) as
+      | { data?: { code?: string; message?: string; status?: string }[] }
+      | null;
+    const row = json?.data?.[0];
+
+    // Zoho answers 200 with a per-record failure inside the body, so the HTTP status
+    // alone would report a refused write as a success.
+    if (!res.ok || row?.status === 'error') {
+      const code = row?.code ?? String(res.status);
+      if (code === 'OAUTH_SCOPE_MISMATCH') {
+        throw new IntegrationError(
+          'Zoho has not granted this app permission to change tasks. Reconnect Zoho CRM on the Integrations page.',
+        );
+      }
+      throw new IntegrationError(`Zoho refused the task update (${code}): ${row?.message ?? 'unknown error'}`);
+    }
   },
 
   async getEntities(credential, _config, type) {
