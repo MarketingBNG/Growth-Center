@@ -52,6 +52,9 @@
      surface disappears. */
   --track: #dcdcdf;
   --primary-soft: #eaf1ff;
+  /* The band between the two ends of a chosen date range. Deeper than --primary-soft,
+     which is so close to white that a selected span could not be seen at all. */
+  --range-fill: #d3e2ff;
   --surface-sunken: #f2f2f3;
   --on-primary: #ffffff;
   --line-soft: #efeff1;
@@ -116,6 +119,7 @@
 
   --track: #2b2b2b;
   --primary-soft: #17233d;
+  --range-fill: #22355c;
   --surface-sunken: #0e0e0e;
   --on-primary: #ffffff;
   --line-soft: #1f1f1f;
@@ -175,6 +179,7 @@
 
   --color-track: var(--track);
   --color-primary-soft: var(--primary-soft);
+  --color-range-fill: var(--range-fill);
   --color-surface-sunken: var(--surface-sunken);
   --color-on-primary: var(--on-primary);
   --color-line-soft: var(--line-soft);

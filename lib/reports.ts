@@ -2,7 +2,7 @@ import { db } from './prisma.ts';
 import { OPEN_DEAL } from './pipeline.ts';
 import { convert, symbolOf, type CurrencySettings } from './currency.ts';
 import { currencySettings } from './settings.ts';
-import { channelPerformance, funnel, openPipeline, rangeFor, type Range } from './metrics.ts';
+import { channelPerformance, funnel, openPipeline, windowFor, type Range } from './metrics.ts';
 import { campaignPerformance, campaignTotals } from './campaigns.ts';
 
 // Reports are compositions of the SAME functions the pages use. Nothing here recomputes
@@ -55,8 +55,8 @@ const int = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'
 const pct = (n: number | null, d = 1) => (n === null ? '—' : `${n.toFixed(d)}%`);
 const ratio = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}×`);
 
-export async function buildReport(id: ReportId, days: number): Promise<Report> {
-  const { current, previous } = rangeFor(days);
+export async function buildReport(id: ReportId, spec: number | Range): Promise<Report> {
+  const { current, previous } = windowFor(spec);
   const name = REPORTS.find((r) => r.id === id)!.name;
   const base = { id, name, range: current };
 

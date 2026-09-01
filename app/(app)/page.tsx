@@ -15,11 +15,11 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { openPipeline, rangeFor, trend, channelPerformance } from '@/lib/metrics';
+import { openPipeline, windowFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
 import { campaignPerformance } from '@/lib/campaigns';
-import { rangeParam } from '@/lib/range';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
@@ -44,12 +44,18 @@ export default async function DashboardPage({
   }
 
   const params = await searchParams;
-  const { value, days, bucket } = rangeParam(params);
-  const { current } = rangeFor(days);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const spec = picked ?? days;
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { current } = windowFor(spec);
 
   const [dash, pipeline, series, channels, campaigns, recentLeads, tasks, insights] =
     await Promise.all([
-      dashboardBand(days, bucket),
+      dashboardBand(spec, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),

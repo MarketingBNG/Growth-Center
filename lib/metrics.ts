@@ -527,8 +527,8 @@ export async function openPipeline() {
  * cards and the funnel, and calling funnel() again cost another 7 queries at ~280ms
  * round trip each.
  */
-export async function kpis(days: number): Promise<{ cards: Kpi[]; current: Funnel; previous: Funnel }> {
-  const { current, previous } = rangeFor(days);
+export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; current: Funnel; previous: Funnel }> {
+  const { current, previous } = windowFor(spec);
   const [now, before] = await Promise.all([funnel(current), funnel(previous)]);
 
   const cards: Kpi[] = [
@@ -1198,8 +1198,8 @@ export async function crmKpis(spec: number | Range) {
  *  The first three are snapshots with no previous period — a pipeline is a standing
  *  balance, not a flow — so their delta renders as "No prior period" rather than a
  *  fabricated comparison. */
-export async function pipelineKpis(days: number) {
-  const { current, previous } = rangeFor(days);
+export async function pipelineKpis(spec: number | Range) {
+  const { current, previous } = windowFor(spec);
   // One read per period rather than four: win rate and cycle come from the same set of
   // closed deals, and the stage flags they need are fetched once for both.
   const flags = await stageFlags();
@@ -1224,8 +1224,8 @@ export async function pipelineKpis(days: number) {
 }
 
 /** Marketing: Spend · Leads · CPL · ROAS · CAC. */
-export async function marketingKpis(days: number, channelId?: string) {
-  const { current, previous } = rangeFor(days);
+export async function marketingKpis(spec: number | Range, channelId?: string) {
+  const { current, previous } = windowFor(spec);
   const [now, before, pacing, weekday] = await Promise.all([
     funnel(current, channelId),
     funnel(previous, channelId),
@@ -1258,8 +1258,8 @@ export async function marketingKpis(days: number, channelId?: string) {
 }
 
 /** Analytics: Sessions · Visitor→lead · Lead→qualified · Opp→customer · Revenue. */
-export async function analyticsKpis(days: number) {
-  const { current, previous } = rangeFor(days);
+export async function analyticsKpis(spec: number | Range) {
+  const { current, previous } = windowFor(spec);
   const [now, before, weekday] = await Promise.all([
     funnel(current),
     funnel(previous),

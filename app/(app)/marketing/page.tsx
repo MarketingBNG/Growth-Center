@@ -9,8 +9,8 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { channelPerformance, rangeFor } from '@/lib/metrics';
-import { rangeParam } from '@/lib/range';
+import { channelPerformance, windowFor } from '@/lib/metrics';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
@@ -36,8 +36,14 @@ export default async function MarketingPage({
   }
 
   const params = await searchParams;
-  const { value, days, bucket } = rangeParam(params);
-  const { current } = rangeFor(days);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const spec = picked ?? days;
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { current } = windowFor(spec);
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';
 
@@ -53,7 +59,7 @@ export default async function MarketingPage({
       orderBy: { name: 'asc' },
     }),
     campaignPerformance(current, channelId),
-    marketingBand(days, bucket, channelId),
+    marketingBand(spec, bucket, channelId),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot

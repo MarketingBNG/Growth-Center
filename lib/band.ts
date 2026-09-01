@@ -8,7 +8,6 @@ import {
   marketingKpis,
   pipelineKpis,
   pipelineTrend,
-  rangeFor,
   repeatCustomerRate,
   windowFor,
   sessionsStart,
@@ -134,10 +133,10 @@ export async function crmBand(spec: number | Range, bucket: 'day' | 'month'): Pr
   };
 }
 
-export async function pipelineBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
-  const { current } = rangeFor(days);
+export async function pipelineBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
+  const { current } = windowFor(spec);
   const [{ cards, open, winRate: wr, weekday }, series] = await Promise.all([
-    pipelineKpis(days),
+    pipelineKpis(spec),
     pipelineTrend(current, bucket),
   ]);
 
@@ -168,13 +167,13 @@ export async function pipelineBand(days: number, bucket: 'day' | 'month'): Promi
 }
 
 async function readMarketingBand(
-  days: number,
+  spec: number | Range,
   bucket: 'day' | 'month',
   channelId?: string,
 ): Promise<BandData> {
-  const { current } = rangeFor(days);
+  const { current } = windowFor(spec);
   const [{ cards, current: f, budgetPacing: pacing, weekday }, series] = await Promise.all([
-    marketingKpis(days, channelId),
+    marketingKpis(spec, channelId),
     trend(current, bucket, channelId),
   ]);
 
@@ -210,10 +209,10 @@ async function readMarketingBand(
   };
 }
 
-async function readAnalyticsBand(days: number, bucket: 'day' | 'month'): Promise<BandData> {
-  const { current } = rangeFor(days);
+async function readAnalyticsBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
+  const { current } = windowFor(spec);
   const [{ cards, current: f, weekday }, series, repeat] = await Promise.all([
-    analyticsKpis(days),
+    analyticsKpis(spec),
     trend(current, bucket),
     repeatCustomerRate(),
   ]);
@@ -251,12 +250,12 @@ async function readAnalyticsBand(days: number, bucket: 'day' | 'month'): Promise
  *  Picked out of the full `kpis()` set rather than recomputed, so the dashboard cannot
  *  disagree with any other screen showing the same figure. */
 export async function dashboardBand(
-  days: number,
+  spec: number | Range,
   bucket: 'day' | 'month',
 ): Promise<{ band: BandData; funnel: Funnel; visitorsFrom: Date | null }> {
-  const { current } = rangeFor(days);
+  const { current } = windowFor(spec);
   const [{ cards, current: f }, series, weekday, repeat, sessionsFrom, spendFrom] = await Promise.all([
-    kpis(days),
+    kpis(spec),
     trend(current, bucket),
     leadsByWeekday(current),
     repeatCustomerRate(),

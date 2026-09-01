@@ -13,9 +13,9 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { StateBadge, stateLabel } from '@/components/patterns/integration-state';
 import { db, hasDb } from '@/lib/prisma';
 import { TAGS, cached } from '@/lib/cache';
-import { channelPerformance, rangeFor, trend } from '@/lib/metrics';
+import { channelPerformance, windowFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
-import { rangeParam } from '@/lib/range';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { analyticsBand } from '@/lib/band';
 import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/format';
 
@@ -71,12 +71,20 @@ export default async function AnalyticsPage({
   }
 
   const params = await searchParams;
-  const { value, days, bucket } = rangeParam(params);
-  const { current } = rangeFor(days);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const spec = picked ?? days;
+  // A hand-picked span buckets by its own length, so a two-year custom window plots by
+  // month like the 12-month preset rather than as 730 unreadable daily points.
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { current } = windowFor(spec);
 
   const [series, band, channels, providers, sources] = await Promise.all([
     trend(current, bucket),
-    analyticsBand(days, bucket),
+    analyticsBand(spec, bucket),
     channelPerformance(current),
     cards(),
     metricsInventory(),

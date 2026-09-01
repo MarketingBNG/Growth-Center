@@ -8,8 +8,8 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
 import { costPer } from '@/lib/calc';
-import { provenance, rangeFor } from '@/lib/metrics';
-import { rangeParam } from '@/lib/range';
+import { provenance, windowFor } from '@/lib/metrics';
+import { customRange, rangeParam } from '@/lib/range';
 import { cards } from '@/lib/integrations/service';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/format';
 import { currencySettings } from '@/lib/settings';
@@ -38,7 +38,11 @@ export default async function AdsPage({
 
   const params = await searchParams;
   const { value, days } = rangeParam(params);
-  const { current } = rangeFor(days);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const { current } = windowFor(picked ?? days);
 
   const [all, providers, sources] = await Promise.all([
     campaignPerformance(current),

@@ -6,7 +6,7 @@ import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { hasDb } from '@/lib/prisma';
 import { pipelineBand } from '@/lib/band';
-import { rangeParam } from '@/lib/range';
+import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { board, BOARD_LIMIT } from '@/lib/pipeline';
 import { fmtMoney, fmtNumber } from '@/lib/format';
 import { convert } from '@/lib/currency';
@@ -32,10 +32,16 @@ export default async function PipelinePage({
   }
 
   const params = await searchParams;
-  const { value, days, bucket } = rangeParam(params);
+  const { value, days, bucket: presetBucket } = rangeParam(params);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const spec = picked ?? days;
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const [data, band, fx] = await Promise.all([
     board(),
-    pipelineBand(days, bucket),
+    pipelineBand(spec, bucket),
     currencySettings(),
   ]);
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot

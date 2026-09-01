@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { buildReport, isReportId, REPORTS } from '@/lib/reports';
-import { rangeParam } from '@/lib/range';
+import { customRange, rangeParam } from '@/lib/range';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +31,11 @@ export default async function ReportsPage({
   const { value, days } = rangeParam(params);
   const raw = typeof params.report === 'string' ? params.report : 'executive';
   const id = isReportId(raw) ? raw : 'executive';
-  const report = await buildReport(id, days);
+  // A hand-picked window from the calendar wins over the preset. The two are the same
+  // setting — RangePicker clears one when the other is chosen — so this only has to say
+  // which it prefers when both somehow appear in a URL.
+  const picked = customRange(params);
+  const report = await buildReport(id, picked ?? days);
 
   return (
     <>
