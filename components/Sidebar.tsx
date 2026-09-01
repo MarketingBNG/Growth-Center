@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
 import { signOut } from 'next-auth/react';
+import { usePersisted } from './use-persisted';
 import { LinkProgress } from './NavProgress';
 import { ACCOUNT_NAV, NAV } from '@/lib/nav';
 import { cn } from '@/lib/utils';
@@ -46,34 +47,6 @@ const SECTIONS_KEY = 'gc.sidebar.sections';
 function Icon({ name, className }: { name: string; className?: string }) {
   const Cmp = (Icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[name];
   return Cmp ? <Cmp className={className} /> : null;
-}
-
-/** Reads once on mount rather than during render: touching localStorage while rendering
- *  would make the server and client markup disagree. */
-function usePersisted<T>(key: string, fallback: T) {
-  const [value, setValue] = useState<T>(fallback);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw) as T);
-    } catch {
-      // A blocked or full localStorage is not worth breaking the shell over.
-    }
-    setReady(true);
-  }, [key]);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch {
-      /* ignore */
-    }
-  }, [key, value, ready]);
-
-  return [value, setValue] as const;
 }
 
 /** The full sidebar column: brand row, nav, user card. Owns its own collapse state so
@@ -241,7 +214,16 @@ export function UserCard({
 
   // Closed by navigating: the menu's own links change the route without unmounting it,
   // so it would otherwise stay open over the page it just opened.
-  useEffect(() => setOpen(false), [pathname]);
+  //
+  // Adjusted during render rather than from an effect. React documents this shape for
+  // state that has to follow a prop — it re-renders immediately with the corrected value
+  // before anything is painted, where the effect version briefly showed the open menu on
+  // the new page.
+  const [openedAt, setOpenedAt] = useState(pathname);
+  if (openedAt !== pathname) {
+    setOpenedAt(pathname);
+    setOpen(false);
+  }
 
   // Dismissed by clicking away or pressing Escape, both of which people try first. Bound
   // only while open, so an idle sidebar carries no document-level listeners.

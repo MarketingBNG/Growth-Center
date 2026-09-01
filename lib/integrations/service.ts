@@ -45,6 +45,14 @@ export type Card = {
   connectedByEmail: string | null;
   /** When the stored credential lapses, so the card can warn before it does. */
   credentialExpiresAt: Date | null;
+  /**
+   * Whole days until the stored authorisation expires, negative once it has.
+   *
+   * Derived here rather than in the card that renders it: `Date.now()` in a render is
+   * impure, and a credential sitting on a day boundary could hydrate with a different
+   * number than it was served with. Null when there is nothing to count down to.
+   */
+  credentialExpiresInDays: number | null;
   config: Record<string, unknown> | null;
 };
 
@@ -128,6 +136,9 @@ async function readCards(): Promise<Card[]> {
       lastErrorAt: row?.lastErrorAt ?? null,
       connectedByEmail: row?.connectedByEmail ?? null,
       credentialExpiresAt: row?.credential?.expiresAt ?? null,
+      credentialExpiresInDays: row?.credential?.expiresAt
+        ? Math.ceil((row.credential.expiresAt.getTime() - Date.now()) / 86_400_000)
+        : null,
       config,
     };
   });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
@@ -97,7 +97,15 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
   // whatever it was first given: a range change, or coming back from a deal you had just
   // edited, re-rendered the page with fresh columns behind a board still showing the old
   // cards.
-  useEffect(() => setLocal(columns), [columns]);
+  //
+  // Adjusted during render rather than from an effect, which is the shape React documents
+  // for state derived from a prop. The effect version painted the stale board once before
+  // correcting it — briefly showing the cards the server had just replaced.
+  const [seeded, setSeeded] = useState(columns);
+  if (seeded !== columns) {
+    setSeeded(columns);
+    setLocal(columns);
+  }
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

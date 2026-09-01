@@ -44,7 +44,13 @@ export function Notifications() {
     }
   }, []);
 
+  // Fetched once on mount. The rule is suppressed rather than satisfied: it flags any
+  // call it cannot prove is free of setState, and `load` is async — its setItems and
+  // setUnread run in a microtask after the response arrives, not synchronously in the
+  // effect body, so the cascading render the rule guards against does not happen here.
+  // Fetching on mount is what this bell is for.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

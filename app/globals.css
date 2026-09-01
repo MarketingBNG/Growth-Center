@@ -284,3 +284,50 @@
   background-size: 100% 24px, 100% 24px, 100% 8px, 100% 8px;
   background-attachment: local, local, scroll, scroll;
 }
+
+/* The navigation bar's creep. Kept in CSS rather than driven by a chain of timers in
+   React: the bar has no state worth holding, and animating it from an effect meant
+   setting state synchronously on every navigation — the pattern React's
+   set-state-in-effect rule exists to discourage.
+
+   It eases toward 90% and slows to almost nothing, because the real duration is unknown
+   and a bar that reaches the end before the page does is a lie. `forwards` holds it
+   there until the attribute is removed. */
+@keyframes nav-progress {
+  0% {
+    width: 0%;
+  }
+  12% {
+    width: 45%;
+  }
+  40% {
+    width: 72%;
+  }
+  70% {
+    width: 86%;
+  }
+  100% {
+    width: 94%;
+  }
+}
+
+.nav-progress {
+  width: 0;
+  opacity: 0;
+  /* Only the fade is transitioned. Transitioning width too would make the bar rewind
+     visibly across the screen when a navigation finishes. */
+  transition: opacity 220ms ease-out;
+}
+
+.nav-progress[data-active] {
+  opacity: 1;
+  animation: nav-progress 4s cubic-bezier(0, 0.6, 0.35, 1) forwards;
+  box-shadow: 0 0 8px var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress[data-active] {
+    animation: none;
+    width: 40%;
+  }
+}

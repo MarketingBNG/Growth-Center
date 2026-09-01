@@ -93,43 +93,17 @@ export function LinkProgress() {
 }
 
 /**
- * Creeps toward 90% and waits there, because the real duration is unknown — the honest
- * shape for "still going" is one that never quite finishes. On completion it runs to
- * 100% and fades, so the end reads as an arrival rather than a disappearance.
+ * The bar itself. No state and no effects — it is one element whose appearance follows a
+ * single attribute, and the creep is a CSS animation in globals.css.
+ *
+ * An earlier version drove the width from a chain of four timers in an effect. It worked,
+ * but it set state synchronously on every navigation, which is the pattern React's
+ * set-state-in-effect rule exists to discourage, and it had already produced one bug: the
+ * effect had depended on its own visibility, so hiding the bar cancelled the timer that
+ * reset the width and left it stranded at 100%. There was nothing there worth holding in
+ * React.
  */
 function NavProgressBar({ active }: { active: boolean }) {
-  const [width, setWidth] = useState(0);
-  const [visible, setVisible] = useState(false);
-
-  // Keyed on `active` alone. An earlier version also depended on `visible`, so hiding the
-  // bar re-ran the effect and its cleanup cancelled the timer that resets the width — the
-  // bar stayed stranded at 100% and the next navigation had nowhere to grow from. The
-  // e2e test in e2e/nav-progress.spec.ts is what caught it.
-  useEffect(() => {
-    if (active) {
-      setVisible(true);
-      setWidth(8);
-      // Deliberately eased rather than linear: a linear crawl reads as a countdown and
-      // invites the reader to predict an arrival the bar cannot promise.
-      const timers = [
-        setTimeout(() => setWidth(45), 60),
-        setTimeout(() => setWidth(72), 300),
-        setTimeout(() => setWidth(86), 900),
-        setTimeout(() => setWidth(94), 2200),
-      ];
-      return () => timers.forEach(clearTimeout);
-    }
-
-    // Run to the end, then clear both together — width and visibility in one timer, so
-    // there is no second one left to cancel.
-    setWidth((w) => (w > 0 ? 100 : 0));
-    const done = setTimeout(() => {
-      setVisible(false);
-      setWidth(0);
-    }, 240);
-    return () => clearTimeout(done);
-  }, [active]);
-
   return (
     <div
       // Progress that carries no number to announce, on a bar that repeats what the
@@ -138,15 +112,9 @@ function NavProgressBar({ active }: { active: boolean }) {
       aria-hidden="true"
       className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[2px]"
     >
-      <div
-        className="h-full bg-primary transition-[width,opacity] duration-200 ease-out"
-        style={{
-          width: `${width}%`,
-          opacity: visible ? 1 : 0,
-          // A faint trailing glow, so the leading edge reads as motion on a 2px bar.
-          boxShadow: visible ? "0 0 8px var(--primary)" : "none",
-        }}
-      />
+      {/* `|| undefined` so the attribute is absent rather than data-active="false" —
+          CSS attribute selectors match on presence. */}
+      <div className="nav-progress h-full bg-primary" data-active={active || undefined} />
     </div>
   );
 }

@@ -1,15 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useHydrated } from './use-persisted';
 
 /** Renders the icon only after mount: the server has no idea which theme the browser
  *  restored, so painting one on the first pass guarantees a hydration mismatch. */
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useHydrated();
 
   const dark = resolvedTheme === 'dark';
 

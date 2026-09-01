@@ -228,11 +228,10 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         </p>
       ) : null}
 
-      {card.hasCredential && card.credentialExpiresAt
+      {card.hasCredential && card.credentialExpiresInDays !== null
         ? (() => {
-            const days = Math.ceil(
-              (new Date(card.credentialExpiresAt).getTime() - Date.now()) / 86_400_000,
-            );
+            // Counted where the card was built, not here — see the field's note.
+            const days = card.credentialExpiresInDays;
             if (days > 14) return null;
             return (
               <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">

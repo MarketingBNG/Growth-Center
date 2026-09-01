@@ -38,8 +38,15 @@ export default function Error({
         ) : null}
         <div className="mt-1 flex gap-2">
           <Button onClick={reset}>Try again</Button>
-          <Button variant="outline" onClick={() => window.location.assign('/')}>
-            Back to the dashboard
+          {/* A plain anchor, deliberately, and the rule is suppressed rather than
+              followed: this boundary is showing because the tree below it failed to
+              render, and both a <Link> and a router push are client navigations that
+              would carry that same broken tree to the dashboard. A document load is the
+              point — it rebuilds the app from scratch, which is the only thing that
+              reliably clears whatever caused this. */}
+          <Button variant="outline" asChild>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/">Back to the dashboard</a>
           </Button>
         </div>
       </div>

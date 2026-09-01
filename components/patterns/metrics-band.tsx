@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { KpiCard } from './kpi-card';
@@ -10,6 +10,7 @@ import { GaugeChart } from '@/components/charts/GaugeChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Kpi } from '@/lib/kpi';
 import { sourceMeta } from '@/lib/sources';
+import { usePersisted } from '@/components/use-persisted';
 import { cn } from '@/lib/utils';
 
 export type MetricsBandProps = {
@@ -46,8 +47,12 @@ export function MetricsBand({
 }: MetricsBandProps) {
   const pathname = usePathname();
   const key = `gc.band.${pathname}`;
-  const [open, setOpen] = useState(defaultOpen);
-  const [ready, setReady] = useState(false);
+  // Stored as JSON now rather than '1'/'0'. A value written by the old version still
+  // reads correctly — JSON.parse turns '1' into 1 and '0' into 0, which are the same
+  // truthiness the booleans they replace had — so nobody's collapsed band springs open
+  // on the first load after this ships. Boolean() normalises the type back.
+  const [stored, setOpen] = usePersisted<boolean>(key, defaultOpen);
+  const open = Boolean(stored);
 
   // Which integration the reader is currently asking about. Highlights rather than
   // filters: every figure here has exactly one source, so filtering to one would empty
@@ -56,27 +61,6 @@ export function MetricsBand({
   const [focus, setFocus] = useState<string | null>(null);
 
   const sources = [...new Set(kpis.flatMap((k) => k.sources ?? []))];
-
-  // Read after mount: reading localStorage during render would make the server and
-  // client markup disagree.
-  useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (raw !== null) setOpen(raw === '1');
-    } catch {
-      /* a blocked localStorage is not worth breaking the page over */
-    }
-    setReady(true);
-  }, [key]);
-
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      window.localStorage.setItem(key, open ? '1' : '0');
-    } catch {
-      /* ignore */
-    }
-  }, [key, open, ready]);
 
   return (
     <section className="pb-[18px]">
