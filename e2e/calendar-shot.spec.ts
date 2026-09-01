@@ -44,3 +44,22 @@ for (const theme of ['light', 'dark'] as const) {
     });
   });
 }
+
+// CRM carries the other date control — Today/Week/Month — which until now opened two
+// native date inputs instead of this calendar.
+for (const theme of ['light', 'dark'] as const) {
+  test(`capture the CRM date control (${theme})`, async ({ page }) => {
+    await page.addInitScript((t) => window.localStorage.setItem('theme', t), theme);
+    await page.goto('/crm?range=7');
+    await page.waitForSelector('nav a');
+    await page.click('button[aria-haspopup="dialog"]');
+    const dialog = page.getByRole('dialog', { name: 'Choose a date range' });
+    const days = dialog.locator('button[aria-label]:not([disabled])');
+    await days.nth(5).click();
+    await days.nth(18).hover();
+    await page.screenshot({
+      path: `screenshots/crm-date-control-${theme}.png`,
+      clip: { x: 240, y: 0, width: 1200, height: 520 },
+    });
+  });
+}

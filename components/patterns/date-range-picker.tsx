@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { DateRangeCalendar, isoDay, type PickedRange } from './date-range-calendar';
 
 const PRESETS = [
   { value: 'today', label: 'Today' },
@@ -11,15 +12,16 @@ const PRESETS = [
   { value: '30', label: 'Month' },
 ] as const;
 
-/** UTC, matching the window the queries actually run — a local-time label would be a day
- *  out for anyone west of UTC and would not agree with the numbers beside it. */
-const today = () => new Date().toISOString().slice(0, 10);
-
 /**
  * Today / Week / Month, plus a calendar for anything else.
  *
  * The range lives in the URL — `?range=` for a preset, `?from=&to=` for a custom window —
  * so a shared link shows the same figures, and the back button works.
+ *
+ * Distinct from RangePicker, which offers 7/30/90/365 on the reporting pages. CRM asks a
+ * different question of its window — how the day or the week is going — so the presets
+ * differ. What no longer differs is the calendar behind the date button and the way a
+ * selection is marked: both come from the same place as the other seven pages.
  */
 export function DateRangePicker({
   range,
@@ -37,10 +39,18 @@ export function DateRangePicker({
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
-  const [start, setStart] = useState(from ?? today());
-  const [end, setEnd] = useState(to ?? today());
 
   const custom = Boolean(from && to);
+
+  /** Parsed rather than trusted: these come from the URL, and `customRange` on the server
+   *  rejects the same shapes. */
+  const picked: PickedRange | null = (() => {
+    if (!from || !to) return null;
+    const a = new Date(`${from}T00:00:00Z`);
+    const b = new Date(`${to}T00:00:00Z`);
+    if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+    return a <= b ? { from: a, to: b } : { from: b, to: a };
+  })();
 
   function preset(value: string) {
     const next = new URLSearchParams(params.toString());
@@ -49,18 +59,26 @@ export function DateRangePicker({
     // would let them win and the buttons would appear to do nothing.
     next.delete('from');
     next.delete('to');
+    next.delete('page');
     setOpen(false);
     startTransition(() => router.replace(`?${next.toString()}`));
   }
 
-  function apply() {
-    const next = new URLSearchParams(params.toString());
-    next.set('from', start);
-    next.set('to', end);
-    next.delete('range');
+  function apply(next: PickedRange) {
+    const q = new URLSearchParams(params.toString());
+    q.set('from', isoDay(next.from));
+    q.set('to', isoDay(next.to));
+    q.delete('range');
+    // The page number belongs to the old window's row count, the same reason the presets
+    // drop it.
+    q.delete('page');
     setOpen(false);
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${q.toString()}`));
   }
+
+  /** The blue the whole app now uses for "this is your selection". */
+  const chosen = 'bg-primary-soft font-semibold text-primary';
+  const unchosen = 'font-medium text-muted-foreground hover:text-foreground';
 
   return (
     <div className="relative flex items-center gap-2" data-pending={pending || undefined}>
@@ -73,9 +91,7 @@ export function DateRangePicker({
             aria-pressed={!custom && range === p.value}
             className={cn(
               'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-              !custom && range === p.value
-                ? 'bg-secondary font-semibold text-foreground'
-                : 'font-medium text-muted-foreground hover:text-foreground',
+              !custom && range === p.value ? chosen : unchosen,
             )}
           >
             {p.label}
@@ -87,11 +103,10 @@ export function DateRangePicker({
           onClick={() => setOpen((v) => !v)}
           aria-pressed={custom}
           aria-expanded={open}
+          aria-haspopup="dialog"
           className={cn(
             'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-            custom
-              ? 'bg-secondary font-semibold text-foreground'
-              : 'font-medium text-muted-foreground hover:text-foreground',
+            custom ? chosen : unchosen,
           )}
         >
           <Calendar className="size-[15px]" />
@@ -99,41 +114,17 @@ export function DateRangePicker({
         </button>
       </div>
 
+      {/* The same calendar the other seven pages open. This used to be two native date
+          inputs, which is a different thing to learn on one page for no reason — and
+          `<input type="date">` renders as whatever the browser feels like, so it did not
+          follow the theme either. */}
       {open ? (
-        <div className="absolute right-0 top-[42px] z-20 w-[260px] rounded-[10px] border border-border bg-card p-3 shadow-lg">
-          <label className="block text-[11px] font-medium text-muted-foreground">From</label>
-          <input
-            type="date"
-            value={start}
-            max={end}
-            onChange={(e) => setStart(e.target.value)}
-            className="mb-2 mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-[13px]"
-          />
-          <label className="block text-[11px] font-medium text-muted-foreground">To</label>
-          <input
-            type="date"
-            value={end}
-            min={start}
-            onChange={(e) => setEnd(e.target.value)}
-            className="mb-3 mt-1 h-9 w-full rounded-md border border-border bg-background px-2 text-[13px]"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground hover:text-foreground"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={apply}
-              className="rounded-md bg-primary px-2.5 py-1.5 text-[13px] font-semibold text-primary-foreground"
-            >
-              Apply
-            </button>
-          </div>
-        </div>
+        <DateRangeCalendar
+          initial={picked}
+          onApply={apply}
+          onClear={() => preset('30')}
+          onDismiss={() => setOpen(false)}
+        />
       ) : null}
     </div>
   );
