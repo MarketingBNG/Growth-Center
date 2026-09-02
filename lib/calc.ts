@@ -59,3 +59,55 @@ export function delta(current: number, previous: number): number | null {
   if (!previous) return null;
   return ((current - previous) / previous) * 100;
 }
+
+export type OwnerLoad = { name: string; leads: number; activeDays: number };
+export type OwnerShare = OwnerLoad & {
+  /** Leads per day across the whole period, not per day worked — the target is a per-day
+   *  figure and the two have to be the same kind of quantity to be compared. */
+  perDay: number;
+  /** Percentage of all leads in the period. */
+  share: number;
+  /** How far above or below an even share, as a percentage of that share. */
+  vsTarget: number;
+};
+
+/**
+ * Splits a period's leads across the people who took them, against an even share.
+ *
+ * The arithmetic that answers "does everyone get a fair lead flow every day". Pure and
+ * here rather than inline in lib/reports.ts because the first version was wrong in a way
+ * that looked plausible on screen: it divided each person by their OWN active days and
+ * compared that against a target measured per calendar day, which put all eleven regular
+ * owners above target at once. An average cannot have everyone above it, and a test says
+ * so now.
+ *
+ * `days` is the number of days that produced any lead, not the calendar span — a quiet
+ * weekend is not a shortfall anybody caused.
+ */
+export function fairShare(owners: OwnerLoad[], totalLeads: number, days: number) {
+  const dayCount = days || 1;
+  const evenShare = owners.length ? 100 / owners.length : 0;
+  const target = owners.length ? totalLeads / owners.length / dayCount : 0;
+
+  const ranked: OwnerShare[] = owners
+    .map((o) => {
+      const share = totalLeads ? (o.leads / totalLeads) * 100 : 0;
+      return {
+        ...o,
+        perDay: o.leads / dayCount,
+        share,
+        vsTarget: evenShare ? (share / evenShare - 1) * 100 : 0,
+      };
+    })
+    .sort((a, b) => b.leads - a.leads);
+
+  return {
+    /** Even split, per person per day. */
+    target,
+    evenShare,
+    ranked,
+    /** How many times its even share the busiest person takes. A busiest-to-quietest
+     *  ratio would be governed entirely by whoever took one lead all month. */
+    topSkew: ranked.length && evenShare ? ranked[0].share / evenShare : 1,
+  };
+}
