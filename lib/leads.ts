@@ -44,21 +44,35 @@ export const leadInput = z.object({
 
 export type LeadInput = z.infer<typeof leadInput>;
 
+/**
+ * Every field falls back rather than throwing, the way `sequenceFilters` and `rangeParam`
+ * already do.
+ *
+ * These are read straight off the URL by the Leads page, which called `.parse()` — so a
+ * hand-edited, stale or mistyped filter did not narrow the list, it took the whole page
+ * down with a 500. `?status=bogus` did it, and so did merely getting the case wrong:
+ * `?leadSource=Facebook` for `facebook`. That matters more now the values are words
+ * people might type — `leadCampaign` carries spaces and an ampersand
+ * ("Ambiente & Biofach"), which is exactly the kind of link that arrives mangled.
+ *
+ * An unreadable filter is ignored and the rest of the view still renders, which is what
+ * `?range=` and `?sort=` have always done here.
+ */
 export const leadFilters = z.object({
-  status: z.enum(LEAD_STATUSES).optional(),
-  sourceType: z.enum(SOURCE_TYPES).optional(),
+  status: z.enum(LEAD_STATUSES).optional().catch(undefined),
+  sourceType: z.enum(SOURCE_TYPES).optional().catch(undefined),
   /** The CRM's own source, grouped — see leadSourceGroup. Distinct from `sourceType`
    *  above, which stays for the public API: that is the shared enum a form posting a
    *  lead can name, and it cannot express "Canada" or "Incorp". */
-  leadSource: z.enum(LEAD_SOURCE_KEYS).optional(),
+  leadSource: z.enum(LEAD_SOURCE_KEYS).optional().catch(undefined),
   /** The business line the CRM's source string names — see leadCampaign. Distinct from
    *  `campaignId` below, which is a real Campaign row and is null on every lead here. */
-  leadCampaign: z.enum(LEAD_CAMPAIGNS).optional(),
-  ownerEmail: z.string().trim().optional(),
-  campaignId: recordId.optional(),
-  channelId: recordId.optional(),
-  from: z.string().date().optional(),
-  to: z.string().date().optional(),
+  leadCampaign: z.enum(LEAD_CAMPAIGNS).optional().catch(undefined),
+  ownerEmail: z.string().trim().optional().catch(undefined),
+  campaignId: recordId.optional().catch(undefined),
+  channelId: recordId.optional().catch(undefined),
+  from: z.string().date().optional().catch(undefined),
+  to: z.string().date().optional().catch(undefined),
 });
 
 export type LeadFilters = z.infer<typeof leadFilters>;

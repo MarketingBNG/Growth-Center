@@ -87,3 +87,50 @@ test('pick passes through only the named string keys', () => {
   const out = pick({ status: 'new', junk: 'x', empty: '', arr: ['a'] }, ['status', 'empty', 'arr']);
   assert.deepEqual(out, { status: 'new' });
 });
+
+// ── filters read off the URL ──────────────────────────────────────────────────
+
+test('an unreadable lead filter is ignored, not fatal', async () => {
+  const { leadFilters } = await import('../lib/leads.ts');
+
+  // The Leads page parses these straight from searchParams. Throwing here took the whole
+  // page down with a 500 — `?status=bogus` did it, and so did getting the case wrong on a
+  // value that exists.
+  for (const bad of [
+    { status: 'bogus' },
+    { sourceType: 'bogus' },
+    { leadSource: 'bogus' },
+    { leadCampaign: 'bogus' },
+    { leadSource: 'Facebook' },
+    { leadCampaign: 'incorporation' },
+    { from: 'not-a-date' },
+    { to: '2026-13-45' },
+    { campaignId: 'has spaces and $' },
+    { channelId: 'x'.repeat(200) },
+  ]) {
+    const parsed = leadFilters.parse(bad);
+    const key = Object.keys(bad)[0] as keyof typeof parsed;
+    assert.equal(parsed[key], undefined, `${JSON.stringify(bad)} should be dropped, not kept`);
+  }
+});
+
+test('a valid lead filter still survives the fallback', async () => {
+  const { leadFilters } = await import('../lib/leads.ts');
+  const ok = leadFilters.parse({
+    status: 'lost',
+    leadSource: 'facebook',
+    leadCampaign: 'Incorporation',
+    from: '2026-01-01',
+  });
+  assert.equal(ok.status, 'lost');
+  assert.equal(ok.leadSource, 'facebook');
+  assert.equal(ok.leadCampaign, 'Incorporation');
+  assert.equal(ok.from, '2026-01-01');
+});
+
+test('one bad filter does not discard the good ones beside it', async () => {
+  const { leadFilters } = await import('../lib/leads.ts');
+  const mixed = leadFilters.parse({ status: 'lost', leadSource: 'bogus' });
+  assert.equal(mixed.status, 'lost');
+  assert.equal(mixed.leadSource, undefined);
+});
