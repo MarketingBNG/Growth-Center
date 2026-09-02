@@ -49,7 +49,7 @@ export function SortHeader({
     next.set('dir', nextDir);
     // The old page number belongs to the old ordering.
     next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
   }
 
   const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ArrowUp : ArrowDown;

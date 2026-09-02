@@ -19,6 +19,13 @@ export type FilterDef = {
 /**
  * Filters live in the URL, not in component state: a filtered view is shareable, the
  * back button works, and the server component re-reads searchParams on its own.
+ *
+ * Every `router.replace` here passes `scroll: false`. Next scrolls to the top on a
+ * navigation by default, which is right when you move to another page and wrong for
+ * refining the one you are on — narrowing a filter halfway down a long table threw you
+ * back to the page heading every time. The same applies to sorting, the date range and
+ * the marketing channel picker. The pager keeps the default scroll on purpose: a new
+ * page of rows really is new content, and you want to start at the top of it.
  */
 export function FilterBar({
   filters,
@@ -36,7 +43,7 @@ export function FilterBar({
     if (value) next.set(key, value);
     else next.delete(key);
     next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
   }
 
   // Clear drops the filters and the search term — and nothing else. It used to replace the
@@ -48,7 +55,7 @@ export function FilterBar({
     next.delete('page');
     for (const f of filters) next.delete(f.name);
     const query = next.toString();
-    startTransition(() => router.replace(query ? `?${query}` : '?'));
+    startTransition(() => router.replace(query ? `?${query}` : '?', { scroll: false }));
   }
 
   const active = filters.some((f) => params.get(f.name)) || params.get('q');

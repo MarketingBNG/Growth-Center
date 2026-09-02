@@ -28,7 +28,7 @@ export function ChannelFilter({
     const next = new URLSearchParams(params.toString());
     if (id) next.set(key, id);
     else next.delete(key);
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
   }
 
   return (

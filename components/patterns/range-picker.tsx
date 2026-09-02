@@ -75,7 +75,7 @@ export function RangePicker({ current }: { current?: string }) {
     const next = new URLSearchParams(params.toString());
     mutate(next);
     next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
   };
 
   /** A preset and a hand-picked window are the same setting, so choosing one clears the

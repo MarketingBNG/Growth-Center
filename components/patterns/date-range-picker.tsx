@@ -61,7 +61,7 @@ export function DateRangePicker({
     next.delete('to');
     next.delete('page');
     setOpen(false);
-    startTransition(() => router.replace(`?${next.toString()}`));
+    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
   }
 
   function apply(next: PickedRange) {
@@ -73,7 +73,7 @@ export function DateRangePicker({
     // drop it.
     q.delete('page');
     setOpen(false);
-    startTransition(() => router.replace(`?${q.toString()}`));
+    startTransition(() => router.replace(`?${q.toString()}`, { scroll: false }));
   }
 
   /** The blue the whole app now uses for "this is your selection". */
