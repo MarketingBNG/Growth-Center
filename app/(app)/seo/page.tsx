@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { Search, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { StateBadge } from '@/components/patterns/integration-state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,18 +18,72 @@ import { Pager } from '@/components/patterns/pager';
 
 export const metadata = { title: 'SEO · Growth Center' };
 
-export default async function SeoPage({
+const SUBTITLE = 'Keywords, rankings and the pages that earn them.';
+
+/**
+ * The title is the prerendered shell; everything that reads the database sits behind a
+ * Suspense boundary below it — the same shape Social, Tasks and Team already use.
+ *
+ * This page used to await all four reads before returning any JSX, which made the page
+ * function itself as slow as its slowest query. On a cold database that is around twenty
+ * seconds — Neon suspends, and `metric_snapshot` is 46MB of table under 71MB of indexes
+ * to page back in — and `next build` gave up on /seo twice at its 60-second limit before
+ * finally getting it on the third attempt.
+ *
+ * Nothing here is awaited, so the shell is emitted immediately and the slow reads no
+ * longer hold up the build or the first paint.
+ */
+export default function SeoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return (
+    <>
+      <PageHeader
+        title="SEO"
+        // The domain and keyword count are data, so they stream in behind the generic
+        // line. seoOverview is cached, so asking here and in the body is one read.
+        subtitle={
+          <Suspense fallback={SUBTITLE}>
+            <SeoSubtitle />
+          </Suspense>
+        }
+        actions={
+          <Suspense fallback={null}>
+            <SeoState />
+          </Suspense>
+        }
+      />
+      <Suspense fallback={<PageSkeleton headless />}>
+        <SeoBody searchParams={searchParams} />
+      </Suspense>
+    </>
+  );
+}
+
+async function SeoSubtitle() {
+  if (!hasDb()) return SUBTITLE;
+  const data = await seoOverview();
+  if (!data) return SUBTITLE;
+  return `${data.website.domain} — ${fmtNumber(data.totals.keywords)} tracked keywords`;
+}
+
+/** Its own boundary: the integration cards are a separate read from the SEO data, and
+ *  the badge should not hold the subtitle back. */
+async function SeoState() {
+  if (!hasDb()) return null;
+  const searchConsole = (await cards()).find((p) => p.id === 'google_search_console');
+  return searchConsole ? <StateBadge state={searchConsole.state} /> : null;
+}
+
+async function SeoBody({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="SEO" subtitle="Keywords, rankings and the pages that earn them." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return <Card><NoDatabaseState /></Card>;
   }
 
   const [data, providers, search, fx] = await Promise.all([
@@ -40,20 +96,19 @@ export default async function SeoPage({
 
   if (!data) {
     return (
-      <>
-        <PageHeader title="SEO" subtitle="Keywords, rankings and the pages that earn them." />
-        <Card>
-          <EmptyState
-            icon={<Search className="size-6" />}
-            title="No website configured"
-            hint="Connect Google Search Console on the Integrations page to pull real keyword data."
-          />
-        </Card>
-      </>
+      <Card>
+        <EmptyState
+          icon={<Search className="size-6" />}
+          title="No website configured"
+          hint="Connect Google Search Console on the Integrations page to pull real keyword data."
+        />
+      </Card>
     );
   }
 
-  const { totals, keywords, pages, issues, website, liveness } = data;
+  // `website` is no longer read here — the domain moved into the header's subtitle, which
+  // now streams separately from this body.
+  const { totals, keywords, pages, issues, liveness } = data;
 
   // Paged rather than capped. The cap kept the top 100 by impressions, which is still 100
   // sparkline rows — a 9,100px page — and the other 1,660 keywords were unreachable. Same
@@ -91,12 +146,6 @@ export default async function SeoPage({
 
   return (
     <>
-      <PageHeader
-        title="SEO"
-        subtitle={`${website.domain} — ${fmtNumber(totals.keywords)} tracked keywords`}
-        actions={searchConsole ? <StateBadge state={searchConsole.state} /> : null}
-      />
-
       {/* Keyed on whether these rows actually came from a provider, NOT on whether an SEO
           integration is merely connected — a connection that has never synced leaves
           every row on this page seeded. */}
