@@ -26,9 +26,16 @@ export type SourceType = (typeof SOURCE_TYPES)[number];
 /** Date-range choices for the dashboard/marketing/analytics pickers. Lives here rather
  *  than in lib/metrics because RangePicker is a client component. */
 export const RANGE_OPTIONS = [
+  // The list the team asked for by name in the Sep 2 review: one day, a week, a fortnight,
+  // a month, a quarter, six months, a year — plus the calendar, which the picker offers
+  // beside these. Only 7/30/90/365 existed, so "last 14 days" and "last 6 months" could
+  // not be asked for at all, and a single day only on the CRM screen.
+  { value: '1', label: 'Last 1 day' },
   { value: '7', label: 'Last 7 days' },
+  { value: '14', label: 'Last 14 days' },
   { value: '30', label: 'Last 30 days' },
   { value: '90', label: 'Last 90 days' },
+  { value: '180', label: 'Last 6 months' },
   { value: '365', label: 'Last 12 months' },
 ] as const;
 

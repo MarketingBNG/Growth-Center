@@ -65,7 +65,13 @@ export function RangePicker({ current }: { current?: string }) {
   const picked = pickedFromUrl(params);
   const active = current ?? params.get('range') ?? '30';
 
-  const selected = RANGE_OPTIONS.find((o) => o.value === active) ?? RANGE_OPTIONS[0];
+  // Falls back to the 30-day default `rangeParam` applies on the server, not to whichever
+  // preset happens to be listed first. They were the same value until a one-day preset was
+  // added to the top of the list, at which point a `?range=` the server had rejected made
+  // this pill claim a single day over a month of figures.
+  const selected =
+    RANGE_OPTIONS.find((o) => o.value === active) ??
+    RANGE_OPTIONS.find((o) => o.value === '30')!;
   const days = Number(String(selected.value).replace(/\D/g, '')) || 30;
 
   /** The page number belongs to the old range's row count. Narrowing from 365 days to 7

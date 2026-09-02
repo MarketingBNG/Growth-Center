@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { customRange, rangeParam } from '../lib/range.ts';
+import { RANGE_OPTIONS } from '../lib/enums.ts';
 
 // rangeParam reads ?range= straight off the URL, so it is an input-validation boundary:
 // a hand-edited or crafted value must not reach a query.
@@ -78,4 +79,36 @@ test('an absurd span is refused rather than scanned', () => {
 
 test('today is a single day, and still a valid range', () => {
   assert.deepEqual(rangeParam({ range: 'today' }), { value: 'today', days: 1, bucket: 'day' });
+});
+
+test('the presets the Sep 2 review asked for are all selectable', () => {
+  // Read out by name in the meeting: one day, a week, a fortnight, a month, a quarter,
+  // six months, a year. Only four of the seven existed, so three could not be asked for.
+  const wanted: [string, number][] = [
+    ['1', 1], ['7', 7], ['14', 14], ['30', 30], ['90', 90], ['180', 180], ['365', 365],
+  ];
+  for (const [value, days] of wanted) {
+    const r = rangeParam({ range: value });
+    assert.equal(r.value, value, `${value} should be offered`);
+    assert.equal(r.days, days);
+  }
+  // Every preset is in the list the picker renders, or it would be a URL nobody can reach
+  // from the control.
+  const offered = new Set<string>(RANGE_OPTIONS.map((o) => o.value));
+  for (const [value] of wanted) assert.ok(offered.has(value), `${value} is missing from the picker`);
+});
+
+test('the new presets bucket by day, except six months and a year', () => {
+  // A 180-day window plotted daily is an unreadable line; the shared threshold is 120.
+  assert.equal(rangeParam({ range: '1' }).bucket, 'day');
+  assert.equal(rangeParam({ range: '14' }).bucket, 'day');
+  assert.equal(rangeParam({ range: '90' }).bucket, 'day');
+  assert.equal(rangeParam({ range: '180' }).bucket, 'month');
+  assert.equal(rangeParam({ range: '365' }).bucket, 'month');
+});
+
+test("the CRM screen's `today` still resolves to a one-day window", () => {
+  // Kept accepted so existing links work, even though '1' now says the same thing.
+  assert.equal(rangeParam({ range: 'today' }).days, 1);
+  assert.equal(rangeParam({ range: 'today' }).value, 'today');
 });

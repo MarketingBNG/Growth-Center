@@ -1,8 +1,9 @@
 import { RANGE_OPTIONS } from './enums.ts';
 
-// `today` is offered by the CRM screen's picker but not by the shared one, so it lives
-// here rather than in RANGE_OPTIONS — adding it there would put a Today button on every
-// page whose figures are not meaningful over a single day.
+// `today` is the CRM screen's own spelling of a one-day window and stays accepted so its
+// existing links keep working. RANGE_OPTIONS now carries '1' for the same span — the
+// shared picker was asked for a one-day preset — so the two are the same window under two
+// names, and only `today` is absent from the shared control.
 const ALLOWED = [...RANGE_OPTIONS.map((o) => o.value), 'today'] as readonly string[];
 
 /** Validates ?range= against the allow-list so a hand-edited URL cannot ask for an
