@@ -94,10 +94,11 @@ test('isFullAccess is true for anyone signed in while tiers are off', () => {
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 
-test('both admin accounts are recognised', () => {
+test('every admin account is recognised', () => {
   assert.equal(isAdmin('marketing@usaindiacfo.com'), true);
   assert.equal(isAdmin('shweta@usaindiacfo.com'), true);
-  assert.equal(ADMIN_EMAILS.length, 2);
+  assert.equal(isAdmin('akshay@usaindiacfo.com'), true);
+  assert.equal(ADMIN_EMAILS.length, 3);
 });
 
 test('isAdmin matches however the address is typed', () => {
@@ -125,6 +126,7 @@ test('only the shared mailbox has its name pinned', () => {
   // make the Team page's Rename button silently useless for them.
   assert.equal(pinnedName('marketing@usaindiacfo.com'), 'Marketing');
   assert.equal(pinnedName('shweta@usaindiacfo.com'), null);
+  assert.equal(pinnedName('akshay@usaindiacfo.com'), null);
   assert.equal(pinnedName('anyone@usaindiacfo.com'), null);
   assert.equal(ADMINS.filter((a) => a.name).length, 1);
 });

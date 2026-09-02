@@ -27,6 +27,7 @@ export const PRIMARY_DOMAIN = ALLOWED_DOMAINS[0];
 export const ADMINS: { email: string; name?: string }[] = [
   { email: 'marketing@usaindiacfo.com', name: 'Marketing' },
   { email: 'shweta@usaindiacfo.com' },
+  { email: 'akshay@usaindiacfo.com' },
 ];
 
 export const ADMIN_EMAILS = ADMINS.map((a) => a.email);
