@@ -4,24 +4,23 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RANGE_OPTIONS } from '@/lib/enums';
 import { DateRangeCalendar, isoDay, type PickedRange } from './date-range-calendar';
 
-const PRESETS = [
-  { value: 'today', label: 'Today' },
-  { value: '7', label: 'Week' },
-  { value: '30', label: 'Month' },
-] as const;
-
 /**
- * Today / Week / Month, plus a calendar for anything else.
+ * The same presets as everywhere else, plus a calendar for anything else.
  *
  * The range lives in the URL — `?range=` for a preset, `?from=&to=` for a custom window —
  * so a shared link shows the same figures, and the back button works.
  *
- * Distinct from RangePicker, which offers 7/30/90/365 on the reporting pages. CRM asks a
- * different question of its window — how the day or the week is going — so the presets
- * differ. What no longer differs is the calendar behind the date button and the way a
- * selection is marked: both come from the same place as the other seven pages.
+ * This used to offer Today / Week / Month of its own, on the argument that CRM asks a
+ * different question of its window. In practice it just meant one page could not be asked
+ * the questions every other page could — no fortnight, no quarter, no year — and the same
+ * three buttons carried different labels here than on the eight pages beside it. The
+ * server never had the restriction: `rangeParam` has always accepted the whole list.
+ *
+ * `today` is still honoured by the server for older links; `1` is the same window and is
+ * what the control writes now.
  */
 export function DateRangePicker({
   range,
@@ -83,18 +82,22 @@ export function DateRangePicker({
   return (
     <div className="relative flex items-center gap-2" data-pending={pending || undefined}>
       <div className="inline-flex h-[38px] items-center rounded-[10px] border border-border bg-card p-0.5">
-        {PRESETS.map((p) => (
+        {RANGE_OPTIONS.map((p) => (
           <button
             key={p.value}
             type="button"
             onClick={() => preset(p.value)}
-            aria-pressed={!custom && range === p.value}
+            // `today` and `1` are the same window under two names, so an older link
+            // carrying the first still lights the button that writes the second.
+            aria-pressed={!custom && (range === p.value || (range === 'today' && p.value === '1'))}
             className={cn(
               'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
-              !custom && range === p.value ? chosen : unchosen,
+              !custom && (range === p.value || (range === 'today' && p.value === '1'))
+                ? chosen
+                : unchosen,
             )}
           >
-            {p.label}
+            {p.label.replace('Last ', '')}
           </button>
         ))}
 

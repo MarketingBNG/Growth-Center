@@ -1,6 +1,7 @@
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { DateRangePicker } from '@/components/patterns/date-range-picker';
+import { RANGE_OPTIONS } from '@/lib/enums';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
@@ -97,11 +98,13 @@ export default async function CrmPage({
   // the other, so having both means someone edited the link.
   const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
+  // The preset's own label rather than `Last ${days} days`, which read "Last 180 days"
+  // for the six-month window and "Last 365 days" for the year.
   const rangeLabel = picked
     ? picked.label
     : value === 'today'
-      ? 'Today'
-      : `Last ${days} days`;
+      ? 'Last 1 day'
+      : (RANGE_OPTIONS.find((o) => o.value === value)?.label ?? `Last ${days} days`);
   // The chart buckets by the window actually being drawn, not by the preset behind it.
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
