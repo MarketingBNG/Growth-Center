@@ -1,6 +1,10 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+// The themed listbox lives in its own client module; re-exported so every existing
+// `import { Select } from '@/components/ui/input'` keeps working.
+export { Select } from './select';
+
 export function Input({ className, ...props }: React.ComponentProps<'input'>) {
   return (
     <input
@@ -19,19 +23,6 @@ export function Textarea({ className, ...props }: React.ComponentProps<'textarea
     <textarea
       className={cn(
         'min-h-20 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-[12.5px] placeholder:text-muted-foreground/70',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export function Select({ className, ...props }: React.ComponentProps<'select'>) {
-  return (
-    <select
-      className={cn(
-        'h-9 w-full rounded-[10px] border border-border bg-card px-2.5 text-[12.5px]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',
         className,
       )}

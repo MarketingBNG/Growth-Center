@@ -12,6 +12,11 @@
 
    `next-themes` puts `light`/`dark` on <html>; light is the default and lives on :root. */
 :root {
+  /* Native browser UI — scrollbars, date pickers, autofill, and any <select> popup the
+     OS still draws itself — reads this and nothing else. Without it every one of them
+     renders light even in dark mode. */
+  color-scheme: light;
+
   --background: #f2f2f3;
   --foreground: #121212;
   --card: #ffffff;
@@ -86,6 +91,8 @@
 }
 
 .dark {
+  color-scheme: dark;
+
   --background: #0a0a0a;
   --foreground: #ededed;
   --card: #161616;
