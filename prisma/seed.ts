@@ -63,6 +63,12 @@ const CHANNELS = [
   { name: 'Instagram', slug: 'instagram', kind: 'social' },
   { name: 'Facebook', slug: 'facebook', kind: 'social' },
   { name: 'WhatsApp', slug: 'whatsapp', kind: 'social' },
+  // Split out of the channels that used to swallow them. "Canada Meta Ads" is the only
+  // source naming a market, and Landing Page and Incorp were 3,468 leads inside Direct —
+  // the Marketing page could not report on any of the three.
+  { name: 'Canada', slug: 'canada', kind: 'paid' },
+  { name: 'Landing Page', slug: 'landing-page', kind: 'direct' },
+  { name: 'Incorp', slug: 'incorp', kind: 'direct' },
   { name: 'Events', slug: 'events', kind: 'other' },
   { name: 'Outreach', slug: 'outreach', kind: 'other' },
   { name: 'Referral', slug: 'referral', kind: 'referral' },

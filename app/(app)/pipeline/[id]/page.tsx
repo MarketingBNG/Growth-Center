@@ -10,6 +10,7 @@ import { currencySettings } from '@/lib/settings';
 import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
 import { StageMover } from './StageMover';
 import { ProgressLink } from '@/components/NavProgress';
+import { leadSourceLabel } from '@/lib/integrations/crm-mapping';
 
 export const metadata = { title: 'Deal · Growth Center' };
 
@@ -25,7 +26,9 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
       company: { select: { id: true, name: true } },
       contact: { select: { id: true, firstName: true, lastName: true, email: true } },
       campaign: { select: { id: true, name: true } },
-      lead: { select: { id: true, firstName: true, lastName: true, sourceType: true } },
+      lead: {
+        select: { id: true, firstName: true, lastName: true, sourceType: true, sourceDetail: true },
+      },
       activities: { orderBy: { createdAt: 'desc' } },
       noteEntries: { orderBy: { createdAt: 'desc' } },
     },
@@ -139,7 +142,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
                   deal.lead ? (
                     <ProgressLink href={`/leads/${deal.lead.id}`} className="hover:text-primary">
                       {[deal.lead.firstName, deal.lead.lastName].filter(Boolean).join(' ')} (
-                      {deal.lead.sourceType.replaceAll('_', ' ')})
+                      {leadSourceLabel(deal.lead.sourceDetail, deal.lead.sourceType)})
                     </ProgressLink>
                   ) : null
                 }

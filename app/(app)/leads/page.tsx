@@ -18,8 +18,9 @@ import { leadsBand } from '@/lib/band';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
 import { pageQuery, pick } from '@/lib/query';
-import { leadFilters, listLeads } from '@/lib/leads';
-import { LEAD_STATUSES, SOURCE_TYPES } from '@/lib/enums';
+import { leadCampaignOptions, leadFilters, leadSourceOptions, listLeads } from '@/lib/leads';
+import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
+import { LEAD_STATUSES } from '@/lib/enums';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
@@ -27,7 +28,12 @@ import { NewLeadButton } from './NewLeadButton';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
-const filtersFor = (people: AppUser[], owners: string[]) => [
+const filtersFor = (
+  people: AppUser[],
+  owners: string[],
+  sources: { value: string; label: string }[],
+  campaigns: { value: string; label: string }[],
+) => [
   // Underscores stripped, as the Source filter beside it already did — the Status
   // dropdown was the one control on the page reading "semi_qualified".
   {
@@ -35,11 +41,15 @@ const filtersFor = (people: AppUser[], owners: string[]) => [
     label: 'Status',
     options: LEAD_STATUSES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
   },
-  {
-    name: 'sourceType',
-    label: 'Source',
-    options: SOURCE_TYPES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
-  },
+  // Zoho's own vocabulary, not the SourceType enum this used to offer. That enum has no
+  // word for the distinctions the CRM makes and the team works to — every Instagram,
+  // Facebook, LinkedIn and WhatsApp lead was one option called "social", 17,989 of them,
+  // and Canada, Incorp and Landing Page could not be asked for at all.
+  { name: 'leadSource', label: 'Source', options: sources },
+  // The business line the CRM's source string names. Not the `campaignId` relation —
+  // Zoho stamps no campaign on a lead and every UTM column is empty, so that column is
+  // null on all 27,401 of them. This is the only campaign the data actually contains.
+  { name: 'leadCampaign', label: 'Campaign', options: campaigns },
   {
     name: 'ownerEmail',
     label: 'Owner',
@@ -73,7 +83,7 @@ export default async function LeadsPage({
 
   const q = pageQuery(params);
   const { value, days, bucket: presetBucket } = rangeParam(params);
-  const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
+  const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'leadSource', 'leadCampaign', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
   // The window the picker resolved, handed to the list as well as the band so the table
   // and the cards above it describe the same period. A hand-picked ?from=&to= wins, which
   // is what the CRM page's owner links carry.
@@ -137,9 +147,17 @@ async function Band({ spec, bucket }: { spec: number | ReturnType<typeof customR
 /** Its own boundary: the roster and the owner list are two more queries, and the filter
  *  bar does not need to hold up the table behind it. */
 async function Filters() {
-  const [people, owners] = await Promise.all([listAssignable(), peopleOn('lead', 'ownerEmail')]);
+  const [people, owners, sources, campaigns] = await Promise.all([
+    listAssignable(),
+    peopleOn('lead', 'ownerEmail'),
+    leadSourceOptions(),
+    leadCampaignOptions(),
+  ]);
   return (
-    <FilterBar filters={filtersFor(people, owners)} searchPlaceholder="Name, email, company or phone…" />
+    <FilterBar
+      filters={filtersFor(people, owners, sources, campaigns)}
+      searchPlaceholder="Name, email, company or phone…"
+    />
   );
 }
 
@@ -176,9 +194,13 @@ async function LeadsTable({
                     <SortHeader name="firstName">Name</SortHeader>
                     <SortHeader name="companyName">Company</SortHeader>
                     <SortHeader name="status">Status</SortHeader>
-                    <SortHeader name="sourceType">Source</SortHeader>
-                    {/* Channel is a relation, so it is not in the sort allow-list. */}
-                    <TH>Channel</TH>
+                    {/* Sorted on the CRM's own string, which is what the cell shows
+                        under the badge — sorting by the group would put "Canada Meta Ads"
+                        and "Meta Ads" in different places for no visible reason. */}
+                    <SortHeader name="sourceDetail">Source</SortHeader>
+                    {/* Derived from sourceDetail, so there is nothing to sort on that the
+                        Source header does not already sort by. */}
+                    <TH>Campaign</TH>
                     <SortHeader name="ownerEmail">Owner</SortHeader>
                     <SortHeader name="createdAt" align="right">Created</SortHeader>
                   </TR>
@@ -204,14 +226,28 @@ async function LeadsTable({
                       <TD>
                         <LeadStatusBadge status={lead.status} />
                       </TD>
+                      {/* The source Zoho recorded, grouped for the badge and quoted
+                          verbatim beneath it. The badge is the campaign detail's channel;
+                          the line under it distinguishes "Trademark Google Ads" from
+                          "Incorporation Google Ads", which is the whole reason this column
+                          stopped saying "paid ads".
+                          
+                          There was a Channel column beside this one until the two
+                          vocabularies were unified. The badge IS the channel now —
+                          `leadSourceGroup` decides both — so the column was the same word
+                          printed twice on every row. */}
                       <TD>
-                        <SourceBadge source={lead.sourceType} />
+                        <SourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />
+                        {lead.sourceDetail && lead.sourceDetail !== leadSourceLabel(lead.sourceDetail, lead.sourceType) ? (
+                          <p className="mt-0.5 text-xs text-muted-foreground">{lead.sourceDetail}</p>
+                        ) : null}
                       </TD>
-                      {/* The channel, not the campaign. Every one of this workspace's
-                          leads comes from the CRM, which records no campaign — so a
-                          Campaign column was 27,256 em-dashes. `channelId` is set on all
-                          but 107 of them. */}
-                      <TD className="text-muted-foreground">{lead.channel?.name ?? '—'}</TD>
+                      {/* The business line the CRM named, and an em-dash where it named
+                          none — which is 19,753 leads whose source is "fb" or "ig". A
+                          guess here would be a campaign nobody ran. */}
+                      <TD className="text-muted-foreground">
+                        {leadCampaign(lead.sourceDetail) ?? '—'}
+                      </TD>
                       <TD className="text-muted-foreground">
                         {lead.ownerEmail ? lead.ownerEmail.split('@')[0] : 'Unassigned'}
                       </TD>

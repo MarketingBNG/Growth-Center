@@ -20,6 +20,11 @@ import { splitName } from '../lib/integrations/service.ts';
 import {
   channelSlugFor,
   cleanImportedName,
+  LEAD_CAMPAIGNS,
+  leadCampaign,
+  LEAD_SOURCES,
+  leadSourceGroup,
+  leadSourceLabel,
   leadSourceType,
   leadStatus,
   matchStage,
@@ -542,11 +547,12 @@ test('channelSlugFor reaches the sources that were landing nowhere', () => {
 });
 
 test("the firm's own brands are direct, and nothing else is guessed", () => {
-  // 934 leads arrive under the incorporation service and 23 under the firm's podcast.
-  // Both are the firm's own properties, so the team's answer is Direct — a decision,
-  // not an inference from the name. Everything still genuinely unknown stays null:
-  // inventing a channel would be inventing the attribution the Marketing page is read for.
-  assert.equal(channelSlugFor('import', 'BNG US Incorp'), 'direct');
+  // The podcast and the firm's own site are Direct — a decision, not an inference from
+  // the name. The incorporation service is no longer among them: 934 leads is a channel
+  // the Marketing page should be able to report on, not a share of Direct.
+  // Everything still genuinely unknown stays null: inventing a channel would be inventing
+  // the attribution the Marketing page is read for.
+  assert.equal(channelSlugFor('import', 'BNG US Incorp'), 'incorp');
   assert.equal(channelSlugFor('import', 'NG Podcast'), 'direct');
   assert.equal(channelSlugFor('import', 'Platform'), null);
   assert.equal(channelSlugFor('import', 'Excel CRM'), null);
@@ -559,8 +565,35 @@ test("the firm's own brands are direct, and nothing else is guessed", () => {
 
 test('a paid source is an ad, not the organic platform it runs on', () => {
   assert.equal(channelSlugFor('paid_ads', 'Meta Ads'), 'meta-ads');
-  assert.equal(channelSlugFor('paid_ads', 'Canada Meta Ads'), 'meta-ads');
   assert.equal(channelSlugFor('paid_ads', 'Meta - Landing Page'), 'meta-ads');
+  // The market comes first. 365 leads were reported as Meta Ads and could not be told
+  // apart from the rest of Meta's spend.
+  assert.equal(channelSlugFor('paid_ads', 'Canada Meta Ads'), 'canada');
+});
+
+test('channelSlugFor and leadSourceGroup cannot disagree', () => {
+  // They were separate copies of the same rules and drifted — the Leads page said Canada
+  // while Marketing said Meta Ads. The group key IS the slug now, and this is what keeps
+  // that true for every source the CRM writes.
+  const sources = [
+    'ig', 'fb', 'Facebook', 'Whatsapp', 'WhatsApp - USAINDIACFO', 'Incorporation LinkdIn',
+    'Old Incorp LinkedIn', 'Hiring LinkedIn Ads', 'LinkediIn', 'VCFO linkdin',
+    'Trademark Google Ads', 'Incorporation Google Ads', 'Meta Ads', 'Trademark_Meta',
+    'Meta-VCFO', 'Meta - Landing Page', 'Canada Meta Ads', 'Landing Page',
+    'Trademark - Landingpage', 'Global Landing Page', 'BNG US Incorp', 'BTS Event',
+    'Calendly', 'Outbound-Calendly', 'Ref by NG', 'Personal Ref', 'Call', 'Smartlead',
+    'Web Research', 'Email', 'USAIndiaCFO Site', 'NG Podcast', 'Zoho Desk',
+  ];
+  for (const detail of sources) {
+    assert.equal(
+      channelSlugFor(leadSourceType(detail), detail),
+      leadSourceGroup(detail),
+      `${detail} reaches a different channel than the source the Leads page shows`,
+    );
+  }
+  // The two keys that deliberately reach no channel.
+  assert.equal(leadSourceGroup('Excel CRM'), 'other');
+  assert.equal(channelSlugFor('import', 'Excel CRM'), null);
 });
 
 test('channelSlugFor covers the remaining sources this account uses', () => {
@@ -569,7 +602,9 @@ test('channelSlugFor covers the remaining sources this account uses', () => {
   assert.equal(channelSlugFor('outreach', 'Call'), 'outreach');
   assert.equal(channelSlugFor('outreach', 'Web Research'), 'outreach');
   assert.equal(channelSlugFor('referral', 'Ref by AN'), 'referral');
-  assert.equal(channelSlugFor('landing_page', 'Landing Page'), 'direct');
+  // Its own channel now, not a share of Direct — 2,534 leads.
+  assert.equal(channelSlugFor('landing_page', 'Landing Page'), 'landing-page');
+  assert.equal(channelSlugFor('landing_page', 'Trademark - Landingpage'), 'landing-page');
   assert.equal(channelSlugFor('organic_search', null), 'organic-search');
 });
 
@@ -581,4 +616,207 @@ test('channelSlugFor refuses to invent attribution', () => {
   assert.equal(channelSlugFor('manual', ''), null);
   // Unrecognised social with no detail still has nowhere honest to go.
   assert.equal(channelSlugFor('social', null), null);
+});
+
+// ─── the CRM's own lead source, grouped ───────────────────────────────────────
+//
+// The Leads page filters and labels its Source column with leadSourceGroup, so these are
+// the 56 strings this workspace's Zoho actually writes, not invented ones. Counts are
+// from the live table and are what makes a regression here visible: fold "Canada Meta
+// Ads" back into Meta Ads and 365 leads stop being findable.
+
+test('leadSourceGroup keeps the platforms Zoho tells apart and sourceType does not', () => {
+  assert.equal(leadSourceGroup('ig'), 'instagram');
+  assert.equal(leadSourceGroup('fb'), 'facebook');
+  assert.equal(leadSourceGroup('Facebook'), 'facebook');
+  assert.equal(leadSourceGroup('Whatsapp'), 'whatsapp');
+  assert.equal(leadSourceGroup('WhatsApp - USAINDIACFO-+917232075551'), 'whatsapp');
+
+  // All four are `social` to sourceType — 17,989 leads under one word, which is what the
+  // Source column used to say.
+  for (const v of ['ig', 'fb', 'Facebook', 'Whatsapp']) {
+    assert.equal(leadSourceType(v), 'social');
+  }
+});
+
+test('leadSourceGroup reads the platform through the business line', () => {
+  // Five campaign prefixes crossed with four platforms. The prefix is the campaign; the
+  // platform is the source.
+  assert.equal(leadSourceGroup('Incorporation LinkdIn'), 'linkedin');
+  assert.equal(leadSourceGroup('Old Incorp LinkedIn'), 'linkedin');
+  assert.equal(leadSourceGroup('Hiring LinkedIn Ads'), 'linkedin');
+  assert.equal(leadSourceGroup('IRS LinkedIn Ads'), 'linkedin');
+  assert.equal(leadSourceGroup('VCFO linkdin'), 'linkedin');
+  assert.equal(leadSourceGroup('LinkediIn'), 'linkedin');
+
+  assert.equal(leadSourceGroup('Trademark Google Ads'), 'google-ads');
+  assert.equal(leadSourceGroup('Incorporation Google Ads'), 'google-ads');
+  assert.equal(leadSourceGroup('IRS Google Ads'), 'google-ads');
+
+  assert.equal(leadSourceGroup('Meta Ads'), 'meta-ads');
+  assert.equal(leadSourceGroup('Meta-VCFO'), 'meta-ads');
+  // Underscored, and the word is not the prefix.
+  assert.equal(leadSourceGroup('Trademark_Meta'), 'meta-ads');
+});
+
+test('leadSourceGroup reports Canada on its own, before the platform', () => {
+  // The one value that names a market. Folded into Meta Ads it was invisible, which is
+  // the bug this group exists for.
+  assert.equal(leadSourceGroup('Canada Meta Ads'), 'canada');
+  assert.notEqual(leadSourceGroup('Canada Meta Ads'), leadSourceGroup('Meta Ads'));
+});
+
+test('leadSourceGroup puts a paid landing page under the ad that paid for it', () => {
+  // Both contain "landing". The precedence is the same one leadSourceType applies: the
+  // money spent is the more useful fact.
+  assert.equal(leadSourceGroup('Meta - Landing Page'), 'meta-ads');
+  assert.equal(leadSourceGroup('Landing Page'), 'landing-page');
+  assert.equal(leadSourceGroup('Trademark - Landingpage'), 'landing-page');
+  assert.equal(leadSourceGroup('Global Landing Page'), 'landing-page');
+});
+
+test('leadSourceGroup keeps Incorp to the incorporation service itself', () => {
+  // "BNG US Incorp" is the service. The three sources that advertise it are their
+  // platforms, tested above — this must not swallow them.
+  assert.equal(leadSourceGroup('BNG US Incorp'), 'incorp');
+  assert.equal(leadSourceGroup('Incorporation LinkdIn'), 'linkedin');
+  assert.equal(leadSourceGroup('Incorporation Google Ads'), 'google-ads');
+});
+
+test('leadSourceGroup handles the long tail the same way channelSlugFor does', () => {
+  assert.equal(leadSourceGroup('BTS Event'), 'events');
+  assert.equal(leadSourceGroup('Convergence India Expo 2026'), 'events');
+  assert.equal(leadSourceGroup('Discovery Meet: AI Impact Summit'), 'events');
+  assert.equal(leadSourceGroup('Zoho Bookings'), 'events');
+  // Contains "Outbound", and is still a booked meeting.
+  assert.equal(leadSourceGroup('Outbound-Calendly'), 'events');
+
+  assert.equal(leadSourceGroup('Ref by NG'), 'referral');
+  assert.equal(leadSourceGroup('Personal Ref'), 'referral');
+  assert.equal(leadSourceGroup('Reference'), 'referral');
+  assert.equal(leadSourceGroup('Partner Reference'), 'referral');
+
+  assert.equal(leadSourceGroup('Call'), 'outreach');
+  assert.equal(leadSourceGroup('Smartlead'), 'outreach');
+  // Before the website test, or looking for a prospect reads as one arriving.
+  assert.equal(leadSourceGroup('Web Research'), 'outreach');
+
+  assert.equal(leadSourceGroup('Sales Email Alias'), 'email');
+  assert.equal(leadSourceGroup('USAIndiaCFO Site'), 'direct');
+  assert.equal(leadSourceGroup('NG Podcast'), 'direct');
+  assert.equal(leadSourceGroup('Zoho Desk'), 'direct');
+});
+
+test('leadSourceGroup names what it does not recognise rather than guessing', () => {
+  // A source Zoho starts writing tomorrow must not join Direct quietly.
+  assert.equal(leadSourceGroup('Platform'), 'other');
+  assert.equal(leadSourceGroup('Excel CRM'), 'other');
+  assert.equal(leadSourceGroup('Something Bespoke'), 'other');
+
+  // No source is a real answer and keeps its own group — 104 leads, which a filter has
+  // to be able to ask for.
+  assert.equal(leadSourceGroup(null), 'unattributed');
+  assert.equal(leadSourceGroup(''), 'unattributed');
+  assert.equal(leadSourceGroup('   '), 'unattributed');
+});
+
+test('every group has a label, and the label survives the badge', () => {
+  for (const s of LEAD_SOURCES) {
+    assert.ok(s.label.trim(), `${s.key} has no label`);
+  }
+  // Rendered as given — SourceBadge no longer title-cases, so the internal capitals have
+  // to be right here.
+  assert.equal(leadSourceLabel('Incorporation LinkdIn'), 'LinkedIn');
+  assert.equal(leadSourceLabel('WhatsApp - USAINDIACFO'), 'WhatsApp');
+  assert.equal(leadSourceLabel('Canada Meta Ads'), 'Canada');
+  assert.equal(leadSourceLabel(null), 'Unattributed');
+});
+
+test('an unfamiliar CRM string still reaches the channel its enum knows', () => {
+  // Merging channelSlugFor into leadSourceGroup nearly lost this. The group rules are a
+  // superset of the old channel rules but NOT of leadSourceType's, so a source neither
+  // recognises by name — but the enum classifies — must still fall through to the switch.
+  assert.equal(leadSourceGroup('Trade Show'), 'other');
+  assert.equal(channelSlugFor('event', 'Trade Show'), 'events');
+  assert.equal(channelSlugFor('website', 'Web Download'), 'direct');
+  assert.equal(channelSlugFor('paid_ads', 'Some Brand New Campaign'), 'meta-ads');
+
+  // ...and where the enum knows nothing either, nothing is invented.
+  assert.equal(channelSlugFor('import', 'Something Bespoke'), null);
+  assert.equal(channelSlugFor('manual', 'Something Bespoke'), null);
+});
+
+test('a lead this app created shows its own source, not "Unattributed"', () => {
+  // Only Zoho writes sourceDetail. A lead from the New Lead button or from a website
+  // posting to /api/public/v1/leads has none, and read "Unattributed" in the Source
+  // column while carrying a real channel underneath.
+  assert.equal(leadSourceLabel(null, 'form'), 'Form');
+  assert.equal(leadSourceLabel(null, 'landing_page'), 'Landing page');
+  assert.equal(leadSourceLabel(null, 'website'), 'Website');
+
+  // The enum's own words for not knowing stay honest.
+  assert.equal(leadSourceLabel(null, 'import'), 'Unattributed');
+  assert.equal(leadSourceLabel(null, 'manual'), 'Unattributed');
+  assert.equal(leadSourceLabel(null), 'Unattributed');
+
+  // A CRM string always wins over the enum — 22,887 Zoho leads carry sourceType `import`.
+  assert.equal(leadSourceLabel('ig', 'import'), 'Instagram');
+  assert.equal(leadSourceLabel('Canada Meta Ads', 'paid_ads'), 'Canada');
+});
+
+// ─── the campaign the CRM's source string names ───────────────────────────────
+
+test('leadCampaign reads the business line out of the source string', () => {
+  // Zoho stamps no campaign and writes no UTM, so this string is the only campaign the
+  // data contains. These are the real values, and the counts they carry are why it is
+  // worth extracting: Incorporation is 3,871 leads and Trademark 2,852.
+  assert.equal(leadCampaign('Incorporation LinkdIn'), 'Incorporation');
+  assert.equal(leadCampaign('Incorporation Google Ads'), 'Incorporation');
+  assert.equal(leadCampaign('Old Incorp LinkedIn'), 'Incorporation');
+  assert.equal(leadCampaign('BNG US Incorp'), 'Incorporation');
+
+  assert.equal(leadCampaign('Trademark Google Ads'), 'Trademark');
+  assert.equal(leadCampaign('Trademark - Landingpage'), 'Trademark');
+  assert.equal(leadCampaign('Trademark_Meta'), 'Trademark');
+
+  assert.equal(leadCampaign('Canada Meta Ads'), 'Canada');
+  assert.equal(leadCampaign('Hiring LinkedIn Ads'), 'Hiring');
+  assert.equal(leadCampaign('Meta-VCFO'), 'VCFO');
+  assert.equal(leadCampaign('VCFO linkdin'), 'VCFO');
+  assert.equal(leadCampaign('IRS Google Ads'), 'IRS');
+  assert.equal(leadCampaign('IRS LinkedIn Ads'), 'IRS');
+});
+
+test('a named event is its own campaign', () => {
+  assert.equal(leadCampaign('Convergence India Expo 2026'), 'Convergence India Expo 2026');
+  assert.equal(leadCampaign('Discovery Meet: AI Impact Summit'), 'AI Impact Summit');
+  assert.equal(leadCampaign('Ambiente and Biofach Events'), 'Ambiente & Biofach');
+  assert.equal(leadCampaign('BTS Event'), 'BTS Event');
+});
+
+test('leadCampaign says nothing where the CRM named no campaign', () => {
+  // 19,753 leads. A channel or a person is not a campaign, and inventing one here would
+  // put a campaign nobody ran into the column the marketing review reads.
+  for (const v of ['fb', 'ig', 'Landing Page', 'Ref by NG', 'Whatsapp', 'Meta Ads', 'Call']) {
+    assert.equal(leadCampaign(v), null, `${v} is not a campaign`);
+  }
+  assert.equal(leadCampaign(null), null);
+  assert.equal(leadCampaign(''), null);
+
+  // Whole word, so the first source that merely contains the letters does not become IRS.
+  assert.equal(leadCampaign('First Contact'), null);
+});
+
+test('every campaign a source can name is offered by the filter', () => {
+  // The filter's options come from LEAD_CAMPAIGNS; a line the mapping can return but the
+  // list does not carry would be unselectable.
+  const named = new Set<string>(LEAD_CAMPAIGNS);
+  for (const v of [
+    'Incorporation LinkdIn', 'Trademark Google Ads', 'Canada Meta Ads', 'Hiring LinkedIn Ads',
+    'Meta-VCFO', 'IRS Google Ads', 'BTS Event', 'Convergence India Expo 2026',
+    'Discovery Meet: AI Impact Summit', 'Ambiente and Biofach Events',
+  ]) {
+    const c = leadCampaign(v);
+    assert.ok(c && named.has(c), `${v} -> ${c} is not in LEAD_CAMPAIGNS`);
+  }
 });

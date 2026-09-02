@@ -19,12 +19,16 @@ export function LeadStatusBadge({ status }: { status: keyof typeof LEAD_TONE }) 
   );
 }
 
+/**
+ * Where a lead came from, as the CRM names it.
+ *
+ * Takes a finished label rather than an enum value: it used to be handed a `sourceType`
+ * and title-case it, which is why the column read "Social" on every Instagram, Facebook,
+ * LinkedIn and WhatsApp lead in the workspace. Callers pass `leadSourceLabel(...)` now,
+ * and "WhatsApp" and "LinkedIn" have to survive it — so nothing here rewrites the text.
+ */
 export function SourceBadge({ source }: { source: string }) {
-  return (
-    <Badge tone="neutral" className="capitalize">
-      {source.replaceAll('_', ' ')}
-    </Badge>
-  );
+  return <Badge tone="neutral">{source}</Badge>;
 }
 
 const PRIORITY_TONE = { low: 'neutral', normal: 'info', high: 'warning', urgent: 'danger' } as const;

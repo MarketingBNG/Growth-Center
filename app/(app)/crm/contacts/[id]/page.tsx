@@ -8,6 +8,7 @@ import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
 import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getContact } from '@/lib/crm';
+import { leadSourceLabel } from '@/lib/integrations/crm-mapping';
 import { hasDb } from '@/lib/prisma';
 import { fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
 
@@ -114,7 +115,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
                   >
                     <span className="text-muted-foreground">
-                      {l.sourceType.replaceAll('_', ' ')}
+                      {leadSourceLabel(l.sourceDetail, l.sourceType)}
                     </span>
                     <span className="flex items-center gap-2">
                       <LeadStatusBadge status={l.status} />

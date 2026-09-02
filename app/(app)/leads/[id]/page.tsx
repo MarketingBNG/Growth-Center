@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
+import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
 import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
 import { getLead } from '@/lib/leads';
@@ -75,7 +76,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <Detail label="Email" value={lead.email} />
               <Detail label="Phone" value={lead.phone} />
               <Detail label="Owner" value={lead.ownerEmail ?? 'Unassigned'} />
-              <Detail label="Source" value={<SourceBadge source={lead.sourceType} />} />
+              <Detail label="Source" value={<SourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />} />
               {/* The CRM's own two words for this lead, stored on import and shown
                   nowhere until now: `sourceDetail` is where it actually came from ("fb",
                   "Incorporation LinkdIn") and `sourceStatus` is the team's own status
@@ -83,8 +84,17 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                   beside it cannot express. Set on 27,152 and 27,234 leads respectively. */}
               <Detail label="Lead source" value={lead.sourceDetail} />
               <Detail label="CRM status" value={lead.sourceStatus} />
-              <Detail label="Channel" value={lead.channel?.name} />
-              <Detail label="Campaign" value={lead.campaign?.name} />
+              {/* No Channel row. `leadSourceGroup` decides both, so Source above printed
+                  the same word on 27,294 of 27,401 leads — and on the other 107 it said
+                  "Unattributed" or "Other" where Channel could only manage a dash. */}
+              {/* The real Campaign relation first, then the business line the CRM's own
+                  source string names. The relation is null on all 27,401 leads — Zoho
+                  stamps no campaign and every UTM column is empty — so this row was an
+                  em-dash on every lead in the workspace. */}
+              <Detail
+                label="Campaign"
+                value={lead.campaign?.name ?? leadCampaign(lead.sourceDetail)}
+              />
               <Detail label="Created" value={fmtDate(lead.createdAt)} />
               <Detail label="Qualified" value={lead.qualifiedAt ? fmtDate(lead.qualifiedAt) : '—'} />
               {lead.landingPage ? (

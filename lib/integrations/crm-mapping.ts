@@ -204,62 +204,34 @@ export function taskPriority(value: string | null | undefined): Priority {
 /**
  * The channel slug a lead's source belongs to, or null.
  *
- * Matched on the CRM's own wording first, because SourceType cannot tell Instagram from
- * Facebook — it calls all of them `social`, which is 17,789 of this account's leads and
- * the single thing the Marketing page most needs to break apart.
+ * Delegates the whole decision to `leadSourceGroup`, whose keys ARE the channel slugs.
+ * The two used to be separate near-copies of the same rules, and they drifted: the Leads
+ * page called a lead Canada while the Marketing page filed its money under Meta Ads, and
+ * Landing Page and Incorp existed on one page and not the other. One function now, so
+ * they cannot disagree again.
  *
- * Null is a real answer and stays one: a lead the CRM recorded no source for is
- * unattributed, and naming a channel for it would put invented attribution into every
- * ROAS and cost-per-lead figure on the page.
+ * `sourceType` is only consulted when the CRM recorded no source at all — a lead created
+ * in this app, or one of the 104 Zoho left blank.
+ *
+ * Null is a real answer and stays one: a source the mapping does not recognise reaches no
+ * channel, because naming one would put invented attribution into every ROAS and
+ * cost-per-lead figure on the Marketing page.
  */
 export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | null): string | null {
-  // Underscores read as word separators. The CRM writes "Trademark_Meta", and matching on
-  // whole words is what keeps a rule for "meta" off "metallurgy".
-  const v = (sourceDetail ?? '').trim().toLowerCase().replace(/_/g, ' ');
-  const word = (w: string) => new RegExp(String.raw`\b${w}\b`).test(v);
+  const group = leadSourceGroup(sourceDetail);
 
-  if (v) {
-    // Paid first: "Meta Ads" is an ad, not organic Facebook.
-    // `word('meta')` rather than startsWith: the campaign name is not always the prefix —
-    // 44 leads came in under "Trademark_Meta" and reached no channel at all.
-    if (word('meta') || v.includes('meta ad')) return 'meta-ads';
-    if (v.includes('google ad') || v.includes('adwords')) return 'google-ads';
+  // Recognised, and the group name is the slug.
+  if (group !== 'other' && group !== 'unattributed') return group;
 
-    if (v === 'ig' || v.includes('instagram')) return 'instagram';
-    if (v === 'fb' || v.includes('facebook')) return 'facebook';
-    if (v.includes('whatsapp')) return 'whatsapp';
-    // Misspelt in this CRM as "LinkdIn" on thousands of leads and "LinkediIn" on one, so
-    // the stem is matched rather than either spelling.
-    if (v.includes('linkedi') || v.includes('linkdin')) return 'linkedin';
-
-    // Anything the firm showed up at in person. Expos and summits were landing nowhere.
-    if (
-      v.includes('calendly') ||
-      v.includes('booking') ||
-      v.includes('expo') ||
-      v.includes('summit') ||
-      v.includes('conference') ||
-      v.includes('webinar')
-    ) {
-      return 'events';
-    }
-    // Smartlead is the cold-email tool, so a lead credited to it came from outreach.
-    if (v.includes('smartlead') || v.includes('call') || v.includes('research')) return 'outreach';
-    if (v.includes('email')) return 'email';
-    // The firm's own web properties, and the firm's own brands. "BNG US Incorp" is the
-    // incorporation service and "NG Podcast" is the firm's own show — 957 leads between
-    // them that reached no channel at all, because neither name contains any word the
-    // rules above look for.
-    if (
-      v.includes('site') ||
-      v.includes('website') ||
-      v.includes('incorp') ||
-      v.includes('podcast')
-    ) {
-      return 'direct';
-    }
-  }
-
+  // `other` and `unattributed` both fall through to the enum, and it matters that `other`
+  // does. The two functions were merged by having this one return null for anything the
+  // group rules did not recognise, which quietly dropped the case where the CRM's string
+  // is unfamiliar but the enum still knows what it is: "Trade Show" is an `event` and
+  // "Web Download" a `website`, and both stopped reaching a channel at all. The group
+  // rules are a superset of the old ones but not of leadSourceType's.
+  //
+  // Nothing is invented here — `import` and `manual` say the enum knows nothing either,
+  // and they return null.
   switch (sourceType) {
     case 'paid_ads':
       return 'meta-ads';
@@ -271,8 +243,9 @@ export function channelSlugFor(sourceType: SourceType, sourceDetail?: string | n
       return 'events';
     case 'outreach':
       return 'outreach';
-    case 'website':
     case 'landing_page':
+      return 'landing-page';
+    case 'website':
     case 'form':
       return 'direct';
     default:
@@ -297,4 +270,212 @@ export function cleanImportedName(value: string | null | undefined): string | nu
   if (!value) return null;
   const cleaned = value.replace(/^\s*\[merged\]\s*/i, '').trim();
   return cleaned || null;
+}
+
+/**
+ * The lead source as Zoho actually named it, folded onto the names the team uses.
+ *
+ * Three vocabularies describe where a lead came from and none of them was the CRM's own:
+ * `sourceType` is a shared enum that calls 17,989 of this account's leads `social`,
+ * `channelSlugFor` is the business grouping the Marketing page reports against, and
+ * `sourceDetail` is the only one Zoho wrote. The Leads page was showing the first — a
+ * Source column reading "social" on twelve thousand rows the CRM had already told apart
+ * as "ig", "fb" and "Incorporation LinkdIn".
+ *
+ * These are Zoho's 56 source strings, and the partition is exhaustive: every one of the
+ * 27,401 leads lands in exactly one group, the 104 with no source included.
+ *
+ * The keys are channel slugs: `channelSlugFor` returns them verbatim, so the Source a
+ * lead shows on the Leads page and the Channel its money is reported under on Marketing
+ * are the same decision. `other` and `unattributed` are the two that reach no channel.
+ *
+ * Platform beats business line. "Incorporation Google Ads", "Hiring LinkedIn Ads" and
+ * "Trademark_Meta" are Google, LinkedIn and Meta — the prefix names the campaign, not
+ * the source, and there are five of those prefixes crossed with four platforms. Geography
+ * does not: `canada` is tested first, because "Canada Meta Ads" is the only value that
+ * carries a market and folding it into Meta Ads is what hid it.
+ */
+export const LEAD_SOURCES = [
+  { key: 'instagram', label: 'Instagram' },
+  { key: 'facebook', label: 'Facebook' },
+  { key: 'linkedin', label: 'LinkedIn' },
+  { key: 'google-ads', label: 'Google Ads' },
+  { key: 'meta-ads', label: 'Meta Ads' },
+  { key: 'canada', label: 'Canada' },
+  { key: 'landing-page', label: 'Landing Page' },
+  { key: 'incorp', label: 'Incorp' },
+  { key: 'whatsapp', label: 'WhatsApp' },
+  { key: 'events', label: 'Events' },
+  { key: 'referral', label: 'Referral' },
+  { key: 'outreach', label: 'Outreach' },
+  { key: 'email', label: 'Email' },
+  { key: 'direct', label: 'Direct' },
+  { key: 'other', label: 'Other' },
+  { key: 'unattributed', label: 'Unattributed' },
+] as const;
+
+export type LeadSourceKey = (typeof LEAD_SOURCES)[number]['key'];
+
+export const LEAD_SOURCE_KEYS = LEAD_SOURCES.map((s) => s.key) as unknown as [
+  LeadSourceKey,
+  ...LeadSourceKey[],
+];
+
+const LEAD_SOURCE_LABELS = new Map<LeadSourceKey, string>(
+  LEAD_SOURCES.map((s) => [s.key, s.label]),
+);
+
+export function leadSourceGroup(sourceDetail: string | null | undefined): LeadSourceKey {
+  // Underscores read as word separators, exactly as channelSlugFor treats them: the CRM
+  // writes "Trademark_Meta".
+  const v = (sourceDetail ?? '').trim().toLowerCase().replace(/_/g, ' ');
+  // A lead the CRM recorded no source for is unattributed, and stays so. Guessing one
+  // would put invented attribution into a column whose whole job is to say what Zoho said.
+  if (!v) return 'unattributed';
+
+  const word = (w: string) => new RegExp(String.raw`\b${w}\b`).test(v);
+
+  // The market, before any platform. "Canada Meta Ads" is the only value naming one.
+  if (v.includes('canada')) return 'canada';
+
+  // Matched whole. `includes('ig')` would fire on "Landing Page" and `includes('fb')` on
+  // anything with those letters adjacent.
+  if (v === 'ig' || v.includes('instagram')) return 'instagram';
+  if (v === 'fb' || v.includes('facebook')) return 'facebook';
+  if (v.includes('whatsapp')) return 'whatsapp';
+  // Misspelt as "LinkdIn" on 2,638 leads and "LinkediIn" on one, so the stem is matched
+  // rather than either spelling. Before `incorp` below: "Incorporation LinkdIn" is
+  // LinkedIn, and it is the third-largest source in the CRM.
+  if (v.includes('linkedi') || v.includes('linkdin')) return 'linkedin';
+  if (v.includes('google ad') || v.includes('adwords')) return 'google-ads';
+  // Before landing-page, so "Meta - Landing Page" reads as the ad it is rather than the
+  // page it points at — the same precedence leadSourceType applies.
+  if (word('meta')) return 'meta-ads';
+
+  // "Landing Page", "Trademark - Landingpage" and "Global Landing Page". Substring, not
+  // a word: the CRM spells it both ways.
+  if (v.includes('landing')) return 'landing-page';
+  // Everything platform-led is already gone, so what is left is the incorporation
+  // service itself: "BNG US Incorp".
+  if (v.includes('incorp')) return 'incorp';
+
+  // Anywhere the firm showed up at, in person or on a calendar.
+  if (
+    v.includes('calendly') ||
+    v.includes('booking') ||
+    v.includes('event') ||
+    v.includes('expo') ||
+    v.includes('summit') ||
+    v.includes('conference') ||
+    v.includes('webinar') ||
+    v.includes('seminar')
+  ) {
+    return 'events';
+  }
+
+  // "Ref by AN", "Personal Ref", "Client Ref" — the word turns up at either end, and none
+  // of them contain the double-r of "referral".
+  if (word('ref') || v.includes('refer')) return 'referral';
+
+  // Before the website test, which "Web Research" would otherwise satisfy: going looking
+  // for a prospect is outreach. Smartlead is the cold-email tool.
+  if (v.includes('research') || v.includes('smartlead') || word('call')) return 'outreach';
+  if (v.includes('email')) return 'email';
+  // The firm's own properties and its own show: "USAIndiaCFO Site", "NG Podcast". Direct
+  // rather than a channel of their own, which is where the Marketing page has always
+  // filed them.
+  if (v.includes('site') || v.includes('website') || v.includes('podcast') || v.includes('desk')) {
+    return 'direct';
+  }
+
+  // "Platform" and "Excel CRM" — three leads between them. Named rather than filed under
+  // a channel nobody chose, so a source Zoho starts writing tomorrow shows up as
+  // unrecognised instead of quietly joining Direct.
+  return 'other';
+}
+
+/**
+ * The group's display name, for the Source column and the filter.
+ *
+ * `sourceType` is the fallback for a lead with no CRM string at all — one created by the
+ * New Lead button, or posted to /api/public/v1/leads by a website form, which defaults to
+ * `form`. Only Zoho writes `sourceDetail`, so without this every lead this app creates
+ * read "Unattributed" in the column while carrying a perfectly good channel underneath.
+ *
+ * `import` and `manual` stay "Unattributed": they are the enum's own words for not
+ * knowing, and dressing them up as a source would be inventing one.
+ */
+export function leadSourceLabel(
+  sourceDetail: string | null | undefined,
+  sourceType?: SourceType | null,
+): string {
+  const group = leadSourceGroup(sourceDetail);
+  if (group !== 'unattributed') return LEAD_SOURCE_LABELS.get(group)!;
+  if (!sourceType || sourceType === 'import' || sourceType === 'manual') return 'Unattributed';
+  return sourceType.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * The campaign a lead's CRM source names, or null.
+ *
+ * Zoho records no campaign: `Campaign_Source` is null on all 27,401 leads and every UTM
+ * column is empty, so there is no id to join on and no honest way to link a lead to one of
+ * the 44 Meta campaigns the ad account actually ran. Name-matching does not rescue it —
+ * six campaigns say "Hiring", four say "Incorporation", and the largest lead campaign of
+ * all (Trademark, 2,852 leads) runs on Google, which is not even connected.
+ *
+ * What the CRM DOES record is the business line, inside the source string itself:
+ * "Trademark Google Ads", "Incorporation LinkdIn", "Canada Meta Ads". That is a campaign
+ * at the granularity the team actually types, and it is theirs, not inferred — which is
+ * why this reads only the words already in the string and returns null for the 19,753
+ * leads whose source names no campaign at all.
+ *
+ * Deliberately NOT joined to Campaign/MarketingSpend. Spend belongs to a named ad
+ * campaign and these are lines of business; multiplying one by the other would produce a
+ * cost-per-lead nobody could defend.
+ */
+export const LEAD_CAMPAIGNS = [
+  'Incorporation',
+  'Trademark',
+  'Canada',
+  'Hiring',
+  'VCFO',
+  'IRS',
+  'BTS Event',
+  'Convergence India Expo 2026',
+  'AI Impact Summit',
+  'Ambiente & Biofach',
+] as const;
+
+export type LeadCampaign = (typeof LEAD_CAMPAIGNS)[number];
+
+export function leadCampaign(sourceDetail: string | null | undefined): LeadCampaign | null {
+  // Underscores as separators, as everywhere else here: "Trademark_Meta".
+  const v = (sourceDetail ?? '').trim().toLowerCase().replace(/_/g, ' ');
+  if (!v) return null;
+
+  // The services the firm advertises.
+  if (v.includes('incorp')) return 'Incorporation';
+  if (v.includes('trademark')) return 'Trademark';
+  // A market rather than a service, and the only one the CRM names. It reads as a
+  // campaign here for the same reason it is its own channel: the team runs it as one.
+  if (v.includes('canada')) return 'Canada';
+  // Recruitment ads. Not a service the firm sells, which is exactly why separating them
+  // matters — 208 leads that are job applicants, not prospects.
+  if (v.includes('hiring')) return 'Hiring';
+  if (v.includes('vcfo')) return 'VCFO';
+  // Whole word: no other source contains it, and a substring rule would be waiting for
+  // the first source that does.
+  if (/\birs\b/.test(v)) return 'IRS';
+
+  // The named events, each its own campaign. The CRM's own wording, tidied only where it
+  // carries a prefix that is not part of the name.
+  if (v.includes('convergence')) return 'Convergence India Expo 2026';
+  if (v.includes('impact summit')) return 'AI Impact Summit';
+  if (v.includes('ambiente') || v.includes('biofach')) return 'Ambiente & Biofach';
+  if (/\bbts\b/.test(v)) return 'BTS Event';
+
+  // "fb", "ig", "Landing Page", "Ref by NG" — a channel or a person, never a campaign.
+  // Null rather than a guess: it is the honest answer for 19,753 of these leads.
+  return null;
 }

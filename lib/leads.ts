@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { z } from 'zod';
 import { recordId } from './id.ts';
 import { db } from './prisma.ts';
@@ -5,7 +6,16 @@ import { dispatch } from './events.ts';
 import { companyDomainFromEmail, normalizeCompanyName, normalizeEmail } from './dedupe.ts';
 import type { ListQuery } from './api.ts';
 import { LEAD_STATUSES, SOURCE_TYPES } from './enums.ts';
-import { channelSlugFor } from './integrations/crm-mapping.ts';
+import {
+  channelSlugFor,
+  leadCampaign,
+  leadSourceGroup,
+  LEAD_CAMPAIGNS,
+  LEAD_SOURCES,
+  LEAD_SOURCE_KEYS,
+  type LeadCampaign,
+  type LeadSourceKey,
+} from './integrations/crm-mapping.ts';
 import { INTERNAL_SOURCE } from './sources.ts';
 import { phoneMatches } from './phone.ts';
 
@@ -37,6 +47,13 @@ export type LeadInput = z.infer<typeof leadInput>;
 export const leadFilters = z.object({
   status: z.enum(LEAD_STATUSES).optional(),
   sourceType: z.enum(SOURCE_TYPES).optional(),
+  /** The CRM's own source, grouped — see leadSourceGroup. Distinct from `sourceType`
+   *  above, which stays for the public API: that is the shared enum a form posting a
+   *  lead can name, and it cannot express "Canada" or "Incorp". */
+  leadSource: z.enum(LEAD_SOURCE_KEYS).optional(),
+  /** The business line the CRM's source string names — see leadCampaign. Distinct from
+   *  `campaignId` below, which is a real Campaign row and is null on every lead here. */
+  leadCampaign: z.enum(LEAD_CAMPAIGNS).optional(),
   ownerEmail: z.string().trim().optional(),
   campaignId: recordId.optional(),
   channelId: recordId.optional(),
@@ -51,8 +68,82 @@ export type LeadFilters = z.infer<typeof leadFilters>;
 // or an arbitrary field.
 const SORTABLE = [
   'createdAt', 'updatedAt', 'status', 'score', 'firstName',
-  'companyName', 'sourceType', 'ownerEmail',
+  'companyName', 'sourceType', 'sourceDetail', 'ownerEmail',
 ] as const;
+
+/**
+ * Every distinct CRM source string, with how many leads carry it. ~56 rows over 27k
+ * leads.
+ *
+ * `cache` is React's per-request dedupe, and it is doing real work here: rendering the
+ * Leads page with a source filter set called this twice — once to build the dropdown and
+ * once to turn the chosen group into a WHERE clause — which was two full scans of the
+ * lead table, ~250ms each, for one answer that cannot change between them.
+ */
+const sourceDetailCounts = cache(async () =>
+  db().lead.groupBy({ by: ['sourceDetail'], _count: { _all: true } }),
+);
+
+/**
+ * The distinct CRM source strings that belong to one group, for the WHERE clause.
+ *
+ * The group is computed, not stored, so it cannot be matched in SQL: the rules have a
+ * precedence a set of ORed LIKEs cannot express — "Meta - Landing Page" is Meta Ads and
+ * "Trademark - Landingpage" is Landing Page, and both contain "landing". So the distinct
+ * values are grouped in JS, which is exactly the same decision the column renders and
+ * cannot drift from it.
+ */
+async function sourceDetailsIn(group: LeadSourceKey): Promise<string[]> {
+  return (await sourceDetailCounts())
+    .map((r) => r.sourceDetail)
+    .filter((d): d is string => d !== null && leadSourceGroup(d) === group);
+}
+
+/** The same, for the campaign the source string names. */
+async function campaignDetailsIn(campaign: LeadCampaign): Promise<string[]> {
+  return (await sourceDetailCounts())
+    .map((r) => r.sourceDetail)
+    .filter((d): d is string => d !== null && leadCampaign(d) === campaign);
+}
+
+/**
+ * The campaign filter's options, busiest first.
+ *
+ * Only the lines this CRM actually names. Ten are defined and this account uses all ten,
+ * but a workspace that never ran a Trademark ad should not be offered one.
+ */
+export async function leadCampaignOptions() {
+  const totals = new Map<LeadCampaign, number>();
+  for (const r of await sourceDetailCounts()) {
+    const key = leadCampaign(r.sourceDetail);
+    if (key) totals.set(key, (totals.get(key) ?? 0) + r._count._all);
+  }
+
+  return LEAD_CAMPAIGNS.filter((c) => totals.has(c))
+    .sort((a, b) => totals.get(b)! - totals.get(a)!)
+    .map((c) => ({ value: c, label: c }));
+}
+
+/**
+ * The source filter's options: the groups that actually have leads behind them, busiest
+ * first. Offering the whole vocabulary would put ten dead options in the dropdown — this
+ * CRM writes no organic search at all — and picking one returns an empty table, which
+ * reads as a broken page rather than as an empty source.
+ *
+ * Counted over the whole table, not the visible date range, so the list does not shuffle
+ * itself every time the range picker moves.
+ */
+export async function leadSourceOptions() {
+  const totals = new Map<LeadSourceKey, number>();
+  for (const r of await sourceDetailCounts()) {
+    const key = leadSourceGroup(r.sourceDetail);
+    totals.set(key, (totals.get(key) ?? 0) + r._count._all);
+  }
+
+  return LEAD_SOURCES.filter((s) => totals.has(s.key))
+    .sort((a, b) => totals.get(b.key)! - totals.get(a.key)!)
+    .map((s) => ({ value: s.key, label: s.label }));
+}
 
 /**
  * `window` is the range the picker resolved, applied only when the URL carries no
@@ -67,6 +158,34 @@ export async function leadWhere(filters: LeadFilters, q: ListQuery, window?: { f
   const where: Record<string, unknown> = {};
   if (filters.status) where.status = filters.status;
   if (filters.sourceType) where.sourceType = filters.sourceType;
+  if (filters.leadSource) {
+    // Null is the group, not a value in it: the 104 leads Zoho recorded no source for are
+    // what "Unattributed" means, and `sourceDetail: { in: [] }` would match none of them.
+    where.sourceDetail =
+      filters.leadSource === 'unattributed'
+        ? null
+        : { in: await sourceDetailsIn(filters.leadSource) };
+  }
+  if (filters.leadCampaign) {
+    // Both filters narrow the same column, so they have to be intersected rather than
+    // overwrite each other. Composing them is the point: Incorporation on LinkedIn is
+    // `?leadSource=linkedin&leadCampaign=Incorporation`, which is the question the
+    // marketing review actually asks.
+    const details = await campaignDetailsIn(filters.leadCampaign);
+    const already = where.sourceDetail;
+    if (already === null) {
+      // Source filter is "Unattributed", which means sourceDetail IS NULL — and a null
+      // source names no campaign, so the two together match nothing. Said explicitly:
+      // `typeof null === 'object'` is true, so the object branch below would have
+      // silently dropped the null and returned every campaign lead instead.
+      where.sourceDetail = { in: [] };
+    } else if (already && typeof already === 'object') {
+      const kept = new Set((already as { in: string[] }).in);
+      where.sourceDetail = { in: details.filter((d) => kept.has(d)) };
+    } else {
+      where.sourceDetail = { in: details };
+    }
+  }
   if (filters.ownerEmail) {
     where.ownerEmail = filters.ownerEmail === 'unassigned' ? null : filters.ownerEmail;
   }
@@ -100,7 +219,7 @@ export async function leadWhere(filters: LeadFilters, q: ListQuery, window?: { f
 /** The sortable columns that allow a null. Postgres puts nulls first on DESC, so sorting
  *  by Company or Owner descending opened with a screenful of blanks; these ask for them
  *  at the end instead, in both directions. */
-const NULLABLE_SORTS = new Set(['companyName', 'ownerEmail', 'lastName']);
+const NULLABLE_SORTS = new Set(['companyName', 'ownerEmail', 'lastName', 'sourceDetail']);
 
 export async function listLeads(
   filters: LeadFilters,
