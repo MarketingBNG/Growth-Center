@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { db, hasDb } from '@/lib/prisma';
 import { aiStatus, growthContext, ruleFindings } from '@/lib/ai';
 import { AI_KEY_ENV } from '@/lib/enums';
+import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { AskBox } from './AskBox';
 
 export const metadata = { title: 'AI Insights · Growth Center' };
@@ -111,13 +112,20 @@ export default async function AiPage() {
           <CardHeader>
             <CardTitle>Saved insights</CardTitle>
             <p className="text-[11px] text-muted-foreground">
-              Anything marked <span className="text-warning">sample</span> shipped with the demo data
-              and was not produced by a model.
+              Written by the model when you ask for them, and replaced each time. Anything marked{' '}
+              <span className="text-warning">sample</span> shipped with the demo data and was not
+              produced by a model.
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
+            <GenerateInsightsButton configured={status.configured} existing={stored.length} />
+
             {stored.length === 0 ? (
-              <p className="text-xs text-muted-foreground">None saved.</p>
+              <p className="text-xs text-muted-foreground">
+                {status.configured
+                  ? 'None yet — generate a set from the numbers above.'
+                  : 'None saved.'}
+              </p>
             ) : stored.map((i) => (
               <div key={i.id} className="rounded-md border border-border px-3 py-2">
                 <div className="flex items-start justify-between gap-2">

@@ -49,6 +49,13 @@ export const SUGGESTED_QUESTIONS = [
   'What are the biggest growth opportunities in this data?',
 ] as const;
 
+/** The four kinds an insight can be, matching the InsightKind enum in the schema. Here so
+ *  the structured-output schema in lib/ai.ts and the badges that render them cannot drift
+ *  apart from each other. */
+export const INSIGHT_KINDS = ['opportunity', 'risk', 'anomaly', 'recommendation'] as const;
+
+export type InsightKind = (typeof INSIGHT_KINDS)[number];
+
 /**
  * The environment variable that switches AI answers on.
  *

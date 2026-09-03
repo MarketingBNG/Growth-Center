@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
+import { z } from 'zod';
 import { db } from './prisma.ts';
-import { AI_KEY_ENV } from './enums.ts';
+import { AI_KEY_ENV, INSIGHT_KINDS } from './enums.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
@@ -322,3 +323,177 @@ export function ruleFindings(ctx: GrowthContext) {
 }
 
 export const asNumber = num;
+
+// ── generated insights ────────────────────────────────────────────────────────
+//
+// The findings the AI Insights page shows without being asked a question. Until this
+// existed the page had two arithmetic sentences and a panel reading "None saved", because
+// nothing in the app ever wrote to ai_insight except the seed.
+//
+// Manual on purpose for now: a button someone presses, not a step in the nightly sync.
+
+/**
+ * Structured output, not prose parsed with a regular expression.
+ *
+ * `strict` holds the model to this exactly, which is what lets the rows be written straight
+ * to a typed enum column. The alternative — asking for JSON in the prompt and hoping —
+ * fails on the day the model wraps it in a code fence, and fails by writing nothing while
+ * reporting success.
+ */
+const FINDINGS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['findings'],
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['kind', 'title', 'body', 'confidence'],
+        properties: {
+          kind: { type: 'string', enum: [...INSIGHT_KINDS] },
+          title: { type: 'string' },
+          body: { type: 'string' },
+          confidence: { type: 'integer' },
+        },
+      },
+    },
+  },
+} as const;
+
+/** Validated rather than trusted. `strict` is the vendor's promise, and a row that reaches
+ *  a Prisma enum column has to satisfy this side of the boundary too. */
+const findingsShape = z.object({
+  findings: z
+    .array(
+      z.object({
+        kind: z.enum(INSIGHT_KINDS),
+        title: z.string().trim().min(1).max(200),
+        body: z.string().trim().min(1).max(2000),
+        confidence: z.number().int().min(0).max(100),
+      }),
+    )
+    .max(12),
+});
+
+const INSIGHTS_SYSTEM = `${SYSTEM}
+
+You are now writing standalone findings rather than answering a question. Return between
+three and six, ordered with the most consequential first.
+
+- Every finding must name the figures it rests on, and those figures must be in the data.
+- \`title\` is one line a busy person can act on. No preamble, under 90 characters.
+- \`body\` is two or three sentences: what the numbers say, and what follows from it.
+- \`confidence\` is 0-100 and reflects how well the data supports the claim, not how
+  strongly you feel. A finding resting on a null or a single record does not deserve 90.
+- Prefer fewer, better findings. Three real ones beat six padded to fill the quota.
+- Do not repeat a finding the arithmetic already states plainly, such as the raw count of
+  leads in "new" or the size of the open pipeline.
+- \`leadOwners\` entries are colleagues, and these findings are read by their team. Refer to
+  a person by name, or as "they". Never infer anyone's gender from their name — the data
+  does not record it, and guessing it wrong about a named coworker is worse than the plain
+  alternative.
+- Write figures the way a reader can take them in: thousands separated, so 1,295,976 rather
+  than 1295976.
+- A \`confidence\` above 90 says the data settles the point on its own. If your own \`body\`
+  admits the snapshot cannot explain something, or rests the claim on a single record or a
+  null, the figure belongs well below that.`;
+
+// A note on that last rule: it does not work. Measured over several runs, every finding
+// comes back between 95 and 99 — including ones whose own body says the snapshot cannot
+// explain what they describe. Self-reported confidence from this model is not calibrated,
+// and asking more firmly does not calibrate it.
+//
+// The rule stays because it is correct guidance and costs forty tokens. The column stays
+// because it records what the model claimed. But nothing renders it, and nothing should
+// start rendering it as though it ranked anything — sorting this page by `confidence` would
+// be sorting by noise.
+
+export type GeneratedInsights = {
+  written: number;
+  usage?: TokenUsage;
+  model: string;
+};
+
+/**
+ * Asks the model for findings and replaces the previously generated set.
+ *
+ * Replaces rather than appends: a finding describes the numbers as they were when it was
+ * written, so keeping last month's beside this month's presents stale claims as current.
+ * Seeded rows are left alone — they are labelled samples and not ours to delete.
+ *
+ * A dismissal does not survive a regeneration, which is the honest behaviour: the set was
+ * thrown away and rebuilt, so there is nothing left for the dismissal to apply to.
+ */
+export async function generateInsights(context: GrowthContext): Promise<GeneratedInsights> {
+  const status = aiStatus();
+  if (!status.configured) throw new Error(status.reason);
+
+  const client = new OpenAI({ apiKey: process.env[AI_KEY_ENV] });
+
+  const response = await client.responses.create({
+    model: MODEL,
+    instructions: INSIGHTS_SYSTEM,
+    input: `Growth data:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``,
+    max_output_tokens: MAX_OUTPUT_TOKENS,
+    reasoning: { effort: EFFORT },
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'growth_findings',
+        schema: FINDINGS_SCHEMA as unknown as Record<string, unknown>,
+        strict: true,
+      },
+    },
+    store: false,
+  });
+
+  const raw = response.output_text.trim();
+  if (!raw) {
+    throw new Error(
+      response.incomplete_details?.reason === 'max_output_tokens'
+        ? 'The model used its entire output budget before writing any findings.'
+        : 'The model returned no findings.',
+    );
+  }
+
+  let parsed: z.infer<typeof findingsShape>;
+  try {
+    parsed = findingsShape.parse(JSON.parse(raw));
+  } catch (e) {
+    // The raw text is deliberately not written anywhere a page will render it — a
+    // half-formed finding shown as analysis is the one outcome this module exists to
+    // prevent.
+    throw new Error(`The model's findings did not match the expected shape: ${(e as Error).message}`);
+  }
+
+  const usage = response.usage
+    ? {
+        input: response.usage.input_tokens,
+        output: response.usage.output_tokens,
+        total: response.usage.total_tokens,
+      }
+    : undefined;
+
+  if (!parsed.findings.length) return { written: 0, usage, model: MODEL };
+
+  // One transaction, so a failure cannot leave the page with the old set deleted and the
+  // new one unwritten — which would read as "the AI found nothing".
+  await db().$transaction([
+    db().aiInsight.deleteMany({ where: { provider: { not: 'seed' } } }),
+    db().aiInsight.createMany({
+      data: parsed.findings.map((f) => ({
+        kind: f.kind,
+        title: f.title,
+        body: f.body,
+        provider: 'openai',
+        model: MODEL,
+        confidence: f.confidence,
+        context: { periodDays: context.periodDays },
+      })),
+    }),
+  ]);
+
+  return { written: parsed.findings.length, usage, model: MODEL };
+}
