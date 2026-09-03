@@ -99,7 +99,15 @@ export async function growthContext(days = 90) {
       revenue: Math.round(before.revenue),
       marketingSpend: Math.round(before.spend),
     },
-    leadsByStatus: Object.fromEntries(statuses.map((s) => [s.status, s._count._all])),
+    // Named at this length because the short name was actively misleading, and the model
+    // said so: it reported "a data inconsistency" between `current.qualifiedLeads` (80) and
+    // `leadsByStatus.qualified` (3) and withheld a real finding over it.
+    //
+    // There is no inconsistency. They count different things twice over — this is every
+    // lead ever, by the status it sits in right now; that one is leads created in the window
+    // that ever reached qualified. And `qualified` is a state leads pass through: 1,031 have
+    // reached it, 1,028 went on to `converted`, which leaves the 3 standing there today.
+    allLeadsByCurrentStatus: Object.fromEntries(statuses.map((s) => [s.status, s._count._all])),
     // Who is carrying what. Absent until now, which meant the honest answer to "who has
     // too many leads" was that the data could not say — the one question the team asked of
     // this page that it had no figures for.
@@ -150,6 +158,16 @@ Rules:
   that currency when you quote one, and never convert it.
 - Be specific and short. Name the channel or campaign and the figure that supports the point.
 - Do not recommend anything the data does not support.
+
+About the two lead counts, which are NOT comparable:
+- \`current.*\` covers only the last \`periodDays\` days.
+  \`allLeadsByCurrentStatus\` covers every lead ever recorded, with no window.
+- \`current.qualifiedLeads\` counts leads that ever reached qualified.
+  \`allLeadsByCurrentStatus.qualified\` counts leads sitting in that status today, which is
+  a state leads pass through on their way to \`converted\` — a small number there is normal
+  and is not evidence of anything.
+- So never divide one by the other, and never report a gap between them as an
+  inconsistency in the data.
 
 About \`leadOwners\`:
 - \`open\` is not a workload. It counts every lead still open, and most of this firm's are
@@ -291,11 +309,13 @@ export function ruleFindings(ctx: GrowthContext) {
     });
   }
 
-  const unassigned = ctx.leadsByStatus.new ?? 0;
-  if (unassigned > 0) {
+  // Named for what it counts. It was `unassigned`, which it never was — these are leads in
+  // status `new`, whether or not anybody owns them, and almost all of them do.
+  const untouched = ctx.allLeadsByCurrentStatus.new ?? 0;
+  if (untouched > 0) {
     findings.push({
       kind: 'recommendation',
-      title: `${unassigned} leads are still in "new"`,
+      title: `${untouched.toLocaleString('en-US')} leads are still in "new"`,
       body: 'These have arrived and not yet been contacted. They are the cheapest pipeline available, because the acquisition cost is already spent.',
     });
   }

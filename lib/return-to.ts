@@ -1,5 +1,5 @@
 /**
- * Where to send someone after they sign in, from the `?from=` the middleware set.
+ * Where to send someone after they sign in, from the `?from=` the proxy set.
  *
  * Its own module rather than part of lib/auth.ts, for the reason lib/kpi.ts is separate
  * from lib/metrics.ts: auth.ts builds the NextAuth config at import time, so nothing can

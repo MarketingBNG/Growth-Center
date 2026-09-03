@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { safeReturnTo } from '../lib/return-to.ts';
 
-// `?from=` is set by middleware but arrives in the URL, so it is an input-validation
+// `?from=` is set by the proxy but arrives in the URL, so it is an input-validation
 // boundary: a crafted sign-in link must not be able to bounce someone off the site the
 // moment they authenticate.
 
