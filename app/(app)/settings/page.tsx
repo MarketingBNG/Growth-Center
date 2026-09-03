@@ -10,6 +10,7 @@ import { can } from '@/lib/roles';
 import { db, hasDb } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { aiStatus } from '@/lib/ai';
+import { AI_KEY_ENV } from '@/lib/enums';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
@@ -69,7 +70,7 @@ export default async function SettingsPage() {
       required: true,
       detail: 'APP_ENCRYPTION_KEY — integrations cannot be connected without it',
     },
-    { label: 'AI insights', ok: ai.configured, required: false, detail: 'ANTHROPIC_API_KEY' },
+    { label: 'AI insights', ok: ai.configured, required: false, detail: AI_KEY_ENV },
     { label: 'Outreach sending', ok: email.sends, required: false, detail: email.detail },
   ];
 

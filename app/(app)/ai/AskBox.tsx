@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
-import { SUGGESTED_QUESTIONS } from '@/lib/enums';
+import { AI_KEY_ENV, SUGGESTED_QUESTIONS } from '@/lib/enums';
 
 export function AskBox({ configured }: { configured: boolean }) {
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [model, setModel] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{ input: number; output: number; total: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,13 +23,19 @@ export function AskBox({ configured }: { configured: boolean }) {
     setError(null);
     setAnswer(null);
     try {
-      const result = await api<{ answer: string; model: string; truncated?: boolean }>('/api/ai/ask', {
+      const result = await api<{
+        answer: string;
+        model: string;
+        truncated?: boolean;
+        usage?: { input: number; output: number; total: number };
+      }>('/api/ai/ask', {
         method: 'POST',
         json: { question: q.trim() },
       });
       setAnswer(result.answer);
       setTruncated(!!result.truncated);
       setModel(result.model);
+      setUsage(result.usage ?? null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -53,7 +60,7 @@ export function AskBox({ configured }: { configured: boolean }) {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             rows={2}
-            placeholder={configured ? 'Which channel produces our best customers?' : 'Configure ANTHROPIC_API_KEY to ask questions'}
+            placeholder={configured ? 'Which channel produces our best customers?' : `Configure ${AI_KEY_ENV} to ask questions`}
             disabled={!configured || busy}
           />
           <div className="flex justify-end">
@@ -98,6 +105,17 @@ export function AskBox({ configured }: { configured: boolean }) {
             {model ? (
               <p className="mt-2 text-[11px] text-muted-foreground">
                 Answered by {model} from the growth snapshot only.
+                {/* Every question spends real money and nothing on screen said how much,
+                    so the only way to find out was the vendor's bill at the end of the
+                    month. Output covers the model's reasoning as well as the text above,
+                    which is why it can exceed what you can see. */}
+                {usage ? (
+                  <>
+                    {' '}
+                    {usage.input.toLocaleString('en-US')} tokens in,{' '}
+                    {usage.output.toLocaleString('en-US')} out.
+                  </>
+                ) : null}
               </p>
             ) : null}
           </div>

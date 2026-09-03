@@ -48,3 +48,13 @@ export const SUGGESTED_QUESTIONS = [
   'Where is the funnel leaking most?',
   'What are the biggest growth opportunities in this data?',
 ] as const;
+
+/**
+ * The environment variable that switches AI answers on.
+ *
+ * Here, and named once, because four screens print it as instructions to the reader —
+ * the AI page, the Ask box's placeholder, the dashboard's insight card and the settings
+ * checklist. All four said ANTHROPIC_API_KEY after the provider changed to OpenAI, which
+ * is worse than saying nothing: it tells the person to set a variable that has no effect.
+ */
+export const AI_KEY_ENV = 'OPENAI_API_KEY';

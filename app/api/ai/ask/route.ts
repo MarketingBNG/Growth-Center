@@ -25,5 +25,13 @@ export const POST = route('ai:run', async (user, req) => {
 
   const result = await ask(question, await growthContext(days));
   if (!result.ok) throw new HttpError(422, result.error);
-  return { answer: result.answer, model: result.model, truncated: !!result.truncated };
+  // Usage passed through so the page can show what a question cost. Every call here spends
+  // real money and nothing on screen said how much, which made the bill the only place to
+  // find out.
+  return {
+    answer: result.answer,
+    model: result.model,
+    truncated: !!result.truncated,
+    usage: result.usage,
+  };
 });

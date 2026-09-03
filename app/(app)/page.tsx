@@ -18,6 +18,7 @@ import { db, hasDb } from '@/lib/prisma';
 import { openPipeline, windowFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
+import { AI_KEY_ENV } from '@/lib/enums';
 import { campaignPerformance } from '@/lib/campaigns';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
@@ -363,7 +364,7 @@ export default async function DashboardPage({
                 <p className="text-xs text-muted-foreground">
                   {ai.configured
                     ? 'No insights yet.'
-                    : 'Set ANTHROPIC_API_KEY to generate insights from your numbers.'}
+                    : `Set ${AI_KEY_ENV} to generate insights from your numbers.`}
                 </p>
               ) : (
                 insights.map((i) => (

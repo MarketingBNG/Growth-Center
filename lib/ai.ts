@@ -1,5 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { db } from './prisma.ts';
+import { AI_KEY_ENV } from './enums.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
@@ -17,23 +18,41 @@ export type AiStatus =
   | { configured: false; reason: string }
   | { configured: true; provider: string; model: string };
 
-// Sonnet tier, current id. claude-sonnet-4-5 was a dated snapshot; claude-sonnet-5 is
-// the current Sonnet and is cheaper per token than the 4-6 generation.
-const MODEL = 'claude-sonnet-5';
+// The cheap end of the gpt-5.6 family: $0.20 per million in, $1.20 out — a tenth of
+// `gpt-5.6-terra`, which this ran on first, and which is the step up if answers start
+// disappointing.
+//
+// Affordable partly because the job is small. The model is handed a ~3,700-token snapshot
+// and asked to read figures out of it under a prompt that forbids inventing any; it is not
+// being asked to reason its way to something new. At this price a question costs about a
+// tenth of a penny, which is what makes the page worth leaving switched on.
+const MODEL = 'gpt-5.6-luna';
+
+// The Responses API, not chat completions: it is the surface OpenAI recommends for the
+// gpt-5 family, and the only one carrying `reasoning` and the incomplete-response details
+// that `ask()` needs to tell a cut-off answer from a finished one.
+//
+// Low on both knobs deliberately. This is a short factual read over a ~3,000-token
+// snapshot, and reasoning tokens are billed as output — at $12 per million, thinking hard
+// about a table of figures costs more than the answer is worth. The system prompt already
+// asks for short answers; `verbosity` enforces it without spending tokens saying so.
+const EFFORT = 'low' as const;
+const VERBOSITY = 'low' as const;
 
 // 900 truncated real answers mid-sentence and the truncation was invisible — the cut-off
 // text was returned as if complete. Room to finish, and the cut is reported if it still
-// happens. Non-streaming, so kept below the SDK's HTTP timeout rather than maxed out.
-const MAX_TOKENS = 16000;
+// happens. Note this budget covers reasoning AND visible text on this model family, which
+// is why ask() has to handle a response that spent all of it before writing anything.
+const MAX_OUTPUT_TOKENS = 16000;
 
 export function aiStatus(): AiStatus {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env[AI_KEY_ENV]) {
     return {
       configured: false,
-      reason: 'ANTHROPIC_API_KEY is not set, so no analysis can run.',
+      reason: `${AI_KEY_ENV} is not set, so no analysis can run.`,
     };
   }
-  return { configured: true, provider: 'anthropic', model: MODEL };
+  return { configured: true, provider: 'openai', model: MODEL };
 }
 
 /**
@@ -143,51 +162,76 @@ About \`leadOwners\`:
   If asked to redistribute leads, say that is what does it — do not invent an allocation
   of your own, and do not imply you have moved anything.`;
 
+export type TokenUsage = { input: number; output: number; total: number };
+
 export type AnswerResult =
-  | { ok: true; answer: string; model: string; truncated?: boolean }
+  | { ok: true; answer: string; model: string; truncated?: boolean; usage?: TokenUsage }
   | { ok: false; error: string };
 
 export async function ask(question: string, context: GrowthContext): Promise<AnswerResult> {
   const status = aiStatus();
   if (!status.configured) return { ok: false, error: status.reason };
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new OpenAI({ apiKey: process.env[AI_KEY_ENV] });
 
   try {
-    const message = await client.messages.create({
+    const response = await client.responses.create({
       model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: `Growth data:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\`\n\nQuestion: ${question}`,
-        },
-      ],
+      // The rules go in `instructions` rather than the input, which is what keeps them
+      // separable from the data: the snapshot below is untrusted in the sense that matters
+      // here — it is full of free-text the CRM collected from strangers.
+      instructions: SYSTEM,
+      input: `Growth data:
+\`\`\`json
+${JSON.stringify(context, null, 2)}
+\`\`\`
+
+Question: ${question}`,
+      max_output_tokens: MAX_OUTPUT_TOKENS,
+      reasoning: { effort: EFFORT },
+      text: { verbosity: VERBOSITY },
+      // Nothing here should outlive the request. The snapshot carries named leads, owner
+      // addresses and revenue, and there is no reason for a copy of it to sit in a vendor
+      // dashboard once the question is answered.
+      store: false,
     });
 
-    const answer = message.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
+    const answer = response.output_text.trim();
+    const usage = response.usage
+      ? {
+          input: response.usage.input_tokens,
+          output: response.usage.output_tokens,
+          total: response.usage.total_tokens,
+        }
+      : undefined;
 
-    if (!answer) return { ok: false, error: 'The model returned no text.' };
+    const cutOff =
+      response.status === 'incomplete' && response.incomplete_details?.reason === 'max_output_tokens';
 
-    // A truncated answer must never be presented as a finished one.
-    if (message.stop_reason === 'max_tokens') {
+    // A reasoning model can spend the whole output budget thinking and return no text at
+    // all — billed in full, and `output_text` an empty string. Reported as the failure it
+    // is: the alternative renders an empty answer card under a question the person asked
+    // and paid for, with nothing saying why.
+    if (!answer) {
       return {
-        ok: true,
-        answer,
-        model: MODEL,
-        truncated: true as const,
+        ok: false,
+        error: cutOff
+          ? 'The model used its entire output budget before writing an answer. Ask a narrower question, or raise MAX_OUTPUT_TOKENS.'
+          : 'The model returned no text.',
       };
     }
 
-    return { ok: true, answer, model: MODEL };
+    // A truncated answer must never be presented as a finished one.
+    if (cutOff) return { ok: true, answer, model: MODEL, truncated: true as const, usage };
+
+    return { ok: true, answer, model: MODEL, usage };
   } catch (e) {
     // Surfaced to the user as-is rather than swallowed — a failed call must not look
-    // like an answer.
+    // like an answer. The vendor's own message is the useful part: it is what says
+    // "insufficient quota" or "invalid api key", which is what the reader has to act on.
+    if (e instanceof OpenAI.APIError) {
+      return { ok: false, error: `OpenAI ${e.status ?? ''}: ${e.message}`.replace('  ', ' ') };
+    }
     return { ok: false, error: (e as Error).message };
   }
 }
