@@ -25,6 +25,7 @@ import { DEMO_SOURCE } from '@/lib/sources';
 import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
 import { NewLeadButton } from './NewLeadButton';
+import { RebalanceButton } from './RebalanceButton';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
@@ -108,6 +109,7 @@ export default async function LeadsPage({
         actions={
           <>
             <RangePicker current={value} />
+            <RebalanceButton />
             <NewLeadButton />
           </>
         }

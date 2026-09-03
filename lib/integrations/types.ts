@@ -180,6 +180,23 @@ export interface IntegrationProvider {
    * row alone and tell the person the CRM did not accept it.
    */
   updateTaskStatus?(credential: string, externalId: string, done: boolean): Promise<void>;
+
+  /**
+   * Reassigns leads in the system of record.
+   *
+   * Only for providers that own the leads Growth Center displays. Without it, changing an
+   * owner here is a local edit the next sync overwrites from the vendor's copy — the lead
+   * goes back to whoever held it and nothing says why.
+   *
+   * Reports per-record outcomes instead of throwing on the first refusal: a batch of a
+   * hundred can have one record the vendor rejects, and the ninety-nine it accepted have
+   * already been written. The caller needs to know which. Throws only for a failure that
+   * applies to the whole batch — a missing scope, an unresolvable address.
+   */
+  updateLeadOwners?(
+    credential: string,
+    updates: { externalId: string; ownerEmail: string }[],
+  ): Promise<{ written: string[]; failed: { externalId: string; reason: string }[] }>;
 }
 
 export type ConnectInput =

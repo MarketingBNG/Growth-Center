@@ -3,6 +3,7 @@ import { db } from './prisma.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
+import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
 
 // AI insights over Growth Center's own data.
@@ -43,13 +44,14 @@ export function aiStatus(): AiStatus {
  */
 export async function growthContext(days = 90) {
   const { current, previous } = rangeFor(days);
-  const [now, before, channels, campaigns, pipeline, statuses] = await Promise.all([
+  const [now, before, channels, campaigns, pipeline, statuses, workload] = await Promise.all([
     funnel(current),
     funnel(previous),
     channelPerformance(current),
     campaignPerformance(current),
     openPipeline(),
     db().lead.groupBy({ by: ['status'], _count: { _all: true } }),
+    ownerWorkload(),
   ]);
 
   return {
@@ -78,6 +80,13 @@ export async function growthContext(days = 90) {
       marketingSpend: Math.round(before.spend),
     },
     leadsByStatus: Object.fromEntries(statuses.map((s) => [s.status, s._count._all])),
+    // Who is carrying what. Absent until now, which meant the honest answer to "who has
+    // too many leads" was that the data could not say — the one question the team asked of
+    // this page that it had no figures for.
+    //
+    // All four counts per person, never just `open`, because `open` on its own is wrong in
+    // a specific and confident way: see the note on OwnerWorkload.notReachable.
+    leadOwners: workload,
     openPipeline: { deals: pipeline.count, value: Math.round(pipeline.total), weighted: Math.round(pipeline.weighted) },
     channels: channels.map((c) => ({
       name: c.name,
@@ -120,7 +129,19 @@ Rules:
 - Every money figure is in the currency named by the snapshot's \`currency\` field. Use
   that currency when you quote one, and never convert it.
 - Be specific and short. Name the channel or campaign and the figure that supports the point.
-- Do not recommend anything the data does not support.`;
+- Do not recommend anything the data does not support.
+
+About \`leadOwners\`:
+- \`open\` is not a workload. It counts every lead still open, and most of this firm's are
+  \`notReachable\` — calls that did not connect — or have never been worked at all. Never
+  call somebody overloaded on \`open\` alone; say which of the four figures you mean.
+- \`untouched\` is the CRM's own "Untouched Lead" status: arrived, nobody has worked it.
+  It is the only figure that represents leads waiting to be picked up.
+- \`active\` is open leads with a call or meeting logged in the last 30 days. It is the
+  closest thing here to what someone is really working.
+- Leads are shared out on \`untouched\` only, by the Rebalance action on the Leads page.
+  If asked to redistribute leads, say that is what does it — do not invent an allocation
+  of your own, and do not imply you have moved anything.`;
 
 export type AnswerResult =
   | { ok: true; answer: string; model: string; truncated?: boolean }

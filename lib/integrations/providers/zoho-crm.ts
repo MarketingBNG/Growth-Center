@@ -15,12 +15,19 @@ const DC = (process.env.ZOHO_DC ?? 'in').replace(/[^a-z.]/gi, '').toLowerCase() 
 
 const ACCOUNTS = `https://accounts.zoho.${DC}`;
 const API = `https://www.zohoapis.${DC}/crm/v6`;
-// tasks.UPDATE is the one write this app asks for: ticking a task off here has to reach
-// Zoho, or the next sync pulls the vendor's copy back over it. Everything else stays
-// read-only. An existing connection was authorised before this was added and does NOT
-// carry it — Zoho fixes scope at authorisation — so completing a task returns
-// OAUTH_SCOPE_MISMATCH until the integration is reconnected.
-const SCOPE = 'ZohoCRM.modules.READ,ZohoCRM.settings.READ,ZohoCRM.modules.tasks.UPDATE';
+// Two writes, and only two: ticking a task off, and changing a lead's owner. Both have to
+// reach Zoho or the next sync pulls the vendor's copy back over them. Everything else stays
+// read-only.
+//
+// users.READ comes with leads.UPDATE because it has to: Zoho names an owner by its own user
+// id, never by address, so a reassignment cannot be written without reading the user list
+// first.
+//
+// Zoho fixes scope at authorisation, so a connection authorised before a scope was added
+// does NOT carry it and the write fails with OAUTH_SCOPE_MISMATCH until somebody reconnects
+// the integration. That is what the errors below say, because reconnecting is the fix.
+const SCOPE =
+  'ZohoCRM.modules.READ,ZohoCRM.settings.READ,ZohoCRM.users.READ,ZohoCRM.modules.tasks.UPDATE,ZohoCRM.modules.leads.UPDATE';
 
 /** Zoho caps per_page at 200.
  *
@@ -47,6 +54,34 @@ async function accessToken(refreshToken: string): Promise<string> {
   if (json.error) throw new IntegrationError(`Zoho: ${json.error}`);
   if (!json.access_token) throw new IntegrationError('Zoho returned no access token.');
   return json.access_token;
+}
+
+/**
+ * Zoho's active users, keyed on lower-cased address.
+ *
+ * Needed because Zoho identifies a record's owner by its own user id and refuses an
+ * address: `Owner: { id }` is the only accepted shape. Read once per write batch rather
+ * than cached across requests — a token lives for an hour and the user list changes when
+ * somebody joins, which is exactly when a stale map would assign leads to a leaver.
+ */
+async function zohoUserIds(token: string): Promise<Map<string, string>> {
+  const res = await fetch(`${API}/users?type=ActiveUsers&per_page=200`, {
+    headers: { authorization: `Zoho-oauthtoken ${token}` },
+    signal: httpTimeout(),
+  });
+  if (res.status === 401 || res.status === 403) {
+    throw new IntegrationError(
+      'Zoho has not granted this app permission to read its user list. Reconnect Zoho CRM on the Integrations page.',
+    );
+  }
+  if (!res.ok) throw new IntegrationError(`Zoho user list request failed (${res.status}).`);
+
+  const json = (await res.json()) as { users?: { id?: unknown; email?: unknown }[] };
+  const byEmail = new Map<string, string>();
+  for (const user of json.users ?? []) {
+    if (typeof user.email === 'string' && user.id) byEmail.set(user.email.toLowerCase(), String(user.id));
+  }
+  return byEmail;
 }
 
 /** The fields each module is read with. Zoho v6 returns only what is asked for, so an
@@ -572,6 +607,85 @@ export const zohoCrm: IntegrationProvider = {
       }
       throw new IntegrationError(`Zoho refused the task update (${code}): ${row?.message ?? 'unknown error'}`);
     }
+  },
+
+  /**
+   * Reassigns leads in Zoho, which is what makes a reassignment here survive the night.
+   *
+   * Returns what Zoho accepted rather than throwing on the first refusal, so the caller can
+   * move exactly those leads locally and leave the rest alone. Throws only when the whole
+   * call failed — a bad token, a missing scope, an address that is nobody's — because those
+   * are conditions no per-record retry gets past.
+   */
+  async updateLeadOwners(credential, updates) {
+    if (!updates.length) return { written: [], failed: [] };
+
+    const { refreshToken } = JSON.parse(credential) as Stored;
+    const token = await accessToken(refreshToken);
+    const userIds = await zohoUserIds(token);
+
+    // Resolved up front, so an unknown address stops the run before anything is written
+    // rather than half way through it.
+    const unknown = [...new Set(updates.map((u) => u.ownerEmail.toLowerCase()))].filter(
+      (email) => !userIds.has(email),
+    );
+    if (unknown.length) {
+      throw new IntegrationError(
+        `Zoho has no active user for ${unknown.join(', ')}, so leads cannot be assigned to them.`,
+      );
+    }
+
+    const written: string[] = [];
+    const failed: { externalId: string; reason: string }[] = [];
+
+    // Zoho takes at most 100 records per write.
+    for (let i = 0; i < updates.length; i += 100) {
+      const chunk = updates.slice(i, i + 100);
+      const res = await fetch(`${API}/Leads`, {
+        method: 'PUT',
+        headers: {
+          authorization: `Zoho-oauthtoken ${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: chunk.map((u) => ({
+            id: u.externalId,
+            Owner: { id: userIds.get(u.ownerEmail.toLowerCase()) },
+          })),
+          // Zoho runs assignment rules and workflows on a write unless told not to. A
+          // rebalance that tripped the org's own round-robin rule would have its owner
+          // reassigned again on arrival, silently undoing the very thing being written.
+          trigger: [],
+        }),
+        signal: httpTimeout(),
+      });
+
+      const json = (await res.json().catch(() => null)) as
+        | { data?: { code?: string; message?: string; status?: string }[] }
+        | null;
+
+      // A scope failure is reported per record like any other, but it is not per record:
+      // it fails every write and is fixed in one place, so it is raised rather than
+      // collected as ninety-nine separate refusals.
+      const scopeError = json?.data?.some((r) => r.code === 'OAUTH_SCOPE_MISMATCH');
+      if (scopeError || res.status === 401 || res.status === 403) {
+        throw new IntegrationError(
+          'Zoho has not granted this app permission to change lead owners. Reconnect Zoho CRM on the Integrations page.',
+        );
+      }
+      if (!res.ok && !json?.data) {
+        throw new IntegrationError(`Zoho refused the lead reassignment (${res.status}).`);
+      }
+
+      // Rows come back in the order they were sent, so the index is the record.
+      chunk.forEach((u, k) => {
+        const row = json?.data?.[k];
+        if (row?.status === 'success') written.push(u.externalId);
+        else failed.push({ externalId: u.externalId, reason: row?.message ?? row?.code ?? 'unknown error' });
+      });
+    }
+
+    return { written, failed };
   },
 
   async getEntities(credential, _config, type) {

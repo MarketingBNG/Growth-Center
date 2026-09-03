@@ -2140,6 +2140,41 @@ export async function pushTaskStatus(
 }
 
 /**
+ * Pushes lead reassignments back to the integration that owns them.
+ *
+ * Every lead in this database came from a CRM sync, and the lead upsert writes `ownerEmail`
+ * from the vendor on every run — so a reassignment that only landed here is undone by the
+ * next nightly sync, with nothing on screen saying so. That makes this the load-bearing
+ * half of any rebalance, not an enhancement to it.
+ *
+ * Returns null when the provider owns no write path or is not connected, which is not a
+ * failure — it means there is nowhere to push to. Throws when the vendor was asked and
+ * refused outright, which the caller must not paper over.
+ */
+export async function pushLeadOwners(
+  providerId: string,
+  updates: { externalId: string; ownerEmail: string }[],
+): Promise<{ written: string[]; failed: { externalId: string; reason: string }[] } | null> {
+  const provider = getProvider(providerId);
+  if (!provider?.updateLeadOwners) return null;
+  if (!updates.length) return { written: [], failed: [] };
+
+  const integration = await db().integration.findUnique({
+    where: { provider: providerId },
+    select: {
+      id: true,
+      credential: { select: { ciphertext: true, iv: true, authTag: true, expiresAt: true } },
+    },
+  });
+  if (!integration?.credential) return null;
+
+  let credential = open(integration.credential);
+  credential = await renewIfNearExpiry(provider, integration.id, credential, integration.credential.expiresAt);
+
+  return provider.updateLeadOwners(credential, updates);
+}
+
+/**
  * Saves the non-secret settings a provider needs to sync — the ad account id, the GA4
  * property id. Separate from connect() because these are routinely corrected after the
  * OAuth handshake, and re-authorising to change a property id would be absurd.
