@@ -33,5 +33,9 @@ export const POST = route('ai:run', async (user, req) => {
     model: result.model,
     truncated: !!result.truncated,
     usage: result.usage,
+    // Without this the footer kept saying "from the growth snapshot only" under answers
+    // the model had gone to the database for — a claim about provenance that the page was
+    // making on its own, and getting wrong.
+    queries: result.queries,
   };
 });

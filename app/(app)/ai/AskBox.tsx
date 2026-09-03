@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { AnswerText } from '@/components/patterns/answer-text';
 import { AI_KEY_ENV, SUGGESTED_QUESTIONS } from '@/lib/enums';
 
 export function AskBox({ configured }: { configured: boolean }) {
@@ -14,6 +15,7 @@ export function AskBox({ configured }: { configured: boolean }) {
   const [truncated, setTruncated] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [usage, setUsage] = useState<{ input: number; output: number; total: number } | null>(null);
+  const [queries, setQueries] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +30,7 @@ export function AskBox({ configured }: { configured: boolean }) {
         model: string;
         truncated?: boolean;
         usage?: { input: number; output: number; total: number };
+        queries?: string[];
       }>('/api/ai/ask', {
         method: 'POST',
         json: { question: q.trim() },
@@ -36,6 +39,7 @@ export function AskBox({ configured }: { configured: boolean }) {
       setTruncated(!!result.truncated);
       setModel(result.model);
       setUsage(result.usage ?? null);
+      setQueries(result.queries ?? []);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -94,7 +98,7 @@ export function AskBox({ configured }: { configured: boolean }) {
 
         {answer ? (
           <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5">
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">{answer}</p>
+            <AnswerText text={answer} />
             {/* A cut-off answer used to be shown as if it were complete. */}
             {truncated ? (
               <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning">
@@ -104,7 +108,12 @@ export function AskBox({ configured }: { configured: boolean }) {
             ) : null}
             {model ? (
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Answered by {model} from the growth snapshot only.
+                {/* The wording has to follow what actually happened: "from the snapshot
+                    only" was a promise the answer no longer keeps once the model has read
+                    the database, and the reader is entitled to know which it was. */}
+                {queries.length
+                  ? `Answered by ${model} after ${queries.length} ${queries.length === 1 ? 'lookup' : 'lookups'} (${[...new Set(queries)].join(', ')}).`
+                  : `Answered by ${model} from the growth snapshot only.`}
                 {/* Every question spends real money and nothing on screen said how much,
                     so the only way to find out was the vendor's bill at the end of the
                     month. Output covers the model's reasoning as well as the text above,

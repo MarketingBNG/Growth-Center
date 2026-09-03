@@ -6,10 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { db, hasDb } from '@/lib/prisma';
 import { aiStatus, growthContext, ruleFindings } from '@/lib/ai';
 import { AI_KEY_ENV } from '@/lib/enums';
+import { TABLES } from '@/lib/ai-tools';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { AskBox } from './AskBox';
 
 export const metadata = { title: 'AI Insights · Growth Center' };
+
+const READABLE_TABLE_COUNT = Object.keys(TABLES).length;
 
 const KIND_TONE = {
   opportunity: 'success',
@@ -49,8 +52,8 @@ export default async function AiPage() {
 
       {status.configured ? (
         <div className="mb-4 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-xs text-success">
-          Connected to {status.provider} ({status.model}). Answers are generated from the growth
-          snapshot below and cite only figures contained in it.
+          Connected to {status.provider} ({status.model}). Answers come from the snapshot below
+          and from read-only queries against your own data — never from anything else.
         </div>
       ) : (
         <div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2.5 text-xs text-warning">
@@ -78,8 +81,13 @@ export default async function AiPage() {
             {/* Listed because this panel is the page's promise about what an answer can be
                 based on, and an omission here reads as "the model cannot see that". */}
             <p>· what each of {context.leadOwners.length} lead owners is carrying</p>
+            {/* This used to end "it has no database access and cannot look anything up
+                beyond this", which stopped being true the moment the read tools were added.
+                A panel whose whole job is to state the limits has to state the real ones. */}
             <p className="pt-1.5 text-foreground">
-              It has no database access and cannot look anything up beyond this.
+              Beyond the snapshot it can read the {READABLE_TABLE_COUNT} CRM tables directly to
+              look up records and totals — reading only. It cannot change anything, and it
+              cannot see the integration credentials or API keys.
             </p>
           </CardContent>
         </Card>
