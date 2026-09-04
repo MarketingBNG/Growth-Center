@@ -19,3 +19,8 @@ test-results
 # Meeting notes and transcripts. Kept locally: git history is permanent, and these are
 # recordings of named people.
 /New
+
+# Playwright scratch: throwaway specs and screenshots taken while verifying a page.
+# One of these was committed by accident, which is why it is written down.
+e2e/tmp/
+test-results/
