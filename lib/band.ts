@@ -277,7 +277,10 @@ export async function dashboardBand(
   // renewals to have their own card, and the reason is that the three are only meaningful
   // together: "New business" alone invites the reader to assume it is the whole book,
   // which is the misreading the split exists to end.
-  const WANTED = ['visitors', 'leads', 'revenue', 'newRevenue', 'repeatRevenue', 'cac', 'roas'];
+  // Unclassified sits with New and Repeat, not apart from them. The three are a partition
+  // of Revenue, and showing two of the three invites the reader to take them as the whole
+  // book — the same misreading the split was built to end.
+  const WANTED = ['visitors', 'leads', 'revenue', 'newRevenue', 'repeatRevenue', 'unclassifiedRevenue', 'cac', 'roas'];
   const picked = WANTED.map((key) => cards.find((c) => c.key === key)).filter(
     (c): c is Kpi => c !== undefined,
   );

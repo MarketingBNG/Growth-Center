@@ -600,9 +600,7 @@ function newBusinessHint(f: Funnel): string {
       `${money(f.inferredNewRevenue)} of it is inferred from account history, not stated in the name`,
     );
   }
-  if (f.unclassifiedRevenue > 0) {
-    parts.push(`${money(f.unclassifiedRevenue)} still sits on deals nothing here can place`);
-  }
+  // The unclassified remainder has its own card now, so it is not restated here.
   return parts.join('. ');
 }
 
@@ -631,6 +629,17 @@ export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; curren
     {
       key: 'repeatRevenue', label: 'Repeat business', value: now.repeatRevenue, previous: before.repeatRevenue, format: 'money', currency: now.currency, higherIsBetter: true,
       hint: 'Further work for an account already on the books. Real money, but not a return on this period’s acquisition spend',
+    },
+    {
+      // Shown as its own card rather than left to a footnote. Revenue, New and Repeat
+      // otherwise read as a complete partition of the book, and the shortfall between
+      // them is the kind of gap a reader silently attributes to rounding.
+      key: 'unclassifiedRevenue', label: 'Unclassified', value: now.unclassifiedRevenue, previous: before.unclassifiedRevenue, format: 'money', currency: now.currency,
+      // Down is the good direction, unlike every other money card here. This measures
+      // what the business cannot yet explain about its own revenue, so a fall means more
+      // of the book got classified — not that less was earned.
+      higherIsBetter: false,
+      hint: 'Won business that is neither confirmed new nor confirmed repeat — mostly the 887 deals loaded on the first day, where an account with no earlier deal proves nothing. New and Repeat add up to Revenue once this is included',
     },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend' },

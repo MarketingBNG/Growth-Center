@@ -80,6 +80,7 @@ export const KPI_SERIES: Record<string, KpiSeries[]> = {
   revenue: ['revenue'],
   newRevenue: ['revenue'],
   repeatRevenue: ['revenue'],
+  unclassifiedRevenue: ['revenue'],
   avgAccount: ['revenue'],
 
   customers: ['customers'],
