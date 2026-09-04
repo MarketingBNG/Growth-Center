@@ -44,16 +44,66 @@ export async function contentBoard() {
   };
 }
 
-export async function createContent(input: ContentInput) {
-  return db().contentPiece.create({
+/**
+ * `actorEmail` is who added the row, which is not `input.authorEmail` — that is whose
+ * voice the piece is written in, a property of the content. The two are often different
+ * people and only one of them is a fact about the system.
+ */
+export async function createContent(input: ContentInput, actorEmail: string) {
+  const piece = await db().contentPiece.create({
     data: { ...input, publishDate: input.publishDate ? new Date(input.publishDate) : null },
     select: { id: true },
   });
+
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'content.create',
+      entityType: 'content_piece',
+      entityId: piece.id,
+      detail: { title: input.title, status: input.status, format: input.format },
+    },
+  });
+
+  return piece;
 }
 
-export async function setContentStatus(id: string, status: (typeof CONTENT_STATUSES)[number]) {
-  const existing = await db().contentPiece.findUnique({ where: { id }, select: { status: true } });
+/**
+ * Moves a piece to a status and records who moved it.
+ *
+ * The record goes to `audit_event` rather than `activity`, which is where the equivalent
+ * lead and deal transitions write: activity rows hang off a lead, contact, company or
+ * opportunity, and a content piece is none of those. audit_event is already the generic
+ * entityType/entityId log and needs no migration to accept one more kind of subject.
+ *
+ * A no-op move writes nothing. Publishing is reachable from any status and still is —
+ * ordering the stages is §15.3 and a separate piece of work — but from here on, whoever
+ * published something is on the record.
+ */
+export async function setContentStatus(
+  id: string,
+  status: (typeof CONTENT_STATUSES)[number],
+  actorEmail: string,
+) {
+  const existing = await db().contentPiece.findUnique({
+    where: { id },
+    select: { status: true, title: true },
+  });
   if (!existing) return null;
+  if (existing.status === status) return { from: existing.status, to: status, unchanged: true };
+
   await db().contentPiece.update({ where: { id }, data: { status } });
-  return { from: existing.status, to: status };
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'content.status',
+      entityType: 'content_piece',
+      entityId: id,
+      // The title is copied in rather than joined at read time: a piece can be renamed
+      // or deleted, and the log has to still say what was published.
+      detail: { title: existing.title, from: existing.status, to: status },
+    },
+  });
+
+  return { from: existing.status, to: status, unchanged: false };
 }
