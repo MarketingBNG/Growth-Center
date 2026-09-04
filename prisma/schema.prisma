@@ -1100,6 +1100,32 @@ model ContentPiece {
 
   tags String[] @default([])
 
+  /// ── Approval (see lib/content-approval.ts) ────────────────────────────────────────
+  ///
+  /// §21.2: "Approve records her identity, the time and the exact card version she saw.
+  /// Return quotes the finding back to the author and keeps the SLA clock running."
+
+  /// Who approved it, when, and a hash of what they were looking at.
+  ///
+  /// The hash is the load-bearing part. Without it an approval says "Shweta approved
+  /// this piece", which stops being true the moment somebody edits the title or the
+  /// brief — the same problem the sequence registry solved, and solved this way.
+  approvedByEmail String?
+  approvedAt      DateTime?
+  approvedHash    String?
+
+  /// Sent back to its author with a reason, rather than approved.
+  ///
+  /// §21.2 requires the SLA clock to keep running through a return, so `returnedAt` is
+  /// not a reset — the age of the piece is still measured from when it entered review.
+  /// Both are cleared when it is approved.
+  returnedAt   DateTime?
+  returnedNote String?
+
+  /// When it entered review. The clock §21.2 refers to, and the reason a return cannot
+  /// simply restart it: bouncing a piece back would otherwise make it look new.
+  reviewStartedAt DateTime?
+
   campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())

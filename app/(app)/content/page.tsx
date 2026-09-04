@@ -4,6 +4,8 @@ import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { hasDb } from '@/lib/prisma';
+import { currentUser } from '@/lib/auth';
+import { can } from '@/lib/roles';
 import { contentBoard } from '@/lib/content';
 import { fmtCompact, fmtDate, fmtNumber } from '@/lib/format';
 import { NewContentButton } from './NewContentButton';
@@ -29,6 +31,12 @@ export default async function ContentPage() {
       </>
     );
   }
+
+  // §21.2's approving identity. The owner alone holds `approve`, so an admin can write
+  // and move a piece without being able to sign it off — which is the separation the
+  // permission was created for and, until this page, nothing used.
+  const user = await currentUser();
+  const canApprove = can(user?.role ?? 'user', 'approve');
 
   const { columns, totals, pieces } = await contentBoard();
 
@@ -92,7 +100,9 @@ export default async function ContentPage() {
                         leadsGenerated: p.leadsGenerated,
                         campaignName: p.campaign?.name ?? null,
                         url: p.url,
+                        approval: p.approval,
                       }}
+                      canApprove={canApprove}
                     />
                   ))}
                 </div>
