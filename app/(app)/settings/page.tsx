@@ -16,8 +16,9 @@ import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
 import { attributionHealth } from '@/lib/attribution';
+import { thresholds } from '@/lib/settings';
 import { ApiKeys } from './ApiKeys';
-import { AttributionThreshold } from './AttributionThreshold';
+import { Thresholds } from './Thresholds';
 import { CurrencySettings } from './CurrencySettings';
 import { RevokeKey } from './RevokeKey';
 
@@ -46,7 +47,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit, health] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health, limits] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -66,6 +67,7 @@ export default async function SettingsPage() {
     // The last year, so the figure shown beside the threshold is the one the Marketing
     // page's default range is judged against.
     attributionHealth(yearAgo(), new Date()),
+    thresholds(),
   ]);
 
   const ai = aiStatus();
@@ -118,25 +120,25 @@ export default async function SettingsPage() {
 
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle>Attribution</CardTitle>
+          <CardTitle>Thresholds</CardTitle>
           <p className="text-xs text-muted-foreground">
-            Channel figures — CAC, ROAS, revenue per channel — are computed over the records
-            that carry a channel. This is how much of the revenue that has to be before the
-            Marketing page presents them without a caveat.
+            The numbers the AI Insights rules compare against. Every one used to be a literal
+            in the source; each change here is recorded in the activity log below, because
+            lowering a threshold is how a finding stops being raised.
           </p>
         </CardHeader>
         <CardContent>
           {manageSettings ? (
-            <AttributionThreshold initial={health.threshold} coverage={health.revenue.percent} />
+            <Thresholds initial={limits} />
           ) : (
             <p className="text-xs text-muted-foreground">
-              Requires{' '}
-              <span className="font-medium text-foreground">{health.threshold}%</span> of revenue
-              to reach a channel; currently{' '}
+              Revenue attribution must reach{' '}
+              <span className="font-medium text-foreground">{health.threshold}%</span>; it is
+              currently{' '}
               <span className="font-medium text-foreground">
                 {health.revenue.percent === null ? '—' : `${health.revenue.percent.toFixed(1)}%`}
               </span>
-              . Only an owner can change this.
+              . Only an owner can change these.
             </p>
           )}
         </CardContent>

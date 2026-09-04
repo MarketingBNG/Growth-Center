@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import { db } from './prisma.ts';
 import { toResponseInputItems } from 'openai/lib/responses/ResponseInputItems';
-import { AI_KEY_ENV, INSIGHT_KINDS } from './enums.ts';
+import { AI_KEY_ENV } from './enums.ts';
 import { MAX_TOOL_ROUNDS, READ_TOOLS, TABLES, canRead, runReadTool } from './ai-tools.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
@@ -10,6 +10,8 @@ import { num } from './calc.ts';
 import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
 import { fingerprint, normaliseSubject, toResolve } from './insight-identity.ts';
+import { runRules, type RaisedFinding } from './insight-rules.ts';
+import type { Prisma } from './generated/prisma/client.ts';
 
 // AI insights over Growth Center's own data.
 //
@@ -459,21 +461,21 @@ export const asNumber = num;
 const FINDINGS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['findings'],
+  required: ['narrations'],
   properties: {
-    findings: {
+    narrations: {
       type: 'array',
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'subject', 'title', 'body', 'proposedAction', 'confidence'],
+        required: ['index', 'title', 'body'],
         properties: {
-          kind: { type: 'string', enum: [...INSIGHT_KINDS] },
-          subject: { type: 'string' },
+          // The rule's position in the list it was handed, so a narration can be matched
+          // back to the finding it describes. Asking for the subject instead invited the
+          // model to reword it, and a reworded subject is a different finding.
+          index: { type: 'integer' },
           title: { type: 'string' },
           body: { type: 'string' },
-          proposedAction: { type: 'string' },
-          confidence: { type: 'integer' },
         },
       },
     },
@@ -483,63 +485,61 @@ const FINDINGS_SCHEMA = {
 /** Validated rather than trusted. `strict` is the vendor's promise, and a row that reaches
  *  a Prisma enum column has to satisfy this side of the boundary too. */
 const findingsShape = z.object({
-  findings: z
+  narrations: z
     .array(
       z.object({
-        kind: z.enum(INSIGHT_KINDS),
-        subject: z.string().trim().min(1).max(120),
+        index: z.number().int().min(0),
         title: z.string().trim().min(1).max(200),
         body: z.string().trim().min(1).max(2000),
-        proposedAction: z.string().trim().min(1).max(400),
-        confidence: z.number().int().min(0).max(100),
       }),
     )
-    .max(12),
+    .max(40),
 });
 
-const INSIGHTS_SYSTEM = `${SYSTEM}
+const INSIGHTS_SYSTEM = `You are a growth analyst for BNG Advisors, a CFO-services firm.
 
-You are now writing standalone findings rather than answering a question. Return between
-three and six, ordered with the most consequential first.
+You will be given a numbered list of findings. Each was produced by a deterministic rule
+that has already run over the firm's data and decided the finding applies. Your job is to
+put each one into words. You are NOT deciding what is worth reporting, and you are not
+computing anything.
 
-- Every finding must name the figures it rests on, and those figures must be in the data.
-- \`subject\` is a short lowercase-hyphenated slug naming WHAT the finding is about, not
-  what it says about it: \`roas-below-one\`, \`facebook-leads-not-converting\`. It is an
-  identifier, so it must not contain figures that move between runs. If a subject in the
-  "Findings already open" list below describes the same issue, reuse that exact string —
-  that is how the page can tell a problem in its fourth month from a new one. Coin a new
-  subject only for an issue genuinely not in that list.
-- \`title\` is one line a busy person can act on. No preamble, under 90 characters.
-- \`body\` is two or three sentences: what the numbers say, and what follows from it.
-- \`proposedAction\` is ONE concrete step, imperative, that a named colleague could start
-  this week — "Re-map the 44 Trademark_Meta leads to a channel", not "improve
-  attribution". Propose the step; do not name who should do it, do not set a date, and do
-  not propose anything that changes spend, sends, or publishes. Someone here decides all
-  of that.
-- \`confidence\` is 0-100 and reflects how well the data supports the claim, not how
-  strongly you feel. A finding resting on a null or a single record does not deserve 90.
-- Prefer fewer, better findings. Three real ones beat six padded to fill the quota.
-- Do not repeat a finding the arithmetic already states plainly, such as the raw count of
-  leads in "new" or the size of the open pipeline.
-- \`leadOwners\` entries are colleagues, and these findings are read by their team. Refer to
-  a person by name, or as "they". Never infer anyone's gender from their name — the data
-  does not record it, and guessing it wrong about a named coworker is worse than the plain
+For every finding, return its \`index\` and:
+
+- \`title\`: one line a busy person can act on, under 90 characters, no preamble.
+- \`body\`: two or three sentences — what the figures say, and what follows from it.
+
+Rules, and they are absolute:
+
+- Every number you write must appear in that finding's \`evidence\`. Do not add a figure, do
+  not compute a new one from two that are there, do not convert, and do not round further
+  than the evidence already is. If evidence carries a \`basis\` note, it qualifies what the
+  numbers mean and you must not write a sentence that contradicts it.
+- Do not restate the threshold as if it were a target the firm chose for business reasons.
+  It is a setting.
+- Do not name who should do the work, do not set a date, and do not propose an action —
+  the rule has already written one.
+- Where evidence is null, that means "not computable", never zero.
+- Money figures are in the currency named in the evidence. Never convert one.
+- Return exactly one narration per finding you are given, and nothing for an index that
+  was not in the list.
+- Names in the data are colleagues, and these findings are read by their team. Refer to a
+  person by name or as "they". Never infer anyone's gender from their name — the data does
+  not record it, and guessing wrong about a named coworker is worse than the plain
   alternative.
-- Write figures the way a reader can take them in: thousands separated, so 1,295,976 rather
-  than 1295976.
-- A \`confidence\` above 90 says the data settles the point on its own. If your own \`body\`
-  admits the snapshot cannot explain something, or rests the claim on a single record or a
-  null, the figure belongs well below that.`;
+- Write figures the way a reader can take them in: 1,295,976 rather than 1295976.`;
 
-// A note on that last rule: it does not work. Measured over several runs, every finding
-// comes back between 95 and 99 — including ones whose own body says the snapshot cannot
-// explain what they describe. Self-reported confidence from this model is not calibrated,
-// and asking more firmly does not calibrate it.
+// A note on confidence, which used to be asked for here and no longer is.
 //
-// The rule stays because it is correct guidance and costs forty tokens. The column stays
-// because it records what the model claimed. But nothing renders it, and nothing should
-// start rendering it as though it ranked anything — sorting this page by `confidence` would
-// be sorting by noise.
+// Measured over several runs, every finding came back between 95 and 99 — including ones
+// whose own text admitted the snapshot could not explain what they described. Self-
+// reported confidence from this model is not calibrated, and asking more firmly did not
+// calibrate it. §20.7 wants a confidence that can gate, and a number that is always 97
+// gates nothing.
+//
+// The column stays, because it records what past runs claimed. But the model is no longer
+// asked: under the rules-first design it is not judging whether a finding applies, so its
+// confidence in one would be confidence in somebody else's decision. Severity comes from
+// the rule instead, which is a judgement made once, in code, that a person can read.
 
 export type GeneratedInsights = {
   written: number;
@@ -548,54 +548,219 @@ export type GeneratedInsights = {
 };
 
 /**
- * Asks the model for findings and reconciles them against the set already stored.
+ * Runs the rule library, has the model put each firing rule into words, and reconciles
+ * the result against what is already stored.
  *
- * Reconciles rather than replaces. The old behaviour deleted every generated row and
- * wrote a new one, which kept the text current — a finding describes the numbers as they
- * were — but threw away the only thing the page cannot recompute: how long this has been
- * true. A problem in its fourth month appeared as discovered this morning.
+ * ── Rules first, model second ─────────────────────────────────────────────────────────
  *
- * So a finding seen again keeps its identity and its first-seen date while its wording
- * and figures are refreshed; a finding no longer reported is marked resolved rather than
- * deleted; and a dismissal now survives, because it applies to a finding that is still
- * there. See lib/insight-identity.ts for what makes two findings the same finding.
+ * This used to hand the model a snapshot of the whole business and ask it to invent
+ * findings. That is the inverse of §20.1: the model decided what mattered, computed its
+ * own figures, and nothing recorded where a number came from. Both halves of "rules
+ * first, model second" existed in this file and were never connected — and it was the
+ * model half that was stored and shown.
  *
- * Seeded rows are left alone throughout — they are labelled samples and not ours to
- * delete.
+ * Now lib/insight-rules.ts decides. Each rule queries, compares against a stored
+ * threshold, and returns its figures as evidence. The model receives the evidence and
+ * writes a title and two sentences per finding. It is not asked which findings matter, it
+ * is not asked for a confidence in someone else's decision, and it cannot introduce a
+ * number — every figure in a narration must appear in the evidence it was given.
+ *
+ * ── Identity is kept ──────────────────────────────────────────────────────────────────
+ *
+ * A finding raised again keeps its first-seen date while its figures refresh; one no
+ * longer raised is marked resolved rather than deleted; a dismissal survives. See
+ * lib/insight-identity.ts. Seeded rows are left alone — they are labelled samples.
+ *
+ * ── When the model is unavailable ─────────────────────────────────────────────────────
+ *
+ * The findings are still written, in the rule's own wording. A rule decided these applied
+ * and that decision does not depend on a language model being reachable; storing nothing
+ * would report a clean workspace, which is the worst way for this to fail.
  */
 export async function generateInsights(context: GrowthContext): Promise<GeneratedInsights> {
+  const now = new Date();
+  const { current } = rangeFor(context.periodDays);
+  const raised = await runRules(current, now);
+
   const status = aiStatus();
-  if (!status.configured) throw new Error(status.reason);
 
-  const client = new OpenAI({ apiKey: process.env[AI_KEY_ENV] });
+  if (raised.length === 0) {
+    // Nothing fired, so everything previously raised is no longer true. Resolved rather
+    // than left standing as current.
+    await resolveMissing(new Set(), now);
+    return { written: 0, model: 'rules-only' };
+  }
 
-  // The subjects already open, handed to the model so recognising a recurring finding is
-  // a matching problem against a short list rather than free invention. Dismissed ones
-  // are included: the issue is still open, someone has just chosen not to act on it, and
-  // leaving it out would invite the model to coin a second subject for the same thing.
-  const open = await db().aiInsight.findMany({
-    where: { provider: { not: 'seed' }, resolvedAt: null, subject: { not: null } },
-    select: { subject: true, kind: true, title: true },
-    orderBy: { firstSeenAt: 'asc' },
-    take: 30,
+  let narrations = new Map<number, { title: string; body: string }>();
+  let usage: TokenUsage | undefined;
+
+  if (status.configured) {
+    try {
+      const result = await narrate(raised);
+      narrations = result.narrations;
+      usage = result.usage;
+    } catch (e) {
+      // Said out loud and carried on. The rule's own wording is worse prose and exactly
+      // as true, and throwing here would leave the page claiming nothing is wrong because
+      // a vendor was briefly unreachable.
+      console.error(`[insights] narration failed, storing rule wording: ${(e as Error).message}`);
+    }
+  }
+
+  type Narrated = RaisedFinding & { title: string; body: string };
+  const byFingerprint = new Map<string, Narrated>();
+
+  for (const [index, finding] of raised.entries()) {
+    const key = fingerprint(finding.kind, finding.subject);
+    // No usable subject means no identity, and a finding that cannot be recognised next
+    // run cannot be tracked, dismissed or closed. A rule producing one is a bug in the
+    // rule, so it is reported rather than stored half-working.
+    if (!key) {
+      console.error(`[insights] ${finding.ruleId} produced an unusable subject; skipped.`);
+      continue;
+    }
+    if (byFingerprint.has(key)) continue;
+
+    const narration = narrations.get(index);
+    byFingerprint.set(key, {
+      ...finding,
+      title: narration?.title ?? finding.test,
+      body: narration?.body ?? describeEvidence(finding),
+    });
+  }
+
+  const narrated = narrations.size > 0;
+
+  const row = (f: Narrated) => ({
+    kind: f.kind,
+    title: f.title,
+    body: f.body,
+    // 'rules' rather than 'openai' where the sentences are the rule's own. The badge on
+    // the page is the reader's only clue whether a human-sounding sentence was written by
+    // a model, and mislabelling that is worse than the plainer wording.
+    provider: narrated ? 'openai' : 'rules',
+    model: narrated ? MODEL : null,
+    subject: normaliseSubject(f.subject),
+    ruleId: f.ruleId,
+    ruleVersion: f.ruleVersion,
+    section: f.section,
+    severity: f.severity,
+    proposedAction: f.proposedAction,
+    evidence: f.evidence as Prisma.InputJsonValue,
+    periodStart: current.from,
+    periodEnd: current.to,
+    context: { periodDays: context.periodDays },
   });
 
-  const openSubjects = open.length
-    ? `\n\nFindings already open. Reuse the exact subject string where your finding is the same issue:\n${open
-        .map((o) => `- ${o.subject} (${o.kind}) — ${o.title}`)
-        .join('\n')}`
-    : '';
+  const seen = new Set(byFingerprint.keys());
+  const stored = await db().aiInsight.findMany({
+    where: { provider: { not: 'seed' } },
+    select: { id: true, fingerprint: true, resolvedAt: true },
+  });
+
+  // Interactive rather than the array form, for the timeout. Ten rules can raise thirty
+  // findings, each an upsert, and thirty round trips to a hosted Postgres do not fit in
+  // Prisma's 5-second default — the run failed with an expired transaction at 5,544ms.
+  // Still one transaction: a half-applied run would resolve findings whose replacements
+  // were never written, and the page would report a clean workspace.
+  await db().$transaction(
+    async (tx) => {
+      await tx.aiInsight.updateMany({
+        where: { id: { in: toResolve(stored, seen) } },
+        data: { resolvedAt: now },
+      });
+      // Rows with no fingerprint cannot be matched against this run — everything written
+      // before identity existed, and everything the old model-first path produced.
+      await tx.aiInsight.deleteMany({ where: { provider: { not: 'seed' }, fingerprint: null } });
+
+      for (const [key, f] of byFingerprint) {
+        await tx.aiInsight.upsert({
+          where: { fingerprint: key },
+          // firstSeenAt is untouched — that is the whole point — and resolvedAt is
+          // cleared, because a finding raised again is open again. `status` and
+          // `ownerEmail` are left alone: work somebody has already picked up does not go
+          // back to proposed because the rule fired again this morning. A rule's
+          // suggested owner therefore only applies when the finding is first created.
+          update: { ...row(f), lastSeenAt: now, resolvedAt: null },
+          create: {
+            ...row(f),
+            fingerprint: key,
+            firstSeenAt: now,
+            lastSeenAt: now,
+            ownerEmail: f.ownerEmail ?? null,
+          },
+        });
+      }
+    },
+    { timeout: 30_000, maxWait: 10_000 },
+  );
+
+  return { written: byFingerprint.size, usage, model: narrated ? MODEL : 'rules-only' };
+}
+
+/** Marks everything not in `seen` resolved. Split out because the nothing-fired path
+ *  needs it too, and that is the path most likely to be got wrong. */
+async function resolveMissing(seen: Set<string>, now: Date) {
+  const stored = await db().aiInsight.findMany({
+    where: { provider: { not: 'seed' } },
+    select: { id: true, fingerprint: true, resolvedAt: true },
+  });
+  const ids = toResolve(stored, seen);
+  if (ids.length === 0) return;
+  await db().aiInsight.updateMany({ where: { id: { in: ids } }, data: { resolvedAt: now } });
+}
+
+/**
+ * The rule's own wording, used when the model is unavailable or refused.
+ *
+ * Deliberately flat and a little mechanical. It reads as generated because it is, and a
+ * reader should be able to tell it apart from a narrated finding at a glance rather than
+ * by checking the provider badge.
+ */
+function describeEvidence(finding: RaisedFinding): string {
+  const parts = Object.entries(finding.evidence)
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== 'object')
+    .map(([k, v]) => `${spaced(k)}: ${typeof v === 'number' ? v.toLocaleString('en-US') : v}`);
+  return `${finding.test}. ${parts.join('. ')}.`;
+}
+
+/** camelCase to words, for that fallback wording. */
+function spaced(key: string): string {
+  const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * Hands the firing rules to the model and collects a title and body for each.
+ *
+ * The rules go over as JSON, evidence and all, because the evidence IS the permitted
+ * vocabulary — the prompt forbids any figure not in it, and a prose summary would hand
+ * the model numbers with no way to check them against anything.
+ */
+async function narrate(raised: RaisedFinding[]): Promise<{
+  narrations: Map<number, { title: string; body: string }>;
+  usage?: TokenUsage;
+}> {
+  const client = new OpenAI({ apiKey: process.env[AI_KEY_ENV] });
+
+  const input = raised.map((f, index) => ({
+    index,
+    severity: f.severity,
+    section: f.section,
+    what_the_rule_tests: f.test,
+    evidence: f.evidence,
+  }));
 
   const response = await client.responses.create({
     model: MODEL,
     instructions: INSIGHTS_SYSTEM,
-    input: `Growth data:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\`${openSubjects}`,
+    input: `Findings to narrate:\n\`\`\`json\n${JSON.stringify(input, null, 2)}\n\`\`\``,
     max_output_tokens: MAX_OUTPUT_TOKENS,
     reasoning: { effort: EFFORT },
     text: {
       format: {
         type: 'json_schema',
-        name: 'growth_findings',
+        name: 'growth_narrations',
         schema: FINDINGS_SCHEMA as unknown as Record<string, unknown>,
         strict: true,
       },
@@ -607,95 +772,31 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
   if (!raw) {
     throw new Error(
       response.incomplete_details?.reason === 'max_output_tokens'
-        ? 'The model used its entire output budget before writing any findings.'
-        : 'The model returned no findings.',
+        ? 'The model used its entire output budget before writing anything.'
+        : 'The model returned nothing.',
     );
   }
 
-  let parsed: z.infer<typeof findingsShape>;
-  try {
-    parsed = findingsShape.parse(JSON.parse(raw));
-  } catch (e) {
-    // The raw text is deliberately not written anywhere a page will render it — a
-    // half-formed finding shown as analysis is the one outcome this module exists to
-    // prevent.
-    throw new Error(`The model's findings did not match the expected shape: ${(e as Error).message}`);
-  }
+  const parsed = findingsShape.parse(JSON.parse(raw));
 
-  const usage = response.usage
-    ? {
-        input: response.usage.input_tokens,
-        output: response.usage.output_tokens,
-        total: response.usage.total_tokens,
-      }
-    : undefined;
-
-  if (!parsed.findings.length) return { written: 0, usage, model: MODEL };
-
-  const now = new Date();
-  const stored = await db().aiInsight.findMany({
-    where: { provider: { not: 'seed' } },
-    select: { id: true, fingerprint: true, resolvedAt: true },
-  });
-
-  // Two findings in one response can normalise to the same fingerprint — the model
-  // occasionally raises the same subject twice under one kind. Keeping the first means
-  // the upsert below never writes the same key twice in one transaction, which Postgres
-  // would reject and which would fail the whole run over a duplicate.
-  const byFingerprint = new Map<string, (typeof parsed.findings)[number]>();
-  const unidentified: typeof parsed.findings = [];
-  for (const finding of parsed.findings) {
-    const key = fingerprint(finding.kind, finding.subject);
-    if (!key) {
-      // No usable subject. Written as a plain row rather than dropped: the finding may
-      // still be worth reading, it simply cannot be tracked across runs.
-      unidentified.push(finding);
-    } else if (!byFingerprint.has(key)) {
-      byFingerprint.set(key, finding);
+  // An index the model invented is dropped rather than matched to whatever happens to sit
+  // at that position. Narrating finding 3 under finding 7's figures is the one failure
+  // mode worse than no narration at all.
+  const narrations = new Map<number, { title: string; body: string }>();
+  for (const n of parsed.narrations) {
+    if (n.index >= 0 && n.index < raised.length) {
+      narrations.set(n.index, { title: n.title, body: n.body });
     }
   }
 
-  const row = (f: (typeof parsed.findings)[number]) => ({
-    kind: f.kind,
-    title: f.title,
-    body: f.body,
-    provider: 'openai',
-    model: MODEL,
-    confidence: f.confidence,
-    subject: normaliseSubject(f.subject),
-    proposedAction: f.proposedAction,
-    context: { periodDays: context.periodDays },
-  });
-
-  // One transaction, so a failure cannot leave the page half-updated — findings resolved
-  // and their replacements unwritten, which would read as "the AI found nothing".
-  await db().$transaction([
-    // Everything this run no longer reports is marked resolved rather than deleted. "This
-    // stopped being true on the 4th" is worth more than the row's absence, and a finding
-    // that comes back is then recognisably the same one rather than a fresh discovery.
-    db().aiInsight.updateMany({
-      where: { id: { in: toResolve(stored, new Set(byFingerprint.keys())) } },
-      data: { resolvedAt: now },
-    }),
-    // Rows with no fingerprint cannot be matched against this run, so they are cleared
-    // the old way. Includes everything written before identity existed.
-    db().aiInsight.deleteMany({ where: { provider: { not: 'seed' }, fingerprint: null } }),
-    ...[...byFingerprint].map(([key, f]) =>
-      db().aiInsight.upsert({
-        where: { fingerprint: key },
-        // Seen again: the wording and figures are refreshed, firstSeenAt is not — that is
-        // the whole point — and resolvedAt is cleared, because a finding that has come
-        // back is open again. A dismissal is deliberately NOT cleared: someone judged
-        // this not worth acting on, and re-raising it on every run until the underlying
-        // number moves is how a page teaches people to ignore it.
-        update: { ...row(f), lastSeenAt: now, resolvedAt: null },
-        create: { ...row(f), fingerprint: key, firstSeenAt: now, lastSeenAt: now },
-      }),
-    ),
-    ...unidentified.map((f) =>
-      db().aiInsight.create({ data: { ...row(f), firstSeenAt: now, lastSeenAt: now } }),
-    ),
-  ]);
-
-  return { written: byFingerprint.size + unidentified.length, usage, model: MODEL };
+  return {
+    narrations,
+    usage: response.usage
+      ? {
+          input: response.usage.input_tokens,
+          output: response.usage.output_tokens,
+          total: response.usage.total_tokens,
+        }
+      : undefined,
+  };
 }

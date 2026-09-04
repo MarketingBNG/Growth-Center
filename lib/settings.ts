@@ -9,6 +9,14 @@ import {
 } from './currency.ts';
 import { fetchRates } from './fx.ts';
 import { TAGS, cached } from './cache.ts';
+import {
+  THRESHOLDS,
+  THRESHOLD_KEYS,
+  isThresholdKey,
+  parseThresholdValue,
+  type ThresholdKey,
+  type Thresholds,
+} from './thresholds.ts';
 
 // Workspace preferences. One row per key in app_setting, read as a block.
 //
@@ -85,3 +93,49 @@ export { rateAgeHours, RATE_STALE_HOURS };
  * currency shows up on the next screen rather than five minutes later.
  */
 export const currencySettings = cached('settings:currency', [TAGS.settings], readCurrencySettings);
+
+// ── Rule thresholds ───────────────────────────────────────────────────────────────────
+//
+// §20.5: "Thresholds live in a config table, editable by Shweta with the change
+// recorded. They are never hard-coded and never decided by the model." What each one
+// means and what it defaults to is in lib/thresholds.ts, which is pure so the settings
+// card can render it; the reading and writing are here, with the rest of app_setting.
+
+/**
+ * Read straight through, not cached.
+ *
+ * It was cached on the settings tag at first, and a saved threshold did not reach the
+ * rules: the floor was set to 99,999 and the run still raised all fifteen task-debt
+ * findings from the old value of 25. `revalidateTag` did not drop the `unstable_cache`
+ * entry, and a threshold nobody can see move is worse than useless — it makes the setting
+ * look broken while the rules quietly use the old number.
+ *
+ * Not worth caching anyway: ten rows fetched by primary key, read once per rule run and
+ * once per settings render. This file's own rule covers it — anything a user edits and
+ * expects to see change stays uncached and pays the round trip.
+ */
+export async function thresholds(): Promise<Thresholds> {
+  const out = Object.fromEntries(
+    THRESHOLD_KEYS.map((k) => [k, THRESHOLDS[k].default]),
+  ) as Thresholds;
+  if (!hasDb()) return out;
+
+  const rows = await db().appSetting.findMany({ where: { key: { in: THRESHOLD_KEYS } } });
+  for (const row of rows) {
+    if (isThresholdKey(row.key)) out[row.key] = parseThresholdValue(row.key, row.value);
+  }
+  return out;
+}
+
+export async function saveThreshold(key: ThresholdKey, value: unknown): Promise<number> {
+  const parsed = parseThresholdValue(key, value);
+  await db().appSetting.upsert({
+    where: { key },
+    // Stored as { value }: AppSetting.value is Json and every other key here holds an
+    // object. parseThresholdValue also reads `percent`, which is the shape the attribution
+    // threshold was written in before this existed.
+    create: { key, value: { value: parsed } },
+    update: { value: { value: parsed } },
+  });
+  return parsed;
+}

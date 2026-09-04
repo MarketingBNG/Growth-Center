@@ -27,9 +27,12 @@ test('nothing at all falls back to the default', () => {
   }
 });
 
-test('out of range is clamped rather than rejected', () => {
+// A percentage above 100 is clamped; a negative one is not. Both mean the person typing
+// meant something else, but 140 has an obvious intent and -20 does not — and a rule
+// comparing against a silently corrected 0 would fire on nothing forever.
+test('over 100 is clamped, and a negative falls back to the default', () => {
   assert.equal(parseThreshold(140), 100);
-  assert.equal(parseThreshold(-20), 0);
+  assert.equal(parseThreshold(-20), DEFAULT_THRESHOLD);
 });
 
 test('a fraction is rounded, so the comparison is against a whole percent', () => {

@@ -1,6 +1,7 @@
-import { db, hasDb } from './prisma.ts';
+import { db } from './prisma.ts';
 import { convert } from './currency.ts';
-import { currencySettings } from './settings.ts';
+import { currencySettings, thresholds } from './settings.ts';
+import { THRESHOLDS, parseThresholdValue } from './thresholds.ts';
 import { num, rate } from './calc.ts';
 import { TAGS, cached } from './cache.ts';
 
@@ -54,29 +55,27 @@ export type AttributionHealth = {
 };
 
 /**
- * The default floor, used until someone sets one.
+ * The threshold, and where it lives.
  *
- * 70% is a judgement, not a finding, and it is written here rather than buried in a
- * component so it can be argued with in one place. The reasoning: below this, the
- * unattributed remainder is large enough that it could reorder the channel table
- * outright, so a ranking drawn from the attributed part is not evidence about the whole.
- * This workspace sits at 37.5% and does not clear it.
+ * Read through lib/thresholds.ts, which owns every threshold in the application and its
+ * default. This module had its own copy first — a default, a parser and a reader — and
+ * two modules parsing one stored value is how they come to disagree about it: the older
+ * parser here read `{percent}` while the newer store writes `{value}`, so a threshold
+ * saved through one was invisible to the other.
+ *
+ * `DEFAULT_THRESHOLD` and `parseThreshold` are re-exported because the settings route and
+ * its tests already import them from here. The 70% judgement, and the reasoning behind
+ * it, now sit in lib/thresholds.ts alongside the other nine.
  */
-export const DEFAULT_THRESHOLD = 70;
-
 export const THRESHOLD_KEY = 'attribution.threshold';
 
-/** Clamped and rounded, because it comes from a text field and reaches a comparison. */
-export function parseThreshold(value: unknown): number {
-  const n = typeof value === 'number' ? value : Number((value as { percent?: unknown })?.percent);
-  if (!Number.isFinite(n)) return DEFAULT_THRESHOLD;
-  return Math.min(100, Math.max(0, Math.round(n)));
-}
+export const DEFAULT_THRESHOLD = THRESHOLDS[THRESHOLD_KEY].default;
+
+export const parseThreshold = (value: unknown): number =>
+  parseThresholdValue(THRESHOLD_KEY, value);
 
 export async function attributionThreshold(): Promise<number> {
-  if (!hasDb()) return DEFAULT_THRESHOLD;
-  const row = await db().appSetting.findUnique({ where: { key: THRESHOLD_KEY } });
-  return row ? parseThreshold(row.value) : DEFAULT_THRESHOLD;
+  return (await thresholds())[THRESHOLD_KEY];
 }
 
 const coverage = (covered: number, total: number): Coverage => ({
@@ -85,10 +84,12 @@ const coverage = (covered: number, total: number): Coverage => ({
   total,
 });
 
-async function readAttributionHealth(from: Date, to: Date): Promise<AttributionHealth> {
+/** Just the coverage. Expensive — four counts and two grouped sums over revenue — and
+ *  stale only as far as yesterday's snapshots, so this is the half worth caching. */
+async function readCoverage(from: Date, to: Date) {
   const window = { gte: from, lte: to };
 
-  const [leadTotal, leadCovered, dealTotal, dealCovered, revenueRows, threshold, fx] =
+  const [leadTotal, leadCovered, dealTotal, dealCovered, revenueRows, fx] =
     await Promise.all([
       db().lead.count({ where: { createdAt: window } }),
       db().lead.count({ where: { createdAt: window, channelId: { not: null } } }),
@@ -107,7 +108,6 @@ async function readAttributionHealth(from: Date, to: Date): Promise<AttributionH
         _sum: { amount: true },
         _count: { _all: true },
       }),
-      attributionThreshold(),
       currencySettings(),
     ]);
 
@@ -132,11 +132,33 @@ async function readAttributionHealth(from: Date, to: Date): Promise<AttributionH
     deals: coverage(dealCovered, dealTotal),
     revenue,
     currency: fx.reporting,
+  };
+}
+
+const cachedCoverage = cached('metrics:attribution-coverage', [TAGS.metrics], readCoverage);
+
+/**
+ * Coverage, plus the threshold it is judged against.
+ *
+ * The threshold is read outside the cache deliberately. Cached alongside the coverage it
+ * went stale: a saved threshold did not reach either the card or the rule, because
+ * `revalidateTag` does not drop an `unstable_cache` entry here — the same bug that made
+ * lib/settings.ts read thresholds straight through. The measurement is expensive and
+ * barely moves; the setting is one indexed row and moves the moment somebody changes it.
+ */
+export async function attributionHealth(from: Date, to: Date): Promise<AttributionHealth> {
+  const [measured, threshold] = await Promise.all([
+    cachedCoverage(from, to),
+    attributionThreshold(),
+  ]);
+
+  return {
+    ...measured,
     threshold,
     // Null, not false, with nothing to measure. A period with no revenue has not failed
     // an attribution standard, and greying out a channel table on that basis would be
     // reporting an empty month as a data-quality problem.
-    sufficient: revenue.percent === null ? null : revenue.percent >= threshold,
+    sufficient: measured.revenue.percent === null ? null : measured.revenue.percent >= threshold,
   };
 }
 
@@ -157,8 +179,3 @@ export function coverageCaveat(
   return `Built on ${money(covered)} of ${money(total)} — ${Math.round(percent ?? 0)}% of revenue reaches a channel, below the ${health.threshold}% this workspace requires. Treat the ranking as a hint, not a basis for moving budget.`;
 }
 
-export const attributionHealth = cached(
-  'metrics:attribution-health',
-  [TAGS.metrics, TAGS.settings],
-  readAttributionHealth,
-);

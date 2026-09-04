@@ -1155,6 +1155,32 @@ model AiInsight {
   /// that returns should be recognisably the same one.
   resolvedAt DateTime?
 
+  /// ── Provenance: which rule raised this, over what (see lib/insight-rules.ts) ──────
+  ///
+  /// §20.1: "Every insight originates in a deterministic rule over the metrics table. The
+  /// model narrates, prioritises and proposes; it never computes a number." These columns
+  /// are what make that checkable after the fact rather than a claim in a comment.
+
+  /// e.g. attribution_health_below_threshold. Null on a row no rule produced — the seeded
+  /// samples, and the findings written before the engine existed.
+  ruleId      String?
+  ruleVersion Int?
+
+  /// dashboard | leads | crm | pipeline | marketing | seo | ads | social | outreach |
+  /// content | analytics | tasks. Where the finding belongs, from the rule.
+  section String?
+
+  /// The figures the rule computed, and where they came from. Every number in the title
+  /// and narrative must appear here: the model is handed this and forbidden to introduce
+  /// a figure that is not in it, which is the only mechanical check on invention there
+  /// can be.
+  evidence Json?
+
+  /// The window the rule actually ran on. Not the same as createdAt, and the difference
+  /// matters when a finding is re-confirmed months later.
+  periodStart DateTime?
+  periodEnd   DateTime?
+
   /// ── The action lifecycle (see lib/insight-actions.ts) ─────────────────────────────
   ///
   /// §20.1: "Every insight becomes an action item with an owner, or it is dismissed with
@@ -1196,6 +1222,7 @@ model AiInsight {
   @@index([createdAt])
   @@index([resolvedAt])
   @@index([status])
+  @@index([ruleId])
   @@map("ai_insight")
 }
 
