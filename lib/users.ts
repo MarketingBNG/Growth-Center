@@ -7,9 +7,11 @@
 import { db, prisma } from './prisma.ts';
 import {
   ADMINS,
+  canAdminister,
   canonicalEmail,
   initialsOf,
   isAdmin,
+  isRole,
   nameFromEmail,
   pinnedName,
   type Role,
@@ -149,6 +151,24 @@ export async function renameUser(inputEmail: string, newName: string) {
   if (!name) throw new Error('A name is required.');
 
   return db().appUser.update({ where: { email }, data: { name, initials: initialsOf(name) } });
+}
+
+/**
+ * Changes someone's role.
+ *
+ * Refuses to take the last way back in off an admin account. `role` is not enforced yet
+ * (see ROLES_ENFORCED in lib/roles.ts), so this guard protects a future state rather than
+ * today's — which is the point of setting the roles up before switching tiers on, and the
+ * reason the check asks POLICY rather than can().
+ */
+export async function setRole(inputEmail: string, role: Role) {
+  const email = canonicalEmail(inputEmail);
+  if (!email) throw new Error(`Not a valid company address: ${inputEmail}`);
+  if (!isRole(role)) throw new Error(`Not a role: ${role}`);
+  if (isAdmin(email) && !canAdminister(role)) {
+    throw new Error(`An admin account must keep a role that can manage settings.`);
+  }
+  return db().appUser.update({ where: { email }, data: { role } });
 }
 
 /** Everyone who can own a lead, deal or task. */

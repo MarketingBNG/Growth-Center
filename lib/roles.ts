@@ -45,6 +45,29 @@ export function pinnedName(email: string | null | undefined): string | null {
   return ADMINS.find((a) => a.email === canonical)?.name ?? null;
 }
 
+/**
+ * Every assignable role, widest access first. The Team page renders this list, and the
+ * settings API validates against it, so a role added here needs no second edit — but it
+ * does need a matching value in the `Role` enum in prisma/schema.prisma.
+ */
+export const ROLES: { value: Role; label: string; blurb: string }[] = [
+  { value: 'partner', label: 'Partner', blurb: 'Everything, including settings and API keys.' },
+  { value: 'controller', label: 'Controller', blurb: 'Everything, including settings and API keys.' },
+  { value: 'manager', label: 'Manager', blurb: 'Campaigns, outreach, integrations and the AI. No settings.' },
+  { value: 'member', label: 'Member', blurb: 'Edit records and content. No spend, no sending.' },
+  { value: 'viewer', label: 'Viewer', blurb: 'Read only.' },
+];
+
+export const ROLE_VALUES = ROLES.map((r) => r.value);
+
+export function isRole(value: unknown): value is Role {
+  return typeof value === 'string' && (ROLE_VALUES as string[]).includes(value);
+}
+
+export function roleLabel(role: Role): string {
+  return ROLES.find((r) => r.value === role)?.label ?? role;
+}
+
 export type Permission =
   | 'growth:read'
   | 'crm:write'
@@ -79,9 +102,20 @@ const POLICY: Record<Permission, Role[]> = {
   'settings:manage': ['partner', 'controller'],
 };
 
+export const PERMISSIONS = Object.keys(POLICY) as Permission[];
+
 /** What POLICY says, ignoring whether it is currently enforced. Used by the Team page. */
 export function wouldAllow(role: Role, permission: Permission): boolean {
   return POLICY[permission].includes(role);
+}
+
+/**
+ * Would someone holding this role still be able to reach the Team page and undo a role
+ * change? Asked of POLICY rather than of can(), deliberately: the guards that use this
+ * must hold for the day tiers are switched on, not only for today.
+ */
+export function canAdminister(role: Role): boolean {
+  return wouldAllow(role, 'settings:manage');
 }
 
 /**

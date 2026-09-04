@@ -11,6 +11,7 @@ import { hasDb } from '@/lib/prisma';
 import { ADMIN_EMAILS, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin, pinnedName } from '@/lib/roles';
 import { fmtRelative } from '@/lib/format';
 import { ensureAdmins, listUsers } from '@/lib/users';
+import { RoleSelect } from './RoleSelect';
 import { TeamActions } from './TeamActions';
 
 export const metadata = { title: 'Team · Growth Center' };
@@ -62,10 +63,10 @@ async function TeamBody() {
             <CardTitle>Everyone has full access</CardTitle>
             <p className="text-[11px] text-muted-foreground">
               Role tiers are switched off: every signed-in person can manage integrations, mint
-              API keys and edit any record. The <code className="font-mono">role</code> column is
-              still recorded, so tiers can be turned back on in{' '}
-              <code className="font-mono">lib/roles.ts</code> without losing data. Until then,
-              revoking access is the only control on this page.
+              API keys and edit any record, whatever role they hold. Roles set here are recorded
+              and audited now so they are already correct on the day tiers are switched on in{' '}
+              <code className="font-mono">lib/roles.ts</code> — until then, treat the Role column
+              as a plan, and revoking access as the only control that bites.
             </p>
           </CardHeader>
         </Card>
@@ -88,6 +89,7 @@ async function TeamBody() {
               <TR>
                 <TH>Name</TH>
                 <TH>Email</TH>
+                <TH>Role</TH>
                 <TH>Status</TH>
                 <TH>Last seen</TH>
                 <TH>First signed in</TH>
@@ -97,7 +99,7 @@ async function TeamBody() {
             <TBody>
               {people.length === 0 ? (
                 <TR>
-                  <TD colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <TD colSpan={7} className="py-8 text-center text-muted-foreground">
                     Nobody has signed in yet.
                   </TD>
                 </TR>
@@ -114,6 +116,14 @@ async function TeamBody() {
                       </span>
                     </TD>
                     <TD className="font-mono text-xs text-muted-foreground">{p.email}</TD>
+                    <TD>
+                      <RoleSelect
+                        email={p.email}
+                        role={p.role}
+                        isSelf={p.email === me?.email}
+                        isAdmin={isAdmin(p.email)}
+                      />
+                    </TD>
                     <TD>
                       <Badge tone={p.active ? 'success' : 'neutral'}>
                         {p.active ? 'active' : 'revoked'}

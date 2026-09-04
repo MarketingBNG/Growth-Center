@@ -2,21 +2,22 @@ import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { db } from '@/lib/prisma';
-import { canonicalEmail, isAdmin } from '@/lib/roles';
-import { renameUser, setActive } from '@/lib/users';
+import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/roles';
+import { renameUser, setActive, setRole } from '@/lib/users';
 
 const input = z
   .object({
     email: z.string().trim().email(),
     active: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
+    role: z.enum(ROLE_VALUES as [Role, ...Role[]]).optional(),
   })
-  .refine((v) => v.active !== undefined || v.name !== undefined, {
+  .refine((v) => v.active !== undefined || v.name !== undefined || v.role !== undefined, {
     message: 'Nothing to change.',
   });
 
 export const PATCH = route('settings:manage', async (user, req) => {
-  const { email, active, name } = await body(req, input);
+  const { email, active, name, role } = await body(req, input);
 
   const target = canonicalEmail(email);
   if (!target) throw new HttpError(422, 'Not a company address.');
@@ -30,6 +31,24 @@ export const PATCH = route('settings:manage', async (user, req) => {
           action: 'user.rename',
           entityType: 'app_user',
           detail: { email: target, name },
+        },
+      });
+    }
+
+    if (role !== undefined) {
+      // Same reasoning as the revoke guard below: demoting yourself out of settings
+      // access could leave nobody able to put it back, and there is no tier above.
+      if (target === user.email && !canAdminister(role)) {
+        throw new HttpError(422, 'You cannot move yourself to a role that cannot manage settings.');
+      }
+
+      await setRole(target, role);
+      await db().auditEvent.create({
+        data: {
+          actorEmail: user.email,
+          action: 'user.role',
+          entityType: 'app_user',
+          detail: { email: target, role },
         },
       });
     }
