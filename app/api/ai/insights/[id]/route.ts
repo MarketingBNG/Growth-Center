@@ -1,42 +1,41 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { db } from '@/lib/prisma';
+import { INSIGHT_STATUSES } from '@/lib/insight-lifecycle';
+import { TransitionError, setInsightStatus } from '@/lib/insight-actions';
 
-// Dismissing a finding, and undoing that.
+// Moving a finding through its lifecycle: proposed → reviewed → assigned → in progress →
+// done, or dismissed with a reason at almost any point.
 //
-// `dismissedAt` has been filtered on by both pages that render insights since the column
-// existed, and nothing ever wrote it — so the filter was a no-op and there was no way to
-// clear a finding you had decided not to act on. It only becomes worth having now that
-// findings survive a regeneration: before, a dismissal lasted until the next run.
+// Everything the transition implies — the owner, the note, `dismissedAt`, the audit row —
+// is written by setInsightStatus rather than here, so the HTTP layer cannot produce a
+// state the domain would refuse.
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export const PATCH = route<unknown, Ctx>('ai:run', async (user, req, ctx) => {
   const { id } = await ctx.params;
-  const input = await body(req, z.object({ dismissed: z.boolean() }));
+  const input = await body(
+    req,
+    z.object({
+      status: z.enum(INSIGHT_STATUSES),
+      ownerEmail: z.string().trim().email().optional().nullable(),
+      reviewNote: z.string().trim().max(1000).optional().nullable(),
+    }),
+  );
 
-  const insight = await db().aiInsight.findUnique({
-    where: { id },
-    select: { id: true, title: true, dismissedAt: true },
-  });
-  if (!insight) throw new HttpError(404, 'No such insight.');
-
-  const dismissedAt = input.dismissed ? new Date() : null;
-  await db().aiInsight.update({ where: { id }, data: { dismissedAt } });
-
-  // Recorded because dismissing a finding is a judgement that it is not worth acting on,
-  // and the next person to wonder why the page is quiet about something is entitled to
-  // find out who decided that.
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: input.dismissed ? 'insight.dismiss' : 'insight.restore',
-      entityType: 'ai_insight',
-      entityId: id,
-      detail: { title: insight.title },
-    },
-  });
-
-  return { id, dismissedAt };
+  try {
+    const result = await setInsightStatus(
+      id,
+      { to: input.status, ownerEmail: input.ownerEmail, reviewNote: input.reviewNote },
+      user.email,
+    );
+    if (!result) throw new HttpError(404, 'No such insight.');
+    return result;
+  } catch (e) {
+    // 422, not 500: a refused transition is the domain working. The message is the one
+    // the rule wrote, because it says which requirement was missed.
+    if (e instanceof TransitionError) throw new HttpError(422, e.message);
+    throw e;
+  }
 });

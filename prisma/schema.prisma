@@ -1155,12 +1155,47 @@ model AiInsight {
   /// that returns should be recognisably the same one.
   resolvedAt DateTime?
 
+  /// ── The action lifecycle (see lib/insight-actions.ts) ─────────────────────────────
+  ///
+  /// §20.1: "Every insight becomes an action item with an owner, or it is dismissed with
+  /// a written reason. No orphan commentary."
+
+  /// proposed | reviewed | assigned | in_progress | done | dismissed.
+  ///
+  /// The single truth about where a finding stands. `dismissedAt` is kept as the
+  /// timestamp for the dismissed state and is only ever written beside this column, by
+  /// setInsightStatus — two fields that can disagree about one fact is this repository's
+  /// documented failure mode.
+  status String @default("proposed")
+
+  /// critical | high | medium | info. Null until a rule sets it: the current findings
+  /// come from a model that was never asked to grade them, and inventing a severity for
+  /// them here would be exactly the computation §20.1 forbids the model.
+  severity String?
+
+  /// One concrete step, imperative. Written by the model.
+  proposedAction String?
+
+  /// Who is meant to act. A company address, checked against the addresses that actually
+  /// appear as users or as CRM record owners — the manual's role map names six people
+  /// (Gaurav, Kriti, Dakshita, Abhuday, Islam, Riyaz) who hold no account here and own no
+  /// records, so a mapping written from those names would resolve to nobody.
+  ownerEmail String?
+
+  /// Recorded on every transition, and required to dismiss. The reason a finding was let
+  /// go is the part worth keeping: without it a quiet page cannot be told apart from a
+  /// page whose findings were all judged and closed.
+  reviewNote      String?
+  reviewedByEmail String?
+  reviewedAt      DateTime?
+
   dismissedAt DateTime?
 
   createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([resolvedAt])
+  @@index([status])
   @@map("ai_insight")
 }
 

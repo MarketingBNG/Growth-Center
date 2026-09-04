@@ -8,8 +8,10 @@ import { aiStatus, growthContext, ruleFindings } from '@/lib/ai';
 import { AI_KEY_ENV } from '@/lib/enums';
 import { TABLES } from '@/lib/ai-tools';
 import { ageLabel } from '@/lib/insight-identity';
+import { STATUS_LABELS, isInsightStatus } from '@/lib/insight-lifecycle';
+import { assignableOwners } from '@/lib/insight-actions';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
-import { DismissInsight } from './DismissInsight';
+import { InsightAction } from './InsightAction';
 import { AskBox } from './AskBox';
 
 export const metadata = { title: 'AI Insights · Growth Center' };
@@ -34,7 +36,7 @@ export default async function AiPage() {
   }
 
   const status = aiStatus();
-  const [context, stored] = await Promise.all([
+  const [context, stored, owners] = await Promise.all([
     growthContext(90),
     // Dismissed findings are listed too, below the rest. Hiding them entirely was the
     // old intent, but nothing could dismiss anything, so nobody discovered that a
@@ -51,9 +53,11 @@ export default async function AiPage() {
       ],
       select: {
         id: true, kind: true, title: true, body: true, provider: true, confidence: true,
-        dismissedAt: true, firstSeenAt: true,
+        dismissedAt: true, firstSeenAt: true, status: true, ownerEmail: true,
+        reviewNote: true, proposedAction: true,
       },
     }),
+    assignableOwners(),
   ]);
 
   const now = new Date();
@@ -155,6 +159,8 @@ export default async function AiPage() {
               </p>
             ) : stored.map((i) => {
               const age = ageLabel(i.firstSeenAt, now);
+              const state = isInsightStatus(i.status) ? i.status : 'proposed';
+              const ownerName = owners.find((o) => o.email === i.ownerEmail);
               return (
                 <div
                   key={i.id}
@@ -167,20 +173,43 @@ export default async function AiPage() {
                       <Badge tone={i.provider === 'seed' ? 'warning' : 'purple'}>
                         {i.provider === 'seed' ? 'sample' : i.provider}
                       </Badge>
-                      {i.provider === 'seed' ? null : (
-                        <DismissInsight id={i.id} dismissed={i.dismissedAt !== null} title={i.title} />
-                      )}
                     </span>
                   </div>
                   <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{i.body}</p>
-                  {/* How long this has been true is the thing regeneration used to throw
-                      away, and it is often the most useful fact on the row: a finding in
-                      its second month is a different conversation from one raised today. */}
-                  {age || i.dismissedAt ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground/80">
-                      {[age, i.dismissedAt ? 'Dismissed' : null].filter(Boolean).join(' · ')}
+
+                  {i.proposedAction ? (
+                    <p className="mt-1.5 text-[11px] leading-relaxed">
+                      <span className="text-muted-foreground">Proposed: </span>
+                      {i.proposedAction}
                     </p>
                   ) : null}
+
+                  {/* State, age, owner and the reason it was let go, on one line. How long
+                      this has been true is often the most useful fact on the row — a
+                      finding in its second month is a different conversation from one
+                      raised today — and it is the thing regeneration used to throw away. */}
+                  <p className="mt-1 text-[11px] text-muted-foreground/80">
+                    {[
+                      STATUS_LABELS[state],
+                      age,
+                      i.ownerEmail ? `${ownerName?.name ?? i.ownerEmail}` : null,
+                      i.reviewNote,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+
+                  {/* Seeded rows are labelled samples and are not real work, so they get
+                      no lifecycle — assigning one to a colleague would be assigning them
+                      demo data. */}
+                  {i.provider === 'seed' ? null : (
+                    <InsightAction
+                      id={i.id}
+                      status={state}
+                      owners={owners}
+                      currentOwner={i.ownerEmail}
+                    />
+                  )}
                 </div>
               );
             })}

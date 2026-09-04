@@ -35,6 +35,7 @@ const PHRASING: Record<string, string> = {
   'content.status': 'moved a content piece',
   'insight.dismiss': 'dismissed a finding',
   'insight.restore': 'restored a finding',
+  'insight.status': 'moved a finding',
   'integration.configure': 'reconfigured an integration',
   'integration.connect': 'connected an integration',
   'integration.disconnect': 'disconnected an integration',

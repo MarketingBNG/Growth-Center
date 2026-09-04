@@ -466,12 +466,13 @@ const FINDINGS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'subject', 'title', 'body', 'confidence'],
+        required: ['kind', 'subject', 'title', 'body', 'proposedAction', 'confidence'],
         properties: {
           kind: { type: 'string', enum: [...INSIGHT_KINDS] },
           subject: { type: 'string' },
           title: { type: 'string' },
           body: { type: 'string' },
+          proposedAction: { type: 'string' },
           confidence: { type: 'integer' },
         },
       },
@@ -489,6 +490,7 @@ const findingsShape = z.object({
         subject: z.string().trim().min(1).max(120),
         title: z.string().trim().min(1).max(200),
         body: z.string().trim().min(1).max(2000),
+        proposedAction: z.string().trim().min(1).max(400),
         confidence: z.number().int().min(0).max(100),
       }),
     )
@@ -509,6 +511,11 @@ three and six, ordered with the most consequential first.
   subject only for an issue genuinely not in that list.
 - \`title\` is one line a busy person can act on. No preamble, under 90 characters.
 - \`body\` is two or three sentences: what the numbers say, and what follows from it.
+- \`proposedAction\` is ONE concrete step, imperative, that a named colleague could start
+  this week — "Re-map the 44 Trademark_Meta leads to a channel", not "improve
+  attribution". Propose the step; do not name who should do it, do not set a date, and do
+  not propose anything that changes spend, sends, or publishes. Someone here decides all
+  of that.
 - \`confidence\` is 0-100 and reflects how well the data supports the claim, not how
   strongly you feel. A finding resting on a null or a single record does not deserve 90.
 - Prefer fewer, better findings. Three real ones beat six padded to fill the quota.
@@ -656,6 +663,7 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     model: MODEL,
     confidence: f.confidence,
     subject: normaliseSubject(f.subject),
+    proposedAction: f.proposedAction,
     context: { periodDays: context.periodDays },
   });
 
