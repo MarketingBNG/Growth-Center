@@ -6,6 +6,7 @@ import { channelPerformance, funnel, openPipeline, windowFor, type Range } from 
 import { campaignPerformance, campaignTotals } from './campaigns.ts';
 import { leadSourceLabel } from './integrations/crm-mapping.ts';
 import { fairShare } from './calc.ts';
+import { insightHealth } from './insight-health.ts';
 
 // Reports are compositions of the SAME functions the pages use. Nothing here recomputes
 // a metric its own way, which is what stops an exported report from disagreeing with the
@@ -80,11 +81,15 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
     convert(Number(amount ?? 0), currency, fx) ?? 0;
 
   if (id === 'executive') {
-    const [now, before, pipeline, channels] = await Promise.all([
+    const [now, before, pipeline, channels, health] = await Promise.all([
       funnel(current),
       funnel(previous),
       openPipeline(),
       channelPerformance(current),
+      // §21.6 puts these on the weekly pack rather than on a screen, and the reason is
+      // that they are about the process, not the business: nobody opens a dashboard to
+      // check whether their own queue is being worked.
+      insightHealth(current.from, current.to),
     ]);
     return {
       ...base,
@@ -139,6 +144,31 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
           columns: ['Channel', 'Spend', 'Leads', 'Customers', 'New revenue', 'ROAS'],
           align: ['left', 'right', 'right', 'right', 'right', 'right'],
           rows: channels.map((c) => [c.name, money(c.spend), int(c.leads), int(c.customers), money(c.revenue), ratio(c.roas)]),
+        },
+        {
+          kind: 'table',
+          title: 'Insight engine health',
+          columns: ['Measure', 'Now', 'Healthy', 'If it drifts'],
+          align: ['left', 'right', 'left', 'left'],
+          // A metric with no figure prints why, in the value column, instead of a dash
+          // that reads as zero. The deferral rate is permanently in that state until
+          // claim checks exist, and §21.6 says a zero there is a defect — so it must
+          // never be shown as one.
+          rows: health.metrics.map((m) => [
+            m.label,
+            m.value === null
+              ? 'Not measured'
+              : m.format === 'percent'
+                ? pct(m.value)
+                : `${m.value}h`,
+            m.healthy,
+            m.unavailable ?? m.basis ?? m.drift,
+          ]),
+        },
+        {
+          kind: 'note',
+          title: 'What these four numbers are for',
+          body: `${health.open} findings are open. The rates above describe how the queue is being worked, not how the business is doing: a closure rate that falls means the queue is producing work nobody does, and a dismissal rate near zero means findings are being waved through rather than judged.`,
         },
       ],
     };

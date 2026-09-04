@@ -355,6 +355,26 @@ export async function applyAllocation(actorEmail: string, options: PlanOptions =
           leadId: move.leadId,
         })),
       }),
+      // One row for the act itself, alongside the per-lead history.
+      //
+      // The Activity rows above are the right record for a lead — "how did this lead get
+      // to me" is answerable from the lead. But a rebalance of two thousand leads is one
+      // decision by one person, and recorded only as two thousand rows it is invisible as
+      // a decision: there is nothing to find unless you already know which lead to open.
+      // Not a duplicate of the Activity rows, a different fact at a different grain.
+      db().auditEvent.create({
+        data: {
+          actorEmail,
+          action: 'leads.rebalance',
+          entityType: 'lead',
+          detail: {
+            leadsMoved: applied.length,
+            owners: byOwner.size,
+            rule: 'equal split of untouched leads',
+            ...(failed.length ? { failedToWriteBack: failed.length } : {}),
+          },
+        },
+      }),
     ]);
   }
 

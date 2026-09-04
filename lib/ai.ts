@@ -11,6 +11,7 @@ import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
 import { fingerprint, normaliseSubject, toResolve } from './insight-identity.ts';
 import { runRules, type RaisedFinding } from './insight-rules.ts';
+import { notifyNewFindings } from './insight-notify.ts';
 import type { Prisma } from './generated/prisma/client.ts';
 
 // AI insights over Growth Center's own data.
@@ -658,6 +659,17 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     select: { id: true, fingerprint: true, resolvedAt: true },
   });
 
+  // Which of these the workspace has not seen before. Worked out here, before the upsert
+  // writes them, because afterwards every one of them exists and the question cannot be
+  // asked. A finding that was raised, resolved, and has now come back counts as new: it
+  // is news again.
+  const known = new Set(
+    stored.filter((r) => r.fingerprint && !r.resolvedAt).map((r) => r.fingerprint!),
+  );
+  const fresh = [...byFingerprint]
+    .filter(([key]) => !known.has(key))
+    .map(([, f]) => ({ severity: f.severity, title: f.title }));
+
   // Interactive rather than the array form, for the timeout. Ten rules can raise thirty
   // findings, each an upsert, and thirty round trips to a hosted Postgres do not fit in
   // Prisma's 5-second default — the run failed with an expired transaction at 5,544ms.
@@ -694,6 +706,16 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     },
     { timeout: 30_000, maxWait: 10_000 },
   );
+
+  // After the transaction, not inside it: a notification is not part of the finding, and
+  // a bell entry for a run that then rolled back would point at nothing. A failure to
+  // notify is logged and does not fail the run — the findings are stored, which is the
+  // part that matters.
+  try {
+    await notifyNewFindings(fresh);
+  } catch (e) {
+    console.error(`[insights] could not notify: ${(e as Error).message}`);
+  }
 
   return { written: byFingerprint.size, usage, model: narrated ? MODEL : 'rules-only' };
 }

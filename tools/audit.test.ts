@@ -82,3 +82,33 @@ test('a detail worth showing wins over the subject', () => {
 test('a row with neither renders empty rather than throwing', () => {
   assert.equal(describeRow({ detail: null, entityId: null }), '');
 });
+
+// ── Record changes, merged in from the activity table ─────────────────────────────────
+//
+// The activity log reads both tables. Its phrasing map has to cover the `record.*`
+// actions the merge synthesises, or every lead status change in the log reads as its own
+// enum value.
+
+test('every record action the merge can produce has a phrasing', () => {
+  // The ActivityType values that carry an actorEmail — the ones a person causes. `created`
+  // and `synced` come from the importer and are filtered out before they reach here.
+  const byPeople = [
+    'status_changed',
+    'owner_changed',
+    'note_added',
+    'task_completed',
+    'stage_changed',
+    'converted',
+  ];
+  for (const type of byPeople) {
+    const action = `record.${type}`;
+    assert.notEqual(phraseAction(action), action, `${action} falls back to its own name`);
+  }
+});
+
+// The prefix is what stops a synthesised action colliding with a real one — an activity
+// of type `status_changed` and a settings action named `status_changed` would otherwise
+// share a row in the phrasing map and one would silently win.
+test('a record action reads differently from a settings action', () => {
+  assert.notEqual(phraseAction('record.status_changed'), phraseAction('content.status'));
+});

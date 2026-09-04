@@ -37,6 +37,13 @@ const PHRASING: Record<string, string> = {
   'insight.restore': 'restored a finding',
   'insight.status': 'moved a finding',
   'integration.configure': 'reconfigured an integration',
+  'leads.rebalance': 'rebalanced the lead queue',
+  'record.converted': 'converted a lead',
+  'record.note_added': 'added a note',
+  'record.owner_changed': 'reassigned a record',
+  'record.stage_changed': 'moved a deal',
+  'record.status_changed': 'changed a status',
+  'record.task_completed': 'completed a task',
   'integration.connect': 'connected an integration',
   'integration.disconnect': 'disconnected an integration',
   'settings.threshold': 'changed a threshold',
@@ -106,19 +113,87 @@ function format(value: unknown): string {
   return '';
 }
 
-/** The most recent entries, newest first. Indexed on createdAt. */
+/**
+ * The most recent entries, newest first — from BOTH tables.
+ *
+ * `auditEvent` records administrative acts: a role change, a key, a threshold, a
+ * rebalance. Changes to records — a lead's status, a deal's stage, a task ticked off —
+ * were never written there, and the first instinct was to start writing them. That would
+ * have been wrong: they are already recorded, as `activity` rows carrying the actor, the
+ * from and the to, attached to the record they describe. Two tables recording one fact is
+ * this repository's documented failure mode, and the duplicate would have drifted.
+ *
+ * So the gap was never the writes. It was that this reader could only see one of the two,
+ * and a log that shows who changed a threshold but not who reassigned two thousand leads
+ * is not an activity log. They are merged here, at read time, and the merge is the only
+ * place that knows about both.
+ *
+ * Fetched `limit` from each and then trimmed: taking 25 from each would show a quiet
+ * fortnight of settings changes beside this morning's record edits, which is not what
+ * "the last fifty things that happened" means.
+ */
 export async function recentAuditEvents(limit = 50): Promise<AuditRow[]> {
-  return db().auditEvent.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    select: {
-      id: true,
-      actorEmail: true,
-      action: true,
-      entityType: true,
-      entityId: true,
-      detail: true,
-      createdAt: true,
-    },
-  });
+  const [events, activity] = await Promise.all([
+    db().auditEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        actorEmail: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        detail: true,
+        createdAt: true,
+      },
+    }),
+    // Only rows with an actor. The sync writes `activity` too — 25,156 rows of imported
+    // lead history — and none of it is somebody in this workspace doing something. An
+    // activity log filled with the nightly import is a log nobody reads.
+    db().activity.findMany({
+      where: { actorEmail: { not: null }, source: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        actorEmail: true,
+        type: true,
+        summary: true,
+        detail: true,
+        createdAt: true,
+        leadId: true,
+        contactId: true,
+        companyId: true,
+        opportunityId: true,
+      },
+    }),
+  ]);
+
+  const fromActivity: AuditRow[] = activity.map((a) => ({
+    id: a.id,
+    actorEmail: a.actorEmail!,
+    // Prefixed so the phrasing map cannot collide with an auditEvent action of the same
+    // name, and so an unrecognised one still reads as a record change rather than as a
+    // setting change.
+    action: `record.${a.type}`,
+    entityType: a.opportunityId
+      ? 'opportunity'
+      : a.leadId
+        ? 'lead'
+        : a.companyId
+          ? 'company'
+          : a.contactId
+            ? 'contact'
+            : 'record',
+    entityId: a.opportunityId ?? a.leadId ?? a.companyId ?? a.contactId ?? null,
+    // The summary is better than anything summariseDetail could build from the JSON —
+    // "Status changed from new to contacted" is already the sentence — so it is used as
+    // the detail directly.
+    detail: a.detail ?? { name: a.summary },
+    createdAt: a.createdAt,
+  }));
+
+  return [...events, ...fromActivity]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
 }

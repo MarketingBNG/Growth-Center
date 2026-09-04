@@ -76,6 +76,12 @@ export const THRESHOLDS = {
     default: 90,
     hint: 'A customer won this long ago with no activity logged since — no review asked for, no referral, no contact.',
   },
+  'insights.approvalSlaHours': {
+    label: 'Decision SLA on a finding',
+    unit: 'hours',
+    default: 24,
+    hint: '§21.6 wants time from insight to approval under 24 hours. Findings decided inside this count as on time.',
+  },
   'marketing.pacingTolerance': {
     label: 'Budget pacing tolerance',
     unit: '%',

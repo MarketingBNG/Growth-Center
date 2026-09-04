@@ -289,9 +289,12 @@ export default async function SettingsPage() {
           <CardHeader>
             <CardTitle>Activity log</CardTitle>
             <p className="text-[11px] text-muted-foreground">
-              Who changed what, newest first. Records connections, keys, roles, access,
-              the reporting currency and content moves. Records are never edited or
-              removed, so this is the answer to a question asked months later.
+              Who changed what, newest first. Both the administrative acts — connections,
+              keys, roles, access, thresholds, currency — and changes to records: a lead
+              reassigned, a deal moved, a task ticked off. Those come from the activity
+              trail on the records themselves rather than being written twice, and the
+              nightly import is filtered out. Nothing here is edited or removed, so this is
+              the answer to a question asked months later.
             </p>
           </CardHeader>
           {audit.length > 0 ? (
