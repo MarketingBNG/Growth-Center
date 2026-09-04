@@ -10,6 +10,7 @@ import { can } from '@/lib/roles';
 import { db, hasDb } from '@/lib/prisma';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { aiStatus } from '@/lib/ai';
+import { describeRow, phraseAction, recentAuditEvents } from '@/lib/audit';
 import { AI_KEY_ENV } from '@/lib/enums';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
@@ -35,7 +36,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -51,6 +52,7 @@ export default async function SettingsPage() {
     // Refreshed on read as well as on the cron, so opening the page after a quiet
     // week converts at today's rate rather than last week's.
     refreshRatesIfStale(),
+    manageSettings ? recentAuditEvents(50) : Promise.resolve([]),
   ]);
 
   const ai = aiStatus();
@@ -241,6 +243,52 @@ export default async function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      {manageSettings ? (
+        <Card className="mt-4 overflow-hidden">
+          <CardHeader>
+            <CardTitle>Activity log</CardTitle>
+            <p className="text-[11px] text-muted-foreground">
+              Who changed what, newest first. Records connections, keys, roles, access,
+              the reporting currency and content moves. Records are never edited or
+              removed, so this is the answer to a question asked months later.
+            </p>
+          </CardHeader>
+          {audit.length > 0 ? (
+            <TableWrap>
+              <Table>
+                <THead>
+                  <TR>
+                    <TH>When</TH>
+                    <TH>Who</TH>
+                    <TH>What</TH>
+                    <TH>Detail</TH>
+                  </TR>
+                </THead>
+                <TBody>
+                  {audit.map((e) => (
+                    <TR key={e.id}>
+                      <TD className="whitespace-nowrap text-muted-foreground">
+                        {fmtRelative(e.createdAt)}
+                      </TD>
+                      <TD className="whitespace-nowrap font-medium">
+                        {e.actorEmail.split('@')[0]}
+                      </TD>
+                      <TD>{phraseAction(e.action)}</TD>
+                      <TD className="text-muted-foreground">{describeRow(e) || '—'}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </TableWrap>
+          ) : (
+            <p className="px-5 pb-5 text-xs text-muted-foreground">
+              Nothing recorded yet. Entries appear as people connect sources, change roles
+              and move content.
+            </p>
+          )}
+        </Card>
+      ) : null}
     </>
   );
 }
