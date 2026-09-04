@@ -97,6 +97,19 @@ export type Rule = {
   /** One line saying what the rule tests, shown next to the finding and handed to the
    *  model as the frame for its narration. */
   test: string;
+  /**
+   * Whether the rule measures a period's activity or a condition that holds right now.
+   *
+   * Declared rather than inferred, because the two are not distinguishable by reading a
+   * rule's query and the difference decides whether firing is correct. An overdue task is
+   * overdue whatever range the dashboard is showing; revenue attribution for Q1 is a
+   * statement about Q1. Seven of these eleven turned out to be standing rules, which was
+   * not obvious to anybody — including to me, until the eval suite asked the question by
+   * running every rule over a window in 1990 and eight of them fired.
+   *
+   * `standing` is a claim, and the claim is that firing on any window is correct.
+   */
+  scope: 'period' | 'standing';
   run: (ctx: RuleContext) => Promise<Finding[]>;
 };
 
@@ -115,6 +128,7 @@ const daysAgo = (now: Date, days: number) => hoursAgo(now, days * 24);
 
 const attributionRule: Rule = {
   id: 'attribution_health_below_threshold',
+  scope: 'period',
   version: 1,
   section: 'dashboard',
   severity: 'high',
@@ -149,6 +163,7 @@ const attributionRule: Rule = {
 
 const staleDealsRule: Rule = {
   id: 'stale_deals',
+  scope: 'standing',
   version: 1,
   section: 'pipeline',
   severity: 'medium',
@@ -189,6 +204,7 @@ const staleDealsRule: Rule = {
           openDeals: open.length,
           staleDeals: stale.length,
           stalePercent: round(share),
+          basis: 'stalePercent is a share of open deals, not of all deals',
           staleAfterDays: ctx.thresholds['pipeline.staleDays'],
           dealsWithAnyActivityLogged: open.filter((d) => d.activities.length > 0).length,
         },
@@ -202,6 +218,7 @@ const staleDealsRule: Rule = {
 
 const leadSlaRule: Rule = {
   id: 'lead_sla_breach',
+  scope: 'period',
   version: 1,
   section: 'leads',
   severity: 'high',
@@ -209,7 +226,13 @@ const leadSlaRule: Rule = {
   test: 'New leads with nothing logged against them past the first-contact SLA',
   async run(ctx) {
     const sla = ctx.thresholds['leads.slaHours'];
-    const cutoff = hoursAgo(ctx.now, sla);
+    // Whichever comes first: the SLA cutoff, or the end of the window being reported on.
+    // It was the cutoff alone, which is right for a window ending today and wrong for any
+    // other — a report about January would have counted a lead that arrived last week,
+    // because `gte: ctx.from` with an upper bound of two days ago spans everything
+    // between. Found by the eval suite running every rule over a window in 1990.
+    const slaCutoff = hoursAgo(ctx.now, sla);
+    const cutoff = slaCutoff < ctx.to ? slaCutoff : ctx.to;
 
     // Only leads old enough to have breached. A lead created an hour ago with no activity
     // is not late, and counting it would make the figure a measure of intake rather than
@@ -248,6 +271,7 @@ const leadSlaRule: Rule = {
 
 const taskDebtRule: Rule = {
   id: 'task_debt',
+  scope: 'standing',
   version: 1,
   section: 'tasks',
   severity: 'medium',
@@ -283,6 +307,7 @@ const taskDebtRule: Rule = {
 
 const syncStaleRule: Rule = {
   id: 'sync_stale_or_failed',
+  scope: 'standing',
   version: 1,
   section: 'analytics',
   severity: 'high',
@@ -328,6 +353,7 @@ const syncStaleRule: Rule = {
 
 const seoCtrRule: Rule = {
   id: 'high_impression_low_ctr_page',
+  scope: 'standing',
   version: 1,
   section: 'seo',
   severity: 'medium',
@@ -353,6 +379,7 @@ const seoCtrRule: Rule = {
         impressions: p.impressions,
         clicks: p.clicks,
         ctrPercent: round(p.ctr),
+        basis: 'ctrPercent is this one page’s click-through, not the site’s',
         averagePosition: round(p.avgPosition),
         impressionFloor,
         ctrFloor,
@@ -364,6 +391,7 @@ const seoCtrRule: Rule = {
 
 const renewalRule: Rule = {
   id: 'renewal_without_task',
+  scope: 'standing',
   version: 1,
   section: 'crm',
   severity: 'high',
@@ -411,6 +439,7 @@ const renewalRule: Rule = {
 
 const dormantCustomerRule: Rule = {
   id: 'review_or_referral_not_requested',
+  scope: 'standing',
   version: 1,
   section: 'crm',
   severity: 'medium',
@@ -439,6 +468,7 @@ const dormantCustomerRule: Rule = {
           dormantCustomers: dormant,
           activeCustomers: total,
           dormantPercent: round(rate(dormant, total)),
+          basis: 'dormantPercent is a share of active customers, not of all customers ever won',
           dormantAfterDays: days,
         },
         proposedAction:
@@ -450,6 +480,7 @@ const dormantCustomerRule: Rule = {
 
 const pacingRule: Rule = {
   id: 'spend_off_pace',
+  scope: 'period',
   version: 1,
   section: 'marketing',
   severity: 'high',
@@ -497,6 +528,7 @@ const pacingRule: Rule = {
 
 const envelopeRule: Rule = {
   id: 'spend_over_envelope',
+  scope: 'period',
   version: 1,
   section: 'marketing',
   severity: 'high',
@@ -538,6 +570,7 @@ const envelopeRule: Rule = {
 
 const placeholderRule: Rule = {
   id: 'template_placeholder',
+  scope: 'standing',
   version: 1,
   section: 'outreach',
   severity: 'critical',

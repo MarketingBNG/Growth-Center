@@ -19,6 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types \"tools/*.test.ts\"",
     "db:verify": "node --experimental-strip-types tools/verify-seed.ts",
+    "eval": "node --experimental-strip-types --env-file-if-exists=.env.local tools/eval.ts",
+    "eval:free": "node --experimental-strip-types --env-file-if-exists=.env.local tools/eval.ts --free",
     "smoke": "node --experimental-strip-types tools/smoke.ts",
     "smoke:metrics": "node --experimental-strip-types tools/smoke-metrics.ts",
     "shots": "playwright test e2e/shots.spec.ts",
