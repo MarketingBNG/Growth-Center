@@ -18,7 +18,11 @@ export type NavSection = {
 // than in the nav list. They are workspace configuration, opened occasionally, and mixing
 // them into the daily modules made the list longer without making anything easier to
 // find — the same reason every app of this shape puts them behind the account button.
+// The Glossary sits here for the same reason: it is reference, looked up when two reports
+// disagree, not a daily module. It is readable by everyone — a definition nobody can look
+// up is a definition people guess at, which is what Appendix C exists to stop.
 export const ACCOUNT_NAV: NavItem[] = [
+  { label: 'Glossary', href: '/glossary', icon: 'BookOpen' },
   { label: 'Settings', href: '/settings', icon: 'Settings' },
   { label: 'Integrations', href: '/integrations', icon: 'Plug' },
   { label: 'Team', href: '/team', icon: 'UserCog' },

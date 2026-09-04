@@ -17,6 +17,7 @@ import {
   type ThresholdKey,
   type Thresholds,
 } from './thresholds.ts';
+import { GLOSSARY_SLUGS, ownerKey, parseOwner } from './glossary.ts';
 
 // Workspace preferences. One row per key in app_setting, read as a block.
 //
@@ -125,6 +126,48 @@ export async function thresholds(): Promise<Thresholds> {
     if (isThresholdKey(row.key)) out[row.key] = parseThresholdValue(row.key, row.value);
   }
   return out;
+}
+
+// ── Glossary owners ───────────────────────────────────────────────────────────────────
+//
+// Appendix C's third column. Stored per term rather than in one row, so a change to one
+// term's owner is one audited write naming that term, and two people editing different
+// terms do not overwrite each other.
+
+/** Every term's owner override, keyed by slug. Absent means the default stands. */
+export async function glossaryOwners(): Promise<Record<string, string>> {
+  if (!hasDb()) return {};
+  const rows = await db().appSetting.findMany({
+    where: { key: { in: GLOSSARY_SLUGS.map(ownerKey) } },
+  });
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const slug = row.key.slice('glossary.owner.'.length);
+    const owner = parseOwner(row.value);
+    if (owner) out[slug] = owner;
+  }
+  return out;
+}
+
+/**
+ * Writes an owner, or clears the override when the field is emptied.
+ *
+ * Cleared by deleting the row rather than storing an empty string, so "no override" has
+ * one representation and the default is what a reader sees.
+ */
+export async function saveGlossaryOwner(slug: string, value: unknown): Promise<string | null> {
+  const owner = parseOwner(value);
+  const key = ownerKey(slug);
+  if (!owner) {
+    await db().appSetting.deleteMany({ where: { key } });
+    return null;
+  }
+  await db().appSetting.upsert({
+    where: { key },
+    create: { key, value: { owner } },
+    update: { value: { owner } },
+  });
+  return owner;
 }
 
 export async function saveThreshold(key: ThresholdKey, value: unknown): Promise<number> {

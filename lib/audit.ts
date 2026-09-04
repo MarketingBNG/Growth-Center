@@ -51,6 +51,7 @@ const PHRASING: Record<string, string> = {
   'integration.disconnect': 'disconnected an integration',
   'settings.threshold': 'changed a threshold',
   'settings.currency': 'changed the reporting currency',
+  'settings.glossary': 'reassigned a definition',
   'user.activate': 'restored access',
   'user.deactivate': 'revoked access',
   'user.rename': 'renamed someone',
