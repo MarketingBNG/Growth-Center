@@ -52,7 +52,23 @@ test('describe_tables lists the tables without touching the database', async () 
   const result = await runReadTool('describe_tables', {});
 
   assert.equal(result.ok, true);
-  assert.deepEqual(result.data, TABLES);
+  const listed = result.data as Record<string, string>;
+  assert.deepEqual(Object.keys(listed), Object.keys(TABLES));
+  for (const [table, purpose] of Object.entries(TABLES)) {
+    assert.ok(listed[table].startsWith(purpose), table);
+  }
+});
+
+// The withheld fields are named in the list, not only in the per-table detail and not only
+// in a refusal. A model that learns a field is unreadable by being refused spends a round
+// trip finding out and reports it to the reader as an error rather than as a limit.
+test('the table list says which fields are withheld', async () => {
+  const result = await runReadTool('describe_tables', {});
+  const listed = (result as { data: Record<string, string> }).data;
+
+  assert.match(listed.lead, /Withheld and not readable: .*email/);
+  // A table with nothing redacted gets no such sentence, so its absence means something.
+  assert.ok(!listed.opportunity.includes('Withheld'));
 });
 
 test('describe_tables gives fields for a named table', async () => {

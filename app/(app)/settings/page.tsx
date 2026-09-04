@@ -20,6 +20,7 @@ import { thresholds } from '@/lib/settings';
 import { ApiKeys } from './ApiKeys';
 import { Thresholds } from './Thresholds';
 import { CurrencySettings } from './CurrencySettings';
+import { VerifyEmail } from './VerifyEmail';
 import { RevokeKey } from './RevokeKey';
 
 export const metadata = { title: 'Settings · Growth Center' };
@@ -88,7 +89,7 @@ export default async function SettingsPage() {
       detail: 'APP_ENCRYPTION_KEY — integrations cannot be connected without it',
     },
     { label: 'AI insights', ok: ai.configured, required: false, detail: AI_KEY_ENV },
-    { label: 'Outreach sending', ok: email.sends, required: false, detail: email.detail },
+    { label: 'Email sending', ok: email.sends, required: false, detail: email.detail },
   ];
 
   return (
@@ -167,6 +168,15 @@ export default async function SettingsPage() {
                     ) : null}
                   </p>
                   <p className="text-[11px] text-muted-foreground">{e.detail}</p>
+                  {/* Only under the email row, and only for someone who can act on it.
+                      "Configured" and "the server accepts these credentials" are
+                      different claims, and the digest not arriving is the only symptom
+                      either way. */}
+                  {e.label === 'Email sending' && manageSettings ? (
+                    <div className="mt-1.5">
+                      <VerifyEmail configured={email.smtpConfigured} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}

@@ -256,9 +256,11 @@ export async function ask(question: string, context: GrowthContext): Promise<Ans
         max_output_tokens: MAX_OUTPUT_TOKENS,
         reasoning: { effort: EFFORT },
         text: { verbosity: VERBOSITY },
-        // Nothing here should outlive the request. The snapshot carries named leads, owner
-        // addresses and revenue, and so do the rows a query returns — no copy of any of it
-        // belongs in a vendor dashboard once the question is answered.
+        // Nothing here should outlive the request. Client names, contact details and free
+        // text are withheld by lib/ai-redaction.ts and never reach this call at all, but
+        // what does reach it — staff addresses, revenue, the pipeline, the rows a query
+        // returns — is still the firm's business and belongs in no vendor's dashboard once
+        // the question is answered.
         store: false,
       });
 

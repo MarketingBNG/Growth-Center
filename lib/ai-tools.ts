@@ -14,6 +14,14 @@
 // the question any better than fifty rows and a count.
 
 import { prisma } from './prisma.ts';
+import {
+  describeRedactions,
+  omitFor,
+  redactedInFields,
+  redactedInFilter,
+  refusal,
+  withoutRedacted,
+} from './ai-redaction.ts';
 
 /** Hard ceiling on rows from one call, whatever the model asks for. */
 export const MAX_ROWS = 50;
@@ -217,12 +225,27 @@ export async function runReadTool(name: string, args: Record<string, unknown>): 
   try {
     if (name === 'describe_tables') {
       const asked = Array.isArray(args.tables) ? (args.tables as unknown[]).filter((t): t is string => typeof t === 'string') : [];
-      if (!asked.length) return { ok: true, data: TABLES };
+      if (!asked.length) {
+        // The withheld fields are named in the table list too, not only in the detail. A
+        // model that learns a field is unreadable only by being refused spends a round
+        // trip finding out, and reports it to the reader as an error rather than a limit.
+        return {
+          ok: true,
+          data: Object.fromEntries(
+            Object.entries(TABLES).map(([t, purpose]) => [t, `${purpose}${describeRedactions(t)}`]),
+          ),
+        };
+      }
 
       const described: Record<string, { purpose: string; fields: string }> = {};
       for (const t of asked) {
         if (!(t in TABLES)) return unknownTable(t);
-        described[t] = { purpose: TABLES[t], fields: FIELDS[t] ?? '(unknown)' };
+        described[t] = {
+          purpose: `${TABLES[t]}${describeRedactions(t)}`,
+          // Withheld fields are removed from the signature as well as refused at query
+          // time. Listing a field and then refusing it invites the model to keep trying.
+          fields: withoutRedacted(t, FIELDS[t] ?? '(unknown)'),
+        };
       }
       return { ok: true, data: described };
     }
@@ -242,6 +265,30 @@ export async function runReadTool(name: string, args: Record<string, unknown>): 
       return { ok: false, error: `Unknown tool "${name}".` };
     }
 
+    // ── Redaction, before anything touches the database ─────────────────────────────
+    //
+    // Filtering and grouping are checked as well as the returned columns. `count` with a
+    // `where` on an email reveals the address it was asked about, and `group` by email
+    // lists every one of them as though it were a total. Refused, not silently dropped: a
+    // filter removed without a word turns a question about one person into a figure about
+    // everybody, and the answer would read as though it had been honoured.
+    const filtered = redactedInFilter(args.table, args.where);
+    if (filtered) return { ok: false, error: refusal(args.table, filtered) };
+
+    const selected = redactedInFields(args.table, args.select);
+    if (selected) return { ok: false, error: refusal(args.table, selected) };
+
+    const grouped = redactedInFields(args.table, args.by);
+    if (grouped) return { ok: false, error: refusal(args.table, grouped) };
+
+    const summed = redactedInFields(args.table, args.sum);
+    if (summed) return { ok: false, error: refusal(args.table, summed) };
+
+    // Ordering leaks too, if less obviously: sorting by email and reading the ids back
+    // recovers the alphabetical order of the addresses, one query at a time.
+    const ordered = redactedInFields(args.table, args.orderBy);
+    if (ordered) return { ok: false, error: refusal(args.table, ordered) };
+
     const model = delegateFor(args.table);
     if (!model) return { ok: false, error: 'The database is not reachable, so nothing can be read.' };
 
@@ -253,6 +300,12 @@ export async function runReadTool(name: string, args: Record<string, unknown>): 
       const rows = await model.findMany({
         where: args.where ?? undefined,
         select: args.select ?? undefined,
+        // `omit` and `select` are mutually exclusive in Prisma, and they do not need to
+        // coexist: a `select` has already been checked field by field above, so anything
+        // it asks for is allowed. `omit` is for the default case, where no select means
+        // every scalar column — which is where the identifying ones would otherwise ride
+        // along unasked for.
+        ...(args.select ? {} : { omit: omitFor(args.table) }),
         orderBy: args.orderBy ?? undefined,
         take: clamp(args.take, DEFAULT_ROWS),
       });
