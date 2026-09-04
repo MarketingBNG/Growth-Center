@@ -151,6 +151,7 @@ model Channel {
   leads     Lead[]
   revenue   RevenueEntry[]
   opportunities Opportunity[]
+  envelopes BudgetEnvelope[]
 
   createdAt DateTime @default(now())
 
@@ -213,6 +214,58 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 
   @@map("app_setting")
+}
+
+/// What the firm intends to spend on a channel in a period. §22: Akshay "sets the budget
+/// envelope by channel", once a quarter, "recorded with his identity".
+///
+/// Deliberately not Campaign.budget, which is the ad platform's own number imported by
+/// the sync. That is what Meta was told to spend; this is what the firm decided to spend,
+/// and the two answer different questions — budget pacing computed against the platform's
+/// figure can only ever say whether the platform is doing as it was told.
+model BudgetEnvelope {
+  id        String @id @default(cuid())
+  channelId String
+
+  /// The period this covers, inclusive of the start and exclusive of the end, as
+  /// "YYYY-MM-DD". A range rather than a quarter label so the same row shape holds a
+  /// month, a quarter or a year.
+  ///
+  /// Strings, not DATE columns, and deliberately. As DATE these were written by Prisma
+  /// from the JS Date's UTC parts and read back by node-postgres as midnight in the
+  /// process's own timezone — so an envelope for Q3 2026 stored as 2026-06-30 in an IST
+  /// process, and the two halves only agreed because both were wrong in the same
+  /// direction. A row written in one timezone and read in another would not have matched
+  /// at all, which is exactly what dev in IST and production in UTC would have done.
+  ///
+  /// A date-only value has no timezone. Stored as the text it is, it compares exactly,
+  /// sorts correctly, and reads in the database as the day somebody actually chose.
+  periodStart String
+  periodEnd   String
+
+  amount   Decimal @db.Decimal(14, 2)
+  /// The currency the envelope was decided in. Spend arrives in whatever each platform
+  /// bills, so a comparison converts — and an envelope stated in the wrong currency is
+  /// out by the exchange rate while looking entirely plausible.
+  currency String  @default("INR")
+
+  /// Whose decision this was, and when. §22 asks for the identity on the record, and the
+  /// reason is that an envelope is an instruction: someone has to own it.
+  setByEmail String
+  setAt      DateTime @default(now())
+
+  note String?
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One envelope per channel per period. A second would make "the envelope" ambiguous,
+  /// and every figure derived from it would depend on which row was read first.
+  @@unique([channelId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
+  @@map("budget_envelope")
 }
 
 model MarketingSpend {

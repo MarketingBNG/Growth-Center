@@ -31,6 +31,7 @@ export type AuditRow = {
 const PHRASING: Record<string, string> = {
   'apikey.create': 'issued an API key',
   'apikey.revoke': 'revoked an API key',
+  'budget.envelope': 'set a budget envelope',
   'content.approve': 'approved a content piece',
   'content.create': 'added a content piece',
   'content.return': 'returned a content piece to its author',

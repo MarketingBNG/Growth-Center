@@ -16,8 +16,12 @@ import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/li
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { attributionHealth } from '@/lib/attribution';
+import { envelopesFor, quarterOf } from '@/lib/budget';
+import { currentUser } from '@/lib/auth';
+import { can } from '@/lib/roles';
 import { ChannelFilter } from './ChannelFilter';
 import { AttributionHealth } from './AttributionHealth';
+import { BudgetEnvelopes } from './BudgetEnvelopes';
 
 export const metadata = { title: 'Marketing · Growth Center' };
 
@@ -49,7 +53,11 @@ export default async function MarketingPage({
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';
 
-  const [channels, allChannels, rows, band, health] = await Promise.all([
+  const quarter = quarterOf(new Date());
+  const user = await currentUser();
+  const canSetBudget = can(user?.role ?? 'user', 'settings:manage');
+
+  const [channels, allChannels, rows, band, health, envelopes] = await Promise.all([
     channelPerformance(current),
     // Only channels that actually hold a campaign. Every channel in the workspace was
     // offered before, and eleven of the twelve had nothing to show: clicking one swapped
@@ -66,6 +74,9 @@ export default async function MarketingPage({
     // the book reaches a channel at all", and scoping it to one channel would be asking
     // how much of the attributed revenue is attributed.
     attributionHealth(current.from, current.to),
+    // Always the quarter we are in, not the report window: an envelope is a quarterly
+    // instruction, and showing a 7-day slice of one would say almost nothing was spent.
+    envelopesFor(quarter.periodStart, quarter.periodEnd),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot
@@ -162,6 +173,38 @@ export default async function MarketingPage({
       {/* Above the channel chart and the campaign table, not below them: it qualifies
           both, and a caveat printed after the thing it qualifies has already been read. */}
       <AttributionHealth health={health} />
+
+      {/* Every channel that carries a campaign, with its envelope where one is set.
+          Listed even without an envelope, because setting the first one is the job — an
+          empty card would be the wrong answer to "no envelope yet". Hidden when a single
+          channel is filtered: the envelope is a set of decisions across channels, and one
+          row of it is not the thing §22 asks Akshay to look at. */}
+      {channelId ? null : (
+        <BudgetEnvelopes
+          rows={allChannels.map((c) => {
+            const e = envelopes.find((x) => x.channelId === c.id);
+            const spent = channels.find((x) => x.id === c.id)?.spend ?? 0;
+            return {
+              channelId: c.id,
+              channelName: c.name,
+              envelope: money(e?.envelopeInReporting ?? 0),
+              spent: money(e?.spent ?? spent),
+              usedPercent: e?.usedPercent ?? null,
+              breached: e?.breached ?? false,
+              setBy: e?.setByEmail ?? null,
+              amount: e?.amount ?? 0,
+              currency: e?.currency ?? band.currency,
+            };
+          })}
+          period={{
+            label: quarter.label,
+            start: quarter.periodStart,
+            end: quarter.periodEnd,
+          }}
+          canEdit={canSetBudget}
+          currency={band.currency}
+        />
+      )}
 
       {/* A chart that compares channels answers nothing once you have picked one, and a
           single bar next to an axis is a worse way to read one number than the band above

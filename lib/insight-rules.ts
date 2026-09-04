@@ -3,6 +3,7 @@ import type { Thresholds } from './thresholds.ts';
 import { thresholds } from './settings.ts';
 import { attributionHealth } from './attribution.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
+import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
 import type { InsightKind } from './enums.ts';
 
@@ -456,6 +457,16 @@ const pacingRule: Rule = {
   test: 'Month-to-date spend against the budget of the campaigns live this period',
   async run(ctx) {
     const tolerance = ctx.thresholds['marketing.pacingTolerance'];
+
+    // Silent where the firm has set its own envelopes for the quarter. This rule reads
+    // the ad platform's budgets, which say what Meta was told to spend; spend_over_
+    // envelope reads what the firm decided to spend. Both firing would raise two
+    // findings about one overspend, measured against two different numbers, and the
+    // reader would have no way to tell which one was the instruction.
+    const { periodStart, periodEnd } = quarterOf(ctx.to);
+    const envelopes = await envelopesFor(periodStart, periodEnd);
+    if (envelopes.length > 0) return [];
+
     const { budgetPacing } = await import('./metrics.ts').then((m) =>
       m.marketingKpis({ from: ctx.from, to: ctx.to }),
     );
@@ -481,6 +492,47 @@ const pacingRule: Rule = {
           : 'Decide whether the under-spend is deliberate before the month closes.',
       },
     ];
+  },
+};
+
+const envelopeRule: Rule = {
+  id: 'spend_over_envelope',
+  version: 1,
+  section: 'marketing',
+  severity: 'high',
+  kind: 'risk',
+  test: "Channel spend against the envelope the firm set for the period",
+  async run(ctx) {
+    // The quarter the window ends in. An envelope is a quarterly instruction, so a
+    // 90-day report window straddling two quarters is judged against the one it finishes
+    // in rather than against a blend of both, which would belong to no decision anybody
+    // made.
+    const { periodStart, periodEnd, label } = quarterOf(ctx.to);
+    const envelopes = await envelopesFor(periodStart, periodEnd);
+
+    // Over the envelope, and over the tolerance the workspace allows either side of a
+    // plan. The same tolerance the pacing rule uses: an envelope exceeded by a rupee is
+    // not an exception, and flagging it would train people to ignore the flag.
+    const tolerance = ctx.thresholds['marketing.pacingTolerance'];
+
+    return envelopes
+      .filter((e) => e.usedPercent !== null && e.usedPercent > 100 + tolerance)
+      .map((e) => ({
+        subject: `spend-over-envelope-${slug(e.channelName)}-${slug(label)}`,
+        evidence: {
+          channel: e.channelName,
+          period: label,
+          envelope: Math.round(e.envelopeInReporting ?? 0),
+          spent: Math.round(e.spent),
+          usedPercent: round(e.usedPercent),
+          overBy: Math.round(e.spent - (e.envelopeInReporting ?? 0)),
+          tolerancePercent: tolerance,
+          currency: e.reportingCurrency,
+          setBy: e.setByEmail,
+          basis: "the envelope the firm set for this channel, not the ad platform's own budget",
+        },
+        proposedAction: `Decide whether to raise the ${e.channelName} envelope for ${label} or pull the spend back.`,
+      }));
   },
 };
 
@@ -532,6 +584,7 @@ const placeholderRule: Rule = {
 export const RULES: Rule[] = [
   attributionRule,
   placeholderRule,
+  envelopeRule,
   syncStaleRule,
   leadSlaRule,
   renewalRule,
