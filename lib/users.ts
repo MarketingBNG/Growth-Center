@@ -128,7 +128,7 @@ export async function ensureAdmins() {
           name: label,
           initials: initialsOf(label),
           displayRole: 'Admin',
-          role: 'partner',
+          role: 'owner',
         },
         // Only a pinned name is overwritten — a real person's own name is left alone.
         update: {

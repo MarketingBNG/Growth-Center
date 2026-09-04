@@ -27,14 +27,13 @@ datasource db {
 
 // ─── enums ────────────────────────────────────────────────────────────────────
 
-/// Mirrors lib/roles.ts. Stored on rows only where a row records who did something;
-/// a person's current role is always read from the roster, never from the database.
+/// Mirrors lib/roles.ts. Three tiers, widest first: an owner can do everything including
+/// settings, keys and approvals; an admin runs the day to day but cannot approve or reach
+/// settings; a user works on records and content.
 enum Role {
-  partner
-  controller
-  manager
-  member
-  viewer
+  owner
+  admin
+  user
 }
 
 enum LeadStatus {
@@ -766,7 +765,9 @@ model AppUser {
   displayRole String?
   team        String?
 
-  role   Role    @default(partner)
+  /// Least privilege by default: someone signing in for the first time can work, not
+  /// administer. The admin mailboxes are lifted to owner by ensureAdmins().
+  role   Role    @default(user)
   active Boolean @default(true)
 
   lastSeenAt DateTime?

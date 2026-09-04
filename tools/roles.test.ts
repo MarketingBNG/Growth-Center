@@ -69,10 +69,10 @@ test('isAllowedEmail agrees with canonicalEmail', () => {
 
 test('tiers are off: every role holds every permission', () => {
   assert.equal(ROLES_ENFORCED, false, 'update this file when tiers are switched back on');
-  for (const role of ['partner', 'controller', 'manager', 'member', 'viewer'] as const) {
-    assert.equal(can(role, 'settings:manage'), true, `${role} was refused settings:manage`);
-    assert.equal(can(role, 'apikeys:manage'), true, `${role} was refused apikeys:manage`);
-    assert.equal(can(role, 'crm:write'), true, `${role} was refused crm:write`);
+  for (const role of ROLE_VALUES) {
+    for (const permission of PERMISSIONS) {
+      assert.equal(can(role, permission), true, `${role} was refused ${permission}`);
+    }
   }
 });
 
@@ -83,18 +83,30 @@ test('can() still refuses someone with no role at all', () => {
 });
 
 test('POLICY is intact underneath, ready to re-enable', () => {
-  assert.equal(wouldAllow('viewer', 'growth:read'), true);
-  assert.equal(wouldAllow('viewer', 'crm:write'), false);
-  assert.equal(wouldAllow('member', 'crm:write'), true);
-  assert.equal(wouldAllow('member', 'integrations:manage'), false);
-  assert.equal(wouldAllow('manager', 'integrations:manage'), true);
-  assert.equal(wouldAllow('manager', 'apikeys:manage'), false);
-  assert.equal(wouldAllow('partner', 'settings:manage'), true);
-  assert.equal(wouldAllow('controller', 'settings:manage'), true);
+  assert.equal(wouldAllow('user', 'growth:read'), true);
+  assert.equal(wouldAllow('user', 'crm:write'), true);
+  assert.equal(wouldAllow('user', 'content:write'), true);
+  assert.equal(wouldAllow('user', 'campaigns:write'), false);
+  assert.equal(wouldAllow('user', 'outreach:send'), false);
+  assert.equal(wouldAllow('admin', 'campaigns:write'), true);
+  assert.equal(wouldAllow('admin', 'integrations:manage'), true);
+  assert.equal(wouldAllow('admin', 'apikeys:manage'), false);
+  assert.equal(wouldAllow('admin', 'settings:manage'), false);
+  assert.equal(wouldAllow('owner', 'settings:manage'), true);
+  assert.equal(wouldAllow('owner', 'apikeys:manage'), true);
+});
+
+test('only the owner can approve', () => {
+  // Part V of the manual turns on this one line: an admin can build and run a campaign
+  // and still not be the person who signs it off.
+  assert.equal(wouldAllow('owner', 'approve'), true);
+  assert.equal(wouldAllow('admin', 'approve'), false);
+  assert.equal(wouldAllow('user', 'approve'), false);
+  assert.deepEqual(ROLE_VALUES.filter((r) => wouldAllow(r, 'approve')), ['owner']);
 });
 
 test('isFullAccess is true for anyone signed in while tiers are off', () => {
-  assert.equal(isFullAccess('viewer'), true);
+  assert.equal(isFullAccess('user'), true);
   assert.equal(isFullAccess(null), false);
 });
 
@@ -104,7 +116,7 @@ test('ROLES covers the Role union exactly, with no duplicates', () => {
   // The Team page and the settings API both drive off this list, and it has to stay in
   // step with the Role enum in prisma/schema.prisma — a value here that the database
   // does not know is a write that fails at the very last step.
-  assert.deepEqual([...ROLE_VALUES].sort(), ['controller', 'manager', 'member', 'partner', 'viewer']);
+  assert.deepEqual([...ROLE_VALUES].sort(), ['admin', 'owner', 'user']);
   assert.equal(new Set(ROLE_VALUES).size, ROLE_VALUES.length);
   for (const r of ROLES) assert.ok(r.label && r.blurb, `${r.value} is missing its copy`);
 });
@@ -118,31 +130,36 @@ test('ROLES is ordered widest access first', () => {
       `${ROLES[i].value} (${breadth[i]} permissions) is listed below ${ROLES[i - 1].value} (${breadth[i - 1]}) but holds more`,
     );
   }
-  assert.equal(ROLES[ROLES.length - 1].value, 'viewer');
+  assert.equal(ROLES[0].value, 'owner');
+  assert.equal(ROLES[ROLES.length - 1].value, 'user');
 });
 
 test('isRole rejects anything that is not a role', () => {
-  assert.equal(isRole('partner'), true);
-  assert.equal(isRole('admin'), false);
-  assert.equal(isRole('approver'), false);
+  assert.equal(isRole('owner'), true);
+  assert.equal(isRole('user'), true);
+  // The five tiers this replaced. A stale value must not sneak back through an old
+  // client, a bookmarked request or a hand-written script.
+  for (const gone of ['partner', 'controller', 'manager', 'member', 'viewer']) {
+    assert.equal(isRole(gone), false, `${gone} is still accepted`);
+  }
+  assert.equal(isRole('Owner'), false);
   assert.equal(isRole(''), false);
   assert.equal(isRole(null), false);
   assert.equal(isRole(undefined), false);
 });
 
 test('roleLabel gives every role a display name', () => {
-  assert.equal(roleLabel('partner'), 'Partner');
-  assert.equal(roleLabel('controller'), 'Controller');
+  assert.equal(roleLabel('owner'), 'Owner');
+  assert.equal(roleLabel('admin'), 'Admin');
+  assert.equal(roleLabel('user'), 'User');
 });
 
 test('canAdminister names exactly the roles that can reach the Team page', () => {
   // The self-lockout and admin guards in lib/users.ts and the settings route both key
   // off this. It asks POLICY, not can(), so it stays true when tiers are switched on.
-  assert.equal(canAdminister('partner'), true);
-  assert.equal(canAdminister('controller'), true);
-  assert.equal(canAdminister('manager'), false);
-  assert.equal(canAdminister('member'), false);
-  assert.equal(canAdminister('viewer'), false);
+  assert.equal(canAdminister('owner'), true);
+  assert.equal(canAdminister('admin'), false);
+  assert.equal(canAdminister('user'), false);
 });
 
 test('at least one role can administer, or nobody could ever undo a change', () => {

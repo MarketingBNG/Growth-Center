@@ -40,8 +40,8 @@ test('a from/to detail reads as a transition', () => {
     'DTAA explainer · draft → published',
   );
   assert.equal(
-    summariseDetail({ email: 'gaurav@usaindiacfo.com', role: 'manager' }),
-    'gaurav@usaindiacfo.com · manager',
+    summariseDetail({ email: 'gaurav@usaindiacfo.com', role: 'admin' }),
+    'gaurav@usaindiacfo.com · admin',
   );
 });
 

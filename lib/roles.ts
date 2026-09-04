@@ -5,7 +5,7 @@
 // alone (ALLOWED_DOMAINS below), and the person's row in `app_user` is created on
 // first sign-in. See lib/users.ts.
 
-export type Role = 'partner' | 'controller' | 'manager' | 'member' | 'viewer';
+export type Role = 'owner' | 'admin' | 'user';
 
 /**
  * Both domains resolve to the same person: staff hold an address on each. The primary
@@ -51,11 +51,9 @@ export function pinnedName(email: string | null | undefined): string | null {
  * does need a matching value in the `Role` enum in prisma/schema.prisma.
  */
 export const ROLES: { value: Role; label: string; blurb: string }[] = [
-  { value: 'partner', label: 'Partner', blurb: 'Everything, including settings and API keys.' },
-  { value: 'controller', label: 'Controller', blurb: 'Everything, including settings and API keys.' },
-  { value: 'manager', label: 'Manager', blurb: 'Campaigns, outreach, integrations and the AI. No settings.' },
-  { value: 'member', label: 'Member', blurb: 'Edit records and content. No spend, no sending.' },
-  { value: 'viewer', label: 'Viewer', blurb: 'Read only.' },
+  { value: 'owner', label: 'Owner', blurb: 'Everything: approvals, settings, API keys.' },
+  { value: 'admin', label: 'Admin', blurb: 'Campaigns, outreach, integrations and the AI. Cannot approve.' },
+  { value: 'user', label: 'User', blurb: 'Work on records and content. No spend, no sending.' },
 ];
 
 export const ROLE_VALUES = ROLES.map((r) => r.value);
@@ -78,7 +76,8 @@ export type Permission =
   | 'integrations:manage'
   | 'apikeys:manage'
   | 'ai:run'
-  | 'settings:manage';
+  | 'settings:manage'
+  | 'approve';
 
 /**
  * Tiered access is currently OFF: every signed-in user has every permission.
@@ -90,16 +89,21 @@ export type Permission =
 export const ROLES_ENFORCED = false;
 
 const POLICY: Record<Permission, Role[]> = {
-  'growth:read': ['partner', 'controller', 'manager', 'member', 'viewer'],
-  'crm:write': ['partner', 'controller', 'manager', 'member'],
-  'pipeline:write': ['partner', 'controller', 'manager', 'member'],
-  'campaigns:write': ['partner', 'controller', 'manager'],
-  'content:write': ['partner', 'controller', 'manager', 'member'],
-  'outreach:send': ['partner', 'controller', 'manager'],
-  'integrations:manage': ['partner', 'controller', 'manager'],
-  'apikeys:manage': ['partner', 'controller'],
-  'ai:run': ['partner', 'controller', 'manager'],
-  'settings:manage': ['partner', 'controller'],
+  'growth:read': ['owner', 'admin', 'user'],
+  'crm:write': ['owner', 'admin', 'user'],
+  'pipeline:write': ['owner', 'admin', 'user'],
+  'campaigns:write': ['owner', 'admin'],
+  'content:write': ['owner', 'admin', 'user'],
+  'outreach:send': ['owner', 'admin'],
+  'integrations:manage': ['owner', 'admin'],
+  'apikeys:manage': ['owner'],
+  'ai:run': ['owner', 'admin'],
+  'settings:manage': ['owner'],
+  // Approval is the owner's alone, which is the whole point of the Build and Operating
+  // Manual's Part V: an admin can build and run a campaign but cannot sign it off, so
+  // nobody approves their own work. Nothing checks this yet — there is no approve route
+  // in the app — but the answer is settled here rather than argued again later.
+  approve: ['owner'],
 };
 
 export const PERMISSIONS = Object.keys(POLICY) as Permission[];
@@ -131,7 +135,7 @@ export function can(role: Role | null | undefined, permission: Permission): bool
 }
 
 export const isFullAccess = (role: Role | null | undefined) =>
-  !!role && (!ROLES_ENFORCED || role === 'partner' || role === 'controller');
+  !!role && (!ROLES_ENFORCED || role === 'owner');
 
 /** Is this address allowed to sign in at all? The only gate there is. */
 export function isAllowedEmail(inputEmail: string): boolean {

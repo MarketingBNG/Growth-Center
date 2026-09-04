@@ -97,7 +97,7 @@ export default async function SettingsPage() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Reporting in <span className="font-medium text-foreground">{currency.reporting}</span>.
-              Only a partner or controller can change this.
+              Only an owner can change this.
             </p>
           )}
         </CardContent>
@@ -237,8 +237,7 @@ export default async function SettingsPage() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-xs text-muted-foreground">
-              API keys are managed by partners and controllers. Your role ({user.role}) cannot see
-              or create them.
+              API keys are managed by owners. Your role ({user.role}) cannot see or create them.
             </p>
           </CardContent>
         </Card>
