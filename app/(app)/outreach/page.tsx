@@ -12,6 +12,7 @@ import { pageQuery, pick } from '@/lib/query';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
 import { emailStatus } from '@/lib/email';
 import { fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
+import { SequenceRegistry } from './SequenceRegistry';
 
 export const metadata = { title: 'Outreach · Growth Center' };
 
@@ -107,12 +108,6 @@ export default async function OutreachPage({
                       {plural(s.steps.length, 'step')} · {plural(s.prospects, 'prospect')}
                       {s.ownerEmail ? ` · ${s.ownerEmail.split('@')[0]}` : ''} · created{' '}
                       {fmtRelative(s.createdAt)}
-                      {/* §14.2 wants copy approved by, and numbers verified by, as
-                          properties of the sequence. Neither field exists yet, so the
-                          honest statement is that there is no approval — not silence,
-                          which reads as approved. */}
-                      {' · '}
-                      <span className="text-destructive">Approval: none on record</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -135,6 +130,19 @@ export default async function OutreachPage({
               </CardHeader>
 
               <CardContent className="space-y-3">
+                {/* The registry and the two sign-offs (§14.2), above the numbers: whether
+                    this may go out is a more urgent fact than how it performed. */}
+                <SequenceRegistry
+                  id={s.id}
+                  purpose={s.registry.purpose}
+                  segment={s.registry.segment}
+                  serviceLine={s.registry.serviceLine}
+                  sendingDomain={s.registry.sendingDomain}
+                  copy={s.fit.copy}
+                  numbers={s.fit.numbers}
+                  blocked={s.fit.blocked}
+                />
+
                 {/* What the platform reports it actually did. Absent for a sequence this
                     app owns, and for a campaign that has not started sending. */}
                 {s.sending ? (

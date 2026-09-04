@@ -3,7 +3,14 @@ import { db } from './prisma.ts';
 import { rate } from './calc.ts';
 import { slice, type ListQuery } from './list-query.ts';
 import { preview } from './html-text.ts';
-import { lintSequence, summarise } from './outreach-lint.ts';
+import { blocksSending, lintSequence, summarise } from './outreach-lint.ts';
+import {
+  SEQUENCE_PURPOSES,
+  displayStatus,
+  fitness,
+  purposeLabel,
+  templateHash,
+} from './outreach-approval.ts';
 
 // An unrecognised value drops its filter rather than throwing. These come straight from
 // the query string, and `?status=bogus` is a typo in a shared link, not a reason to
@@ -77,14 +84,30 @@ export async function sequences(filters: SequenceFilters, q: ListQuery) {
 
     // Linted from the stored body, before `preview` truncates it — a placeholder 600
     // characters into a step is exactly the one nobody has read.
-    const lint = summarise(
-      lintSequence(s.steps.map((st) => ({ position: st.position, subject: st.subject, body: st.body }))),
-    );
+    const hashable = s.steps.map((st) => ({
+      position: st.position,
+      subject: st.subject,
+      body: st.body,
+    }));
+    const lint = summarise(lintSequence(hashable));
+    const fit = fitness(s, hashable, lint.findings);
 
     return {
       id: s.id,
       name: s.name,
-      status: s.status,
+      /// What the sending platform says, qualified where the app cannot vouch for it:
+      /// an active sequence nobody has approved reads "active · unapproved".
+      status: displayStatus(s.status, fit),
+      platformStatus: s.status,
+      /// The registry (§14.2) and what it adds up to.
+      registry: {
+        purpose: s.purpose,
+        purposeLabel: purposeLabel(s.purpose),
+        segment: s.segment,
+        serviceLine: s.serviceLine,
+        sendingDomain: s.sendingDomain,
+      },
+      fit,
       /// Deterministic template checks (§14.6). Rendered per step and summarised on the
       /// header, so a template nobody should send says so on the screen rather than in
       /// somebody's memory.
@@ -118,6 +141,97 @@ export async function sequences(filters: SequenceFilters, q: ListQuery) {
 
   return { rows: list, total, page: q.page, perPage: q.perPage };
 }
+
+export const registryInput = z.object({
+  purpose: z.enum(SEQUENCE_PURPOSES).nullable().optional(),
+  segment: z.string().trim().max(80).nullable().optional(),
+  serviceLine: z.string().trim().max(80).nullable().optional(),
+  sendingDomain: z.string().trim().max(120).nullable().optional(),
+});
+
+export type RegistryInput = z.infer<typeof registryInput>;
+
+/** The registry fields. Descriptive only — none of these gates anything. */
+export async function setSequenceRegistry(id: string, input: RegistryInput, actorEmail: string) {
+  const before = await db().sequence.findUnique({ where: { id }, select: { name: true } });
+  if (!before) return null;
+
+  await db().sequence.update({ where: { id }, data: input });
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'sequence.registry',
+      entityType: 'sequence',
+      entityId: id,
+      detail: { name: before.name, ...input },
+    },
+  });
+  return { ok: true };
+}
+
+export type SignOffKind = 'copy' | 'numbers';
+
+/**
+ * Signs off a template, or withdraws a sign-off.
+ *
+ * The hash of the steps as they stand is stored with the signature. That is what makes
+ * this an approval of something rather than of a row: if the copy is edited afterwards,
+ * or re-synced from Smartlead with different text, the stored hash stops matching and the
+ * approval reports as stale instead of silently standing over words nobody has read.
+ *
+ * Refuses to sign a template the linter has blocked. Approving around a placeholder is
+ * precisely the habit §14.6 exists to break, and letting the button do it would make the
+ * linter advisory.
+ */
+export async function signOffSequence(
+  id: string,
+  kind: SignOffKind,
+  granted: boolean,
+  actorEmail: string,
+) {
+  const seq = await db().sequence.findUnique({
+    where: { id },
+    select: { name: true, steps: { select: { position: true, subject: true, body: true } } },
+  });
+  if (!seq) return null;
+
+  if (granted) {
+    const findings = lintSequence(seq.steps);
+    if (blocksSending(findings)) {
+      throw new IneligibleError(
+        'This template has unresolved placeholders. Fix those before signing it off.',
+      );
+    }
+  }
+
+  const hash = granted ? templateHash(seq.steps) : null;
+  const stamp = granted ? new Date() : null;
+  const who = granted ? actorEmail : null;
+
+  await db().sequence.update({
+    where: { id },
+    data:
+      kind === 'copy'
+        ? { copyApprovedByEmail: who, copyApprovedAt: stamp, copyApprovedHash: hash }
+        : { numbersVerifiedByEmail: who, numbersVerifiedAt: stamp, numbersVerifiedHash: hash },
+  });
+
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: granted ? `sequence.${kind}_signed` : `sequence.${kind}_withdrawn`,
+      entityType: 'sequence',
+      entityId: id,
+      // The hash goes in the record too, so the log says which version was signed.
+      detail: { name: seq.name, kind, templateHash: hash },
+    },
+  });
+
+  return { ok: true };
+}
+
+/** A refusal the caller should show the user, not a bug. */
+export class IneligibleError extends Error {}
 
 export type SendingTotals = {
   sent: number;

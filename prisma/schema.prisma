@@ -936,6 +936,35 @@ model Sequence {
   status String @default("draft") // draft | active | paused | archived
   ownerEmail String?
 
+  /// ── The registry (§14.2) ──────────────────────────────────────────────────
+  /// Written here and never by a sync: the sending platform knows none of this, and
+  /// writeOutreach only ever touches name, status, source and externalId, so a nightly
+  /// pull cannot quietly clear an approval.
+
+  /// cold_acquisition | event_followup | client_reminder | dormant_revival.
+  /// A String rather than an enum, matching `status` above — the vocabulary is the
+  /// manual's proposal and is likely to move once it meets the real campaigns.
+  purpose       String?
+  segment       String?
+  serviceLine   String?
+  /// Which domain the sequence sends from. The routing rule in §14.3 turns on this.
+  sendingDomain String?
+
+  /// Copy signed off, and the statutory figures in it verified. Two separate acts by two
+  /// different people, so two sets of columns rather than one flag.
+  copyApprovedByEmail    String?
+  copyApprovedAt         DateTime?
+  numbersVerifiedByEmail String?
+  numbersVerifiedAt      DateTime?
+
+  /// A hash of the steps as they stood when each sign-off was given. An approval is only
+  /// an approval of what was read: without this, someone approves a template, the copy is
+  /// then edited or re-synced from Smartlead, and the tick silently stands over text
+  /// nobody has seen. Compared on read; a mismatch reports the approval as stale rather
+  /// than valid.
+  copyApprovedHash    String?
+  numbersVerifiedHash String?
+
   steps     SequenceStep[]
   prospects Prospect[]
 
