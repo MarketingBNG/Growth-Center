@@ -273,7 +273,11 @@ export async function dashboardBand(
   // declined to state.
   const spendShort = !spendFrom || spendFrom.getTime() > current.from.getTime();
 
-  const WANTED = ['visitors', 'leads', 'revenue', 'cac', 'roas'];
+  // New business and repeat sit beside Revenue rather than replacing it. G1.4 asks for
+  // renewals to have their own card, and the reason is that the three are only meaningful
+  // together: "New business" alone invites the reader to assume it is the whole book,
+  // which is the misreading the split exists to end.
+  const WANTED = ['visitors', 'leads', 'revenue', 'newRevenue', 'repeatRevenue', 'cac', 'roas'];
   const picked = WANTED.map((key) => cards.find((c) => c.key === key)).filter(
     (c): c is Kpi => c !== undefined,
   );

@@ -450,6 +450,25 @@ model Opportunity {
 
   ownerEmail String?
 
+  /// ── Read out of the deal name (see lib/deal-name.ts) ──────────────────────
+  /// This CRM has no field for either of these, but the naming convention carries both
+  /// and has for thousands of records: "Mosaic Wellness INC_46_Apr'26_One Time".
+  ///
+  /// Derived at import and by tools/backfill-deal-origin.ts, not computed on read, so the
+  /// metrics layer can group on them in SQL rather than parsing 8,000 strings per request.
+
+  /// new | repeat | unknown — whether this is the first engagement for the account.
+  /// `unknown` is a quarter of the book and must stay distinct from `new`: treating an
+  /// unparsed name as new business is the overstatement G1.4 exists to remove.
+  dealOrigin String?
+
+  /// one_time | retainer, from the suffix. §8.2's Engagement_Type.
+  engagementType String?
+
+  /// The per-account engagement counter from the name. Kept because it is the evidence
+  /// for dealOrigin — a deal numbered 46 is self-evidently not new business.
+  accountSequenceNo Int?
+
   leadId     String?
   contactId  String?
   companyId  String?
@@ -464,6 +483,7 @@ model Opportunity {
   /// exactly that reason, and was only findable because the raw string was kept.
   sourceDetail String?
 
+  /// @@index([dealOrigin]) is declared at the foot of this model.
   /// The channel the deal itself was credited to, from the CRM's own Lead_Source on the
   /// deal record.
   ///
@@ -502,6 +522,7 @@ model Opportunity {
   @@index([stageId])
   @@index([companyId])
   @@index([campaignId])
+  @@index([dealOrigin])
   @@map("opportunity")
 }
 

@@ -4,6 +4,7 @@ import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { channelSlugFor, cleanImportedName, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { normalizeCompanyName } from '../dedupe.ts';
+import { parseDealName } from '../deal-name.ts';
 import { currencySettings } from '../settings.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
@@ -1224,8 +1225,13 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
         const dealSource = str(m.leadSource);
         const dealChannelSlug = channelSlugFor(leadSourceType(dealSource), dealSource);
 
+        // New business versus repeat, and one-off versus retainer, read out of the deal
+        // name — this CRM has no field for either, but the naming convention carries both.
+        const dealName = p.entityLabel ?? externalId;
+        const named = parseDealName(dealName);
+
         dealRows.push([
-          p.entityLabel ?? externalId,
+          dealName,
           pipeline.id,
           stage.id,
           Number(m.amount) || 0,
@@ -1243,6 +1249,9 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           // CRM's own wording stored beside the mapped stage, a mismatch is one query away.
           sourceStage ? JSON.stringify({ stage: sourceStage }) : null,
           str(m.ownerEmail),
+          named.origin,
+          named.engagementType,
+          named.sequenceNo,
           createdAtOf(p),
           providerId,
           externalId,
@@ -1259,10 +1268,10 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'dealOrigin', 'engagementType', 'accountSequenceNo', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
-        { value: 'numeric', probability: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
+        { value: 'numeric', probability: 'int', accountSequenceNo: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
       );
       written += dealsTouched.length;
     }

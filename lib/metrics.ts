@@ -3,6 +3,7 @@ import { cac, costPer, num, rate, roas } from './calc.ts';
 import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from './kpi.ts';
 import { DEMO_SOURCE, INTERNAL_SOURCE } from './sources.ts';
 import { convert, sumInReporting } from './currency.ts';
+import { fmtMoney } from './format.ts';
 import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { cache } from 'react';
@@ -387,7 +388,7 @@ export async function funnel(range: Range, channelId?: string) {
   ];
   const paidChannel = { channelId: { in: paidChannelIds } };
 
-  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
+  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, repeatRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
     await Promise.all([
       channelId ? Promise.resolve(0) : sessions(range),
       db().lead.count({ where: { createdAt: window, ...byChannel } }),
@@ -405,11 +406,27 @@ export async function funnel(range: Range, channelId?: string) {
       // both USD and INR and its ad spend is billed in INR, and adding those together
       // produced a revenue figure roughly half of which was rupees counted as dollars.
       db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, ...byChannel }, _sum: { amount: true } }),
-      // New business only. Recurring income from customers won in earlier periods is
-      // real revenue but it is NOT a return on this period's marketing spend — counting
-      // it produced an 18x blended ROAS on a month where new business was a third of
-      // the total.
-      db().revenueEntry.groupBy({ by: ['currency'], where: { date: window, kind: 'one_time', ...byChannel }, _sum: { amount: true } }),
+      // New business only, and it now means what it says. `kind` could not carry this —
+      // writeRevenueFromWonDeals books every entry as one_time, so filtering on it
+      // matched the whole book and "New business" was total bookings under another name.
+      // The deal name is where this organisation records it: a deal numbered 1 is the
+      // first engagement for that account, anything above it is repeat work.
+      //
+      // `unknown` is excluded deliberately. A quarter of the deals carry no convention in
+      // their name, and counting them here would rebuild the same overstatement out of a
+      // different field. They are reported separately, below.
+      db().revenueEntry.groupBy({
+        by: ['currency'],
+        where: { date: window, opportunity: { is: { dealOrigin: 'new' } }, ...byChannel },
+        _sum: { amount: true },
+      }),
+      // Repeat business and the unclassified remainder, so the three add up to the
+      // revenue figure beside them and nothing goes missing between the cards.
+      db().revenueEntry.groupBy({
+        by: ['currency'],
+        where: { date: window, opportunity: { is: { dealOrigin: 'repeat' } }, ...byChannel },
+        _sum: { amount: true },
+      }),
       // Spend reaches a channel through its campaign; there is no channel on a spend row.
       db().marketingSpend.groupBy({
         by: ['currency'],
@@ -417,10 +434,12 @@ export async function funnel(range: Range, channelId?: string) {
         _sum: { amount: true },
       }),
       // New business from the paid channels only, which is what "return on ad spend"
-      // means. See the ROAS note below.
+      // means. See the ROAS note below. Filtered the same way as newRevenue above and for
+      // the same reason — leaving this one on `kind` would have made the ROAS numerator
+      // the whole book while the card beside it counted only genuinely new work.
       db().revenueEntry.groupBy({
         by: ['currency'],
-        where: { date: window, kind: 'one_time', ...paidChannel },
+        where: { date: window, opportunity: { is: { dealOrigin: 'new' } }, ...paidChannel },
         _sum: { amount: true },
       }),
       // Customers won through a paid channel, resolved lead-first exactly as
@@ -444,11 +463,18 @@ export async function funnel(range: Range, channelId?: string) {
 
   const revenueSum = inReporting(revenueAgg);
   const newRevenueSum = inReporting(newRevenueAgg);
+  const repeatRevenueSum = inReporting(repeatRevenueAgg);
   const spendSum = inReporting(spendAgg);
   const paidRevenueSum = inReporting(paidRevenueAgg);
 
   const revenue = revenueSum.total;
   const newRevenue = newRevenueSum.total;
+  const repeatRevenue = repeatRevenueSum.total;
+  // The remainder, rather than a fourth query. These three partition the book by
+  // construction, so subtracting is both cheaper and guaranteed to reconcile with the
+  // Revenue card — a separate `dealOrigin: 'unknown'` query would not, because revenue
+  // with no opportunity at all belongs here too.
+  const unclassifiedRevenue = revenue - newRevenue - repeatRevenue;
   const spend = spendSum.total;
   const paidRevenue = paidRevenueSum.total;
 
@@ -465,6 +491,14 @@ export async function funnel(range: Range, channelId?: string) {
     customers,
     revenue,
     newRevenue,
+    /** Repeat work for an account already on the books. Real money, and not a return on
+     *  this period's acquisition spend. */
+    repeatRevenue,
+    /** Revenue whose deal name carries no convention, so it is neither new nor repeat as
+     *  far as anything here can tell. Reported rather than folded into either — a quarter
+     *  of the deals are in this state and hiding them would restate the same
+     *  overstatement G1.4 removes. */
+    unclassifiedRevenue,
     spend,
     /** New business booked against a channel that carried spend — the numerator ROAS is
      *  actually entitled to. */
@@ -527,6 +561,23 @@ export async function openPipeline() {
  * cards and the funnel, and calling funnel() again cost another 7 queries at ~280ms
  * round trip each.
  */
+/**
+ * What the New business card leaves out, said in money.
+ *
+ * The split is read from the deal-naming convention (lib/deal-name.ts), and a quarter of
+ * the deals do not carry it. Naming that share here is the difference between a figure a
+ * partner can quote and one they will be caught out by.
+ */
+function newBusinessHint(f: Funnel): string {
+  const money = (n: number) => fmtMoney(n, false, f.currency);
+  const parts = ['First engagement with an account, read from the deal name'];
+  if (f.repeatRevenue > 0) parts.push(`${money(f.repeatRevenue)} of repeat work is excluded`);
+  if (f.unclassifiedRevenue > 0) {
+    parts.push(`${money(f.unclassifiedRevenue)} sits on deals whose name says neither`);
+  }
+  return parts.join('. ');
+}
+
 export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; current: Funnel; previous: Funnel }> {
   const { current, previous } = windowFor(spec);
   const [now, before] = await Promise.all([funnel(current), funnel(previous)]);
@@ -537,18 +588,22 @@ export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; curren
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },
     { key: 'opportunities', label: 'Opportunities', value: now.opportunities, previous: before.opportunities, format: 'number', higherIsBetter: true },
     { key: 'customers', label: 'New customers', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true },
-    // The "including recurring" promise is only true where recurring rows exist. Nothing
-    // in the sync writes one — writeRevenueFromWonDeals books every entry as one_time —
-    // so on this workspace the two cards carry the same figure, and the hint says why
-    // rather than leaving the reader to assume one of them is broken.
     {
       key: 'revenue', label: 'Revenue', value: now.revenue, previous: before.revenue, format: 'money', currency: now.currency, higherIsBetter: true,
-      hint:
-        now.revenue === now.newRevenue
-          ? 'All revenue booked. No recurring entries are recorded, so this equals new business'
-          : 'All revenue booked, including recurring',
+      hint: 'Every deal won in this period, new and repeat together',
     },
-    { key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Deals won in this period' },
+    {
+      key: 'newRevenue', label: 'New business', value: now.newRevenue, previous: before.newRevenue, format: 'money', currency: now.currency, higherIsBetter: true,
+      // Says what it excludes, in money, rather than only what it counts. This card read
+      // as total bookings for months — it was filtered on RevenueEntry.kind, which the
+      // sync writes as one_time for every deal — and the number moved materially when
+      // that was fixed. A reader who remembers the old figure is owed the reason.
+      hint: newBusinessHint(now),
+    },
+    {
+      key: 'repeatRevenue', label: 'Repeat business', value: now.repeatRevenue, previous: before.repeatRevenue, format: 'money', currency: now.currency, higherIsBetter: true,
+      hint: 'Further work for an account already on the books. Real money, but not a return on this period’s acquisition spend',
+    },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
     { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend' },
     { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business booked against a paid channel, over all paid spend. Revenue that reached no channel is not a return on ad spend' },
@@ -688,7 +743,14 @@ async function readChannelPerformance(range: Range) {
     await Promise.all([
       db().channel.findMany({ select: { id: true, name: true, kind: true } }),
       db().lead.groupBy({ by: ['channelId'], where: { createdAt: window }, _count: { _all: true } }),
-      db().revenueEntry.groupBy({ by: ['channelId', 'currency'], where: { date: window, kind: 'one_time' }, _sum: { amount: true } }),
+      // New business per channel, on the same definition as the New business card. This
+      // column is headed "New revenue" and sits on the same screen as that card, so a
+      // different filter here would put two figures called the same thing side by side.
+      db().revenueEntry.groupBy({
+        by: ['channelId', 'currency'],
+        where: { date: window, opportunity: { is: { dealOrigin: 'new' } } },
+        _sum: { amount: true },
+      }),
       db().marketingSpend.groupBy({
         // By currency too: this account's spend is billed in rupees and its revenue is
         // mostly written in dollars, and a per-channel ROAS that divides one by the other

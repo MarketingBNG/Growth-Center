@@ -50,11 +50,16 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
       where: { campaignId: { in: ids }, createdAt: window },
       _count: { _all: true },
     }),
-    // one_time only: recurring income from a customer won last year is not a return on
-    // this period's campaign spend.
+    // New business only: further work for a client won last year is not a return on this
+    // period's campaign spend. Read from the deal name rather than from RevenueEntry.kind,
+    // which the sync writes as one_time for every entry and so never excluded anything.
     db().revenueEntry.groupBy({
       by: ['campaignId', 'currency'],
-      where: { campaignId: { in: ids }, date: window, kind: 'one_time' },
+      where: {
+        campaignId: { in: ids },
+        date: window,
+        opportunity: { is: { dealOrigin: 'new' } },
+      },
       _sum: { amount: true },
     }),
     // Counted in SQL like its four siblings. This used to load every customer won in

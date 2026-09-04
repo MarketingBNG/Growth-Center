@@ -108,15 +108,25 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
             {
               label: 'New business',
               value: money(now.newRevenue),
-              // Identical figures under two different definitions read as a fault in one of
-              // them. They match because every revenue row this workspace holds is
-              // one_time: nothing in the sync writes a recurring entry, only the seeder
-              // does. Say that, rather than printing the same number twice in silence.
-              hint:
-                now.newRevenue === now.revenue
-                  ? 'deals won in this period — equal to revenue, because no recurring entries are recorded'
-                  : 'deals won in this period',
+              hint: 'first engagement with an account, read from the deal name',
             },
+            {
+              label: 'Repeat business',
+              value: money(now.repeatRevenue),
+              hint: 'further work for an account already on the books',
+            },
+            // Named rather than left as the gap between the three figures. A quarter of
+            // the deals carry no naming convention, and a reader who adds the two cards
+            // above and finds they miss the revenue line deserves the reason on the page.
+            ...(now.unclassifiedRevenue > 0
+              ? [
+                  {
+                    label: 'Unclassified',
+                    value: money(now.unclassifiedRevenue),
+                    hint: 'deals whose name says neither new nor repeat',
+                  },
+                ]
+              : []),
             { label: 'Marketing spend', value: money(now.spend), hint: `${money(before.spend)} previous period` },
             { label: 'CAC', value: now.cac === null ? '—' : money(now.cac) },
             { label: 'ROAS', value: ratio(now.roas) },
