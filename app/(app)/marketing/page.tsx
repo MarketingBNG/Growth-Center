@@ -15,7 +15,9 @@ import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
+import { attributionHealth } from '@/lib/attribution';
 import { ChannelFilter } from './ChannelFilter';
+import { AttributionHealth } from './AttributionHealth';
 
 export const metadata = { title: 'Marketing · Growth Center' };
 
@@ -47,7 +49,7 @@ export default async function MarketingPage({
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';
 
-  const [channels, allChannels, rows, band] = await Promise.all([
+  const [channels, allChannels, rows, band, health] = await Promise.all([
     channelPerformance(current),
     // Only channels that actually hold a campaign. Every channel in the workspace was
     // offered before, and eleven of the twelve had nothing to show: clicking one swapped
@@ -60,6 +62,10 @@ export default async function MarketingPage({
     }),
     campaignPerformance(current, channelId),
     marketingBand(spec, bucket, channelId),
+    // Measured across the whole period, unfiltered by channel: it answers "how much of
+    // the book reaches a channel at all", and scoping it to one channel would be asking
+    // how much of the attributed revenue is attributed.
+    attributionHealth(current.from, current.to),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot
@@ -152,6 +158,10 @@ export default async function MarketingPage({
           height={180}
         />
       </div>
+
+      {/* Above the channel chart and the campaign table, not below them: it qualifies
+          both, and a caveat printed after the thing it qualifies has already been read. */}
+      <AttributionHealth health={health} />
 
       {/* A chart that compares channels answers nothing once you have picked one, and a
           single bar next to an axis is a worse way to read one number than the band above

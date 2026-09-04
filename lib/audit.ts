@@ -36,6 +36,7 @@ const PHRASING: Record<string, string> = {
   'integration.configure': 'reconfigured an integration',
   'integration.connect': 'connected an integration',
   'integration.disconnect': 'disconnected an integration',
+  'settings.attribution': 'changed the attribution threshold',
   'settings.currency': 'changed the reporting currency',
   'user.activate': 'restored access',
   'user.deactivate': 'revoked access',

@@ -15,11 +15,21 @@ import { AI_KEY_ENV } from '@/lib/enums';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
 import { fmtDate, fmtRelative } from '@/lib/format';
+import { attributionHealth } from '@/lib/attribution';
 import { ApiKeys } from './ApiKeys';
+import { AttributionThreshold } from './AttributionThreshold';
 import { CurrencySettings } from './CurrencySettings';
 import { RevokeKey } from './RevokeKey';
 
 export const metadata = { title: 'Settings · Growth Center' };
+
+/** The window the attribution figure on this page is measured over. Matches the Marketing
+ *  page's widest preset, so the two do not quote different coverage for the same book. */
+function yearAgo(): Date {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d;
+}
 
 export default async function SettingsPage() {
   const user = await currentUser();
@@ -36,7 +46,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -53,6 +63,9 @@ export default async function SettingsPage() {
     // week converts at today's rate rather than last week's.
     refreshRatesIfStale(),
     manageSettings ? recentAuditEvents(50) : Promise.resolve([]),
+    // The last year, so the figure shown beside the threshold is the one the Marketing
+    // page's default range is judged against.
+    attributionHealth(yearAgo(), new Date()),
   ]);
 
   const ai = aiStatus();
@@ -98,6 +111,32 @@ export default async function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               Reporting in <span className="font-medium text-foreground">{currency.reporting}</span>.
               Only an owner can change this.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Attribution</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Channel figures — CAC, ROAS, revenue per channel — are computed over the records
+            that carry a channel. This is how much of the revenue that has to be before the
+            Marketing page presents them without a caveat.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {manageSettings ? (
+            <AttributionThreshold initial={health.threshold} coverage={health.revenue.percent} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Requires{' '}
+              <span className="font-medium text-foreground">{health.threshold}%</span> of revenue
+              to reach a channel; currently{' '}
+              <span className="font-medium text-foreground">
+                {health.revenue.percent === null ? '—' : `${health.revenue.percent.toFixed(1)}%`}
+              </span>
+              . Only an owner can change this.
             </p>
           )}
         </CardContent>
