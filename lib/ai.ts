@@ -9,6 +9,7 @@ import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
 import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
+import { fingerprint, normaliseSubject, toResolve } from './insight-identity.ts';
 
 // AI insights over Growth Center's own data.
 //
@@ -465,9 +466,10 @@ const FINDINGS_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['kind', 'title', 'body', 'confidence'],
+        required: ['kind', 'subject', 'title', 'body', 'confidence'],
         properties: {
           kind: { type: 'string', enum: [...INSIGHT_KINDS] },
+          subject: { type: 'string' },
           title: { type: 'string' },
           body: { type: 'string' },
           confidence: { type: 'integer' },
@@ -484,6 +486,7 @@ const findingsShape = z.object({
     .array(
       z.object({
         kind: z.enum(INSIGHT_KINDS),
+        subject: z.string().trim().min(1).max(120),
         title: z.string().trim().min(1).max(200),
         body: z.string().trim().min(1).max(2000),
         confidence: z.number().int().min(0).max(100),
@@ -498,6 +501,12 @@ You are now writing standalone findings rather than answering a question. Return
 three and six, ordered with the most consequential first.
 
 - Every finding must name the figures it rests on, and those figures must be in the data.
+- \`subject\` is a short lowercase-hyphenated slug naming WHAT the finding is about, not
+  what it says about it: \`roas-below-one\`, \`facebook-leads-not-converting\`. It is an
+  identifier, so it must not contain figures that move between runs. If a subject in the
+  "Findings already open" list below describes the same issue, reuse that exact string —
+  that is how the page can tell a problem in its fourth month from a new one. Coin a new
+  subject only for an issue genuinely not in that list.
 - \`title\` is one line a busy person can act on. No preamble, under 90 characters.
 - \`body\` is two or three sentences: what the numbers say, and what follows from it.
 - \`confidence\` is 0-100 and reflects how well the data supports the claim, not how
@@ -532,14 +541,20 @@ export type GeneratedInsights = {
 };
 
 /**
- * Asks the model for findings and replaces the previously generated set.
+ * Asks the model for findings and reconciles them against the set already stored.
  *
- * Replaces rather than appends: a finding describes the numbers as they were when it was
- * written, so keeping last month's beside this month's presents stale claims as current.
- * Seeded rows are left alone — they are labelled samples and not ours to delete.
+ * Reconciles rather than replaces. The old behaviour deleted every generated row and
+ * wrote a new one, which kept the text current — a finding describes the numbers as they
+ * were — but threw away the only thing the page cannot recompute: how long this has been
+ * true. A problem in its fourth month appeared as discovered this morning.
  *
- * A dismissal does not survive a regeneration, which is the honest behaviour: the set was
- * thrown away and rebuilt, so there is nothing left for the dismissal to apply to.
+ * So a finding seen again keeps its identity and its first-seen date while its wording
+ * and figures are refreshed; a finding no longer reported is marked resolved rather than
+ * deleted; and a dismissal now survives, because it applies to a finding that is still
+ * there. See lib/insight-identity.ts for what makes two findings the same finding.
+ *
+ * Seeded rows are left alone throughout — they are labelled samples and not ours to
+ * delete.
  */
 export async function generateInsights(context: GrowthContext): Promise<GeneratedInsights> {
   const status = aiStatus();
@@ -547,10 +562,27 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
 
   const client = new OpenAI({ apiKey: process.env[AI_KEY_ENV] });
 
+  // The subjects already open, handed to the model so recognising a recurring finding is
+  // a matching problem against a short list rather than free invention. Dismissed ones
+  // are included: the issue is still open, someone has just chosen not to act on it, and
+  // leaving it out would invite the model to coin a second subject for the same thing.
+  const open = await db().aiInsight.findMany({
+    where: { provider: { not: 'seed' }, resolvedAt: null, subject: { not: null } },
+    select: { subject: true, kind: true, title: true },
+    orderBy: { firstSeenAt: 'asc' },
+    take: 30,
+  });
+
+  const openSubjects = open.length
+    ? `\n\nFindings already open. Reuse the exact subject string where your finding is the same issue:\n${open
+        .map((o) => `- ${o.subject} (${o.kind}) — ${o.title}`)
+        .join('\n')}`
+    : '';
+
   const response = await client.responses.create({
     model: MODEL,
     instructions: INSIGHTS_SYSTEM,
-    input: `Growth data:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\``,
+    input: `Growth data:\n\`\`\`json\n${JSON.stringify(context, null, 2)}\n\`\`\`${openSubjects}`,
     max_output_tokens: MAX_OUTPUT_TOKENS,
     reasoning: { effort: EFFORT },
     text: {
@@ -593,22 +625,69 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
 
   if (!parsed.findings.length) return { written: 0, usage, model: MODEL };
 
-  // One transaction, so a failure cannot leave the page with the old set deleted and the
-  // new one unwritten — which would read as "the AI found nothing".
+  const now = new Date();
+  const stored = await db().aiInsight.findMany({
+    where: { provider: { not: 'seed' } },
+    select: { id: true, fingerprint: true, resolvedAt: true },
+  });
+
+  // Two findings in one response can normalise to the same fingerprint — the model
+  // occasionally raises the same subject twice under one kind. Keeping the first means
+  // the upsert below never writes the same key twice in one transaction, which Postgres
+  // would reject and which would fail the whole run over a duplicate.
+  const byFingerprint = new Map<string, (typeof parsed.findings)[number]>();
+  const unidentified: typeof parsed.findings = [];
+  for (const finding of parsed.findings) {
+    const key = fingerprint(finding.kind, finding.subject);
+    if (!key) {
+      // No usable subject. Written as a plain row rather than dropped: the finding may
+      // still be worth reading, it simply cannot be tracked across runs.
+      unidentified.push(finding);
+    } else if (!byFingerprint.has(key)) {
+      byFingerprint.set(key, finding);
+    }
+  }
+
+  const row = (f: (typeof parsed.findings)[number]) => ({
+    kind: f.kind,
+    title: f.title,
+    body: f.body,
+    provider: 'openai',
+    model: MODEL,
+    confidence: f.confidence,
+    subject: normaliseSubject(f.subject),
+    context: { periodDays: context.periodDays },
+  });
+
+  // One transaction, so a failure cannot leave the page half-updated — findings resolved
+  // and their replacements unwritten, which would read as "the AI found nothing".
   await db().$transaction([
-    db().aiInsight.deleteMany({ where: { provider: { not: 'seed' } } }),
-    db().aiInsight.createMany({
-      data: parsed.findings.map((f) => ({
-        kind: f.kind,
-        title: f.title,
-        body: f.body,
-        provider: 'openai',
-        model: MODEL,
-        confidence: f.confidence,
-        context: { periodDays: context.periodDays },
-      })),
+    // Everything this run no longer reports is marked resolved rather than deleted. "This
+    // stopped being true on the 4th" is worth more than the row's absence, and a finding
+    // that comes back is then recognisably the same one rather than a fresh discovery.
+    db().aiInsight.updateMany({
+      where: { id: { in: toResolve(stored, new Set(byFingerprint.keys())) } },
+      data: { resolvedAt: now },
     }),
+    // Rows with no fingerprint cannot be matched against this run, so they are cleared
+    // the old way. Includes everything written before identity existed.
+    db().aiInsight.deleteMany({ where: { provider: { not: 'seed' }, fingerprint: null } }),
+    ...[...byFingerprint].map(([key, f]) =>
+      db().aiInsight.upsert({
+        where: { fingerprint: key },
+        // Seen again: the wording and figures are refreshed, firstSeenAt is not — that is
+        // the whole point — and resolvedAt is cleared, because a finding that has come
+        // back is open again. A dismissal is deliberately NOT cleared: someone judged
+        // this not worth acting on, and re-raising it on every run until the underlying
+        // number moves is how a page teaches people to ignore it.
+        update: { ...row(f), lastSeenAt: now, resolvedAt: null },
+        create: { ...row(f), fingerprint: key, firstSeenAt: now, lastSeenAt: now },
+      }),
+    ),
+    ...unidentified.map((f) =>
+      db().aiInsight.create({ data: { ...row(f), firstSeenAt: now, lastSeenAt: now } }),
+    ),
   ]);
 
-  return { written: parsed.findings.length, usage, model: MODEL };
+  return { written: byFingerprint.size + unidentified.length, usage, model: MODEL };
 }

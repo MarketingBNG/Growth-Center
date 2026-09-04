@@ -33,6 +33,8 @@ const PHRASING: Record<string, string> = {
   'apikey.revoke': 'revoked an API key',
   'content.create': 'added a content piece',
   'content.status': 'moved a content piece',
+  'insight.dismiss': 'dismissed a finding',
+  'insight.restore': 'restored a finding',
   'integration.configure': 'reconfigured an integration',
   'integration.connect': 'connected an integration',
   'integration.disconnect': 'disconnected an integration',

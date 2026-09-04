@@ -7,7 +7,9 @@ import { db, hasDb } from '@/lib/prisma';
 import { aiStatus, growthContext, ruleFindings } from '@/lib/ai';
 import { AI_KEY_ENV } from '@/lib/enums';
 import { TABLES } from '@/lib/ai-tools';
+import { ageLabel } from '@/lib/insight-identity';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
+import { DismissInsight } from './DismissInsight';
 import { AskBox } from './AskBox';
 
 export const metadata = { title: 'AI Insights · Growth Center' };
@@ -34,12 +36,27 @@ export default async function AiPage() {
   const status = aiStatus();
   const [context, stored] = await Promise.all([
     growthContext(90),
+    // Dismissed findings are listed too, below the rest. Hiding them entirely was the
+    // old intent, but nothing could dismiss anything, so nobody discovered that a
+    // dismissal was unreviewable — and a judgement call with no way back is worse than no
+    // dismissal at all. Resolved findings are excluded: they are no longer true.
     db().aiInsight.findMany({
-      where: { dismissedAt: null },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, kind: true, title: true, body: true, provider: true, confidence: true },
+      where: { resolvedAt: null },
+      // Nulls first, said explicitly: Postgres sorts them last on ASC, which would put
+      // every dismissed finding above the live ones.
+      orderBy: [
+        { dismissedAt: { sort: 'asc', nulls: 'first' } },
+        { firstSeenAt: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ],
+      select: {
+        id: true, kind: true, title: true, body: true, provider: true, confidence: true,
+        dismissedAt: true, firstSeenAt: true,
+      },
     }),
   ]);
+
+  const now = new Date();
 
   const computed = ruleFindings(context);
 
@@ -120,7 +137,9 @@ export default async function AiPage() {
           <CardHeader>
             <CardTitle>Saved insights</CardTitle>
             <p className="text-[11px] text-muted-foreground">
-              Written by the model when you ask for them, and replaced each time. Anything marked{' '}
+              Written by the model when you ask for them. A finding still true on the next run
+              keeps its place and its date rather than being rewritten as new; one no longer
+              found drops off the list. Anything marked{' '}
               <span className="text-warning">sample</span> shipped with the demo data and was not
               produced by a model.
             </p>
@@ -134,20 +153,37 @@ export default async function AiPage() {
                   ? 'None yet — generate a set from the numbers above.'
                   : 'None saved.'}
               </p>
-            ) : stored.map((i) => (
-              <div key={i.id} className="rounded-md border border-border px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-xs font-medium leading-snug">{i.title}</p>
-                  <span className="flex shrink-0 gap-1">
-                    <Badge tone={KIND_TONE[i.kind]}>{i.kind}</Badge>
-                    <Badge tone={i.provider === 'seed' ? 'warning' : 'purple'}>
-                      {i.provider === 'seed' ? 'sample' : i.provider}
-                    </Badge>
-                  </span>
+            ) : stored.map((i) => {
+              const age = ageLabel(i.firstSeenAt, now);
+              return (
+                <div
+                  key={i.id}
+                  className={`rounded-md border border-border px-3 py-2 ${i.dismissedAt ? 'opacity-55' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-xs font-medium leading-snug">{i.title}</p>
+                    <span className="flex shrink-0 items-center gap-1">
+                      <Badge tone={KIND_TONE[i.kind]}>{i.kind}</Badge>
+                      <Badge tone={i.provider === 'seed' ? 'warning' : 'purple'}>
+                        {i.provider === 'seed' ? 'sample' : i.provider}
+                      </Badge>
+                      {i.provider === 'seed' ? null : (
+                        <DismissInsight id={i.id} dismissed={i.dismissedAt !== null} title={i.title} />
+                      )}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{i.body}</p>
+                  {/* How long this has been true is the thing regeneration used to throw
+                      away, and it is often the most useful fact on the row: a finding in
+                      its second month is a different conversation from one raised today. */}
+                  {age || i.dismissedAt ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground/80">
+                      {[age, i.dismissedAt ? 'Dismissed' : null].filter(Boolean).join(' · ')}
+                    </p>
+                  ) : null}
                 </div>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{i.body}</p>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       </div>

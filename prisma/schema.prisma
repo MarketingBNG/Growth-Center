@@ -1128,11 +1128,39 @@ model AiInsight {
   /// 0-100, from the model. Null when the provider gave none.
   confidence Int?
 
+  /// ── Identity across runs (see lib/insight-identity.ts) ────────────────────────────
+  ///
+  /// A finding is about something, and the something outlives the sentence describing it.
+  /// Regeneration used to delete the whole set and write a new one, so a problem in its
+  /// fourth month read as discovered this morning, and a dismissal lasted until the next
+  /// run. These three columns are what let a finding be recognised as the same finding.
+
+  /// A short slug naming WHAT the finding is about — "roas-below-one", not the wording.
+  /// Supplied by the model, which is given the open subjects and asked to reuse one where
+  /// the finding is the same issue. Null on seeded rows, which have no run history.
+  subject String?
+
+  /// kind + subject, hashed. Unique, so a re-run updates the row rather than adding a
+  /// second copy of the same finding.
+  fingerprint String? @unique
+
+  /// When this finding was first raised, and when a run last still found it true. Both
+  /// are the run's timestamp, not the row's: createdAt already says when the row was
+  /// written, which after an update is a different question.
+  firstSeenAt DateTime?
+  lastSeenAt  DateTime?
+
+  /// Stamped when a run no longer reports the finding. Kept rather than deleted: "this
+  /// stopped being true on the 4th" is worth more than the row's absence, and a finding
+  /// that returns should be recognisably the same one.
+  resolvedAt DateTime?
+
   dismissedAt DateTime?
 
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+  @@index([resolvedAt])
   @@map("ai_insight")
 }
 

@@ -76,7 +76,10 @@ export default async function DashboardPage({
         select: { id: true, title: true, dueDate: true, priority: true, assigneeEmail: true, leadId: true },
       }),
       db().aiInsight.findMany({
-        where: { dismissedAt: null },
+        // Resolved as well as dismissed: a finding the last run stopped reporting is kept
+        // for its history, not because it is still true, and the dashboard shows three
+        // things it is asserting right now.
+        where: { dismissedAt: null, resolvedAt: null },
         orderBy: { createdAt: 'desc' },
         take: 3,
         select: { id: true, kind: true, title: true, body: true, provider: true },
