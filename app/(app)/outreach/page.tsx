@@ -107,9 +107,25 @@ export default async function OutreachPage({
                       {plural(s.steps.length, 'step')} · {plural(s.prospects, 'prospect')}
                       {s.ownerEmail ? ` · ${s.ownerEmail.split('@')[0]}` : ''} · created{' '}
                       {fmtRelative(s.createdAt)}
+                      {/* §14.2 wants copy approved by, and numbers verified by, as
+                          properties of the sequence. Neither field exists yet, so the
+                          honest statement is that there is no approval — not silence,
+                          which reads as approved. */}
+                      {' · '}
+                      <span className="text-destructive">Approval: none on record</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
+                    {/* Template checks before status, because "not fit to send" outranks
+                        "paused" when someone is deciding what to start next. */}
+                    {s.lint.critical > 0 ? (
+                      <Badge tone="danger">
+                        not fit to send · {plural(s.lint.critical, 'issue')}
+                      </Badge>
+                    ) : null}
+                    {s.lint.review > 0 ? (
+                      <Badge tone="warning">{s.lint.review} to verify</Badge>
+                    ) : null}
                     <Badge tone={s.status === 'active' ? 'success' : 'neutral'}>{s.status}</Badge>
                     <span className="text-xs text-muted-foreground">
                       {fmtPercent(s.replyRate)} reply rate
@@ -162,6 +178,24 @@ export default async function OutreachPage({
                       <p className="mt-1 line-clamp-4 whitespace-pre-wrap pl-7 text-[11px] leading-relaxed text-muted-foreground">
                         {step.body}
                       </p>
+                      {/* Findings sit against the step that carries them, so fixing one
+                          does not mean hunting through the template for the line. */}
+                      {s.lint.findings
+                        .filter((f) => f.stepPosition === step.position)
+                        .map((f, n) => (
+                          <p
+                            key={`${f.code}-${n}`}
+                            className={`mt-1 flex items-start gap-1.5 pl-7 text-[11px] ${
+                              f.severity === 'critical' ? 'text-destructive' : 'text-warning'
+                            }`}
+                          >
+                            <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+                            <span>
+                              {f.message}
+                              <span className="text-muted-foreground"> — in the {f.field}</span>
+                            </span>
+                          </p>
+                        ))}
                     </div>
                   ))}
                 </div>

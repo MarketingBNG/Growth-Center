@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { db } from './prisma.ts';
 import { rate } from './calc.ts';
 import { slice, type ListQuery } from './list-query.ts';
+import { preview } from './html-text.ts';
+import { lintSequence, summarise } from './outreach-lint.ts';
 
 // An unrecognised value drops its filter rather than throwing. These come straight from
 // the query string, and `?status=bogus` is a typo in a shared link, not a reason to
@@ -14,43 +16,6 @@ export const sequenceFilters = z.object({
 export type SequenceFilters = z.infer<typeof sequenceFilters>;
 
 export const SEQUENCE_STATUSES = ['draft', 'active', 'paused', 'archived'] as const;
-
-const ENTITIES: Record<string, string> = {
-  nbsp: ' ',
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  '#39': "'",
-};
-
-/**
- * A step body as readable text.
- *
- * Smartlead stores the composed email, which is HTML — 120 of the 121 imported steps are
- * markup, one of them 33KB of it. Rendered as text that printed
- * `<div><strong style="font-weight: 700">` down the card, and the page shipped 2.7MB of
- * escaped tags for a preview nobody could read. Tags become spacing, entities become
- * characters, and the result is trimmed, because a card is not an email client.
- */
-export function preview(html: string, max = 500): string {
-  const text = html
-    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    // Block ends are the only line breaks worth keeping; everything else collapses.
-    .replace(/<\/(p|div|li|tr|h[1-6])\s*>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&(#?\w+);/g, (m, e: string) => ENTITIES[e.toLowerCase()] ?? ENTITIES[e] ?? m)
-    .replace(/[^\S\n]+/g, ' ')
-    .split('\n')
-    .map((l) => l.trim())
-    // Blank lines dropped, not kept: the card shows the first few lines of the step, and
-    // an empty one spends a line of that budget on nothing.
-    .filter((l) => l)
-    .join('\n');
-  return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text;
-}
 
 /**
  * One page of sequences, each with its steps and its counts.
@@ -109,10 +74,21 @@ export async function sequences(filters: SequenceFilters, q: ListQuery) {
     const byStatus = statusBySequence.get(s.id) ?? {};
     const replied = byStatus.replied ?? 0;
     const sending = reported.get(s.id) ?? null;
+
+    // Linted from the stored body, before `preview` truncates it — a placeholder 600
+    // characters into a step is exactly the one nobody has read.
+    const lint = summarise(
+      lintSequence(s.steps.map((st) => ({ position: st.position, subject: st.subject, body: st.body }))),
+    );
+
     return {
       id: s.id,
       name: s.name,
       status: s.status,
+      /// Deterministic template checks (§14.6). Rendered per step and summarised on the
+      /// header, so a template nobody should send says so on the screen rather than in
+      /// somebody's memory.
+      lint,
       /// Which system wrote the sequence, so the page can tell a real campaign from a
       /// seeded one. Null means the seeder or someone typing into the UI.
       source: s.source,
