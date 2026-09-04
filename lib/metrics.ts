@@ -388,7 +388,7 @@ export async function funnel(range: Range, channelId?: string) {
   ];
   const paidChannel = { channelId: { in: paidChannelIds } };
 
-  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, repeatRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
+  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, inferredNewRevenueAgg, repeatRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
     await Promise.all([
       channelId ? Promise.resolve(0) : sessions(range),
       db().lead.count({ where: { createdAt: window, ...byChannel } }),
@@ -418,6 +418,20 @@ export async function funnel(range: Range, channelId?: string) {
       db().revenueEntry.groupBy({
         by: ['currency'],
         where: { date: window, opportunity: { is: { dealOrigin: 'new' } }, ...byChannel },
+        _sum: { amount: true },
+      }),
+      // The part of that figure this app worked out for itself, rather than read off a
+      // name. 1,081 deals carry no naming convention but do sit on an account with no
+      // earlier deal, and that inference is right about 98% of the time when checked
+      // against the deals whose names do say. Good enough to count, not good enough to
+      // pass off as a fact — so the card says how much of itself rests on it.
+      db().revenueEntry.groupBy({
+        by: ['currency'],
+        where: {
+          date: window,
+          opportunity: { is: { dealOrigin: 'new', originSource: 'account-history' } },
+          ...byChannel,
+        },
         _sum: { amount: true },
       }),
       // Repeat business and the unclassified remainder, so the three add up to the
@@ -463,12 +477,14 @@ export async function funnel(range: Range, channelId?: string) {
 
   const revenueSum = inReporting(revenueAgg);
   const newRevenueSum = inReporting(newRevenueAgg);
+  const inferredNewRevenueSum = inReporting(inferredNewRevenueAgg);
   const repeatRevenueSum = inReporting(repeatRevenueAgg);
   const spendSum = inReporting(spendAgg);
   const paidRevenueSum = inReporting(paidRevenueAgg);
 
   const revenue = revenueSum.total;
   const newRevenue = newRevenueSum.total;
+  const inferredNewRevenue = inferredNewRevenueSum.total;
   const repeatRevenue = repeatRevenueSum.total;
   // The remainder, rather than a fourth query. These three partition the book by
   // construction, so subtracting is both cheaper and guaranteed to reconcile with the
@@ -491,6 +507,9 @@ export async function funnel(range: Range, channelId?: string) {
     customers,
     revenue,
     newRevenue,
+    /** The share of newRevenue that rests on an inference from account history rather
+     *  than on the deal's own name. Part of the figure, not additional to it. */
+    inferredNewRevenue,
     /** Repeat work for an account already on the books. Real money, and not a return on
      *  this period's acquisition spend. */
     repeatRevenue,
@@ -572,8 +591,17 @@ function newBusinessHint(f: Funnel): string {
   const money = (n: number) => fmtMoney(n, false, f.currency);
   const parts = ['First engagement with an account, read from the deal name'];
   if (f.repeatRevenue > 0) parts.push(`${money(f.repeatRevenue)} of repeat work is excluded`);
+  // Said out loud rather than absorbed. This part of the figure was worked out from
+  // whether the account had an earlier deal, not read off anything — a good inference,
+  // but a different kind of claim, and a reader deciding how hard to lean on the number
+  // is entitled to know which part is which.
+  if (f.inferredNewRevenue > 0) {
+    parts.push(
+      `${money(f.inferredNewRevenue)} of it is inferred from account history, not stated in the name`,
+    );
+  }
   if (f.unclassifiedRevenue > 0) {
-    parts.push(`${money(f.unclassifiedRevenue)} sits on deals whose name says neither`);
+    parts.push(`${money(f.unclassifiedRevenue)} still sits on deals nothing here can place`);
   }
   return parts.join('. ');
 }

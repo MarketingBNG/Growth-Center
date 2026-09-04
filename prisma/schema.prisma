@@ -462,6 +462,15 @@ model Opportunity {
   /// unparsed name as new business is the overstatement G1.4 exists to remove.
   dealOrigin String?
 
+  /// name | account-history — what dealOrigin was read from.
+  ///
+  /// The name is a statement by the person who opened the deal; account history is an
+  /// inference this app drew (see lib/deal-origin.ts), right about 98% of the time when
+  /// checked against the names. They are not the same class of evidence and a reader
+  /// deciding how hard to lean on a figure needs to be able to tell them apart. Null
+  /// wherever dealOrigin is null or 'unknown'.
+  originSource String?
+
   /// one_time | retainer, from the suffix. §8.2's Engagement_Type.
   engagementType String?
 

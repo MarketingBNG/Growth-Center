@@ -5,6 +5,7 @@ import { dispatch } from '../events.ts';
 import { channelSlugFor, cleanImportedName, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { normalizeCompanyName } from '../dedupe.ts';
 import { parseDealName } from '../deal-name.ts';
+import { applyHistoryOrigins } from '../deal-origin.ts';
 import { currencySettings } from '../settings.ts';
 import { prospectStatus as prospectStatusOf } from './providers/smartlead.ts';
 import { getProvider, providerList } from './registry.ts';
@@ -1250,6 +1251,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           sourceStage ? JSON.stringify({ stage: sourceStage }) : null,
           str(m.ownerEmail),
           named.origin,
+          named.origin === 'unknown' ? null : 'name',
           named.engagementType,
           named.sequenceNo,
           createdAtOf(p),
@@ -1268,13 +1270,24 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'dealOrigin', 'engagementType', 'accountSequenceNo', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'dealOrigin', 'originSource', 'engagementType', 'accountSequenceNo', 'createdAt', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', accountSequenceNo: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
       );
       written += dealsTouched.length;
     }
+  }
+
+  // The names have had their say; account history now answers for the deals they left
+  // unclassified. It runs once at the end rather than per deal because the rule is about
+  // a deal's position among its siblings, which is not knowable one row at a time — and
+  // because the upsert above rewrites `unknown` over any verdict a previous run reached,
+  // so this must follow it, not precede it.
+  if (written > 0) {
+    await applyHistoryOrigins((sql, params) =>
+      db().$queryRawUnsafe<Record<string, unknown>[]>(sql, ...params),
+    );
   }
 
   return written;
