@@ -16,6 +16,8 @@ import {
   type LeadCampaign,
   type LeadSourceKey,
 } from './integrations/crm-mapping.ts';
+import { LEAD_SEGMENTS, segmentLabel } from './lead-segment.ts';
+import { LOST_REASONS, lostReasonLabel } from './lead-lost-reason.ts';
 import { INTERNAL_SOURCE } from './sources.ts';
 import { phoneMatches } from './phone.ts';
 
@@ -71,6 +73,14 @@ export const leadFilters = z.object({
   ownerEmail: z.string().trim().optional().catch(undefined),
   campaignId: recordId.optional().catch(undefined),
   channelId: recordId.optional().catch(undefined),
+  /** §7.4. One of the ICP segments, or `unsegmented` for the leads that did not say —
+   *  which is 26,331 of them, so the bucket has to be selectable rather than implied. */
+  segment: z.enum([...LEAD_SEGMENTS, 'unsegmented'] as [string, ...string[]]).optional().catch(undefined),
+  /** §7.3. A band rather than a number: a filter is a decision about who to ring today,
+   *  and nobody makes that decision at a threshold of 61. */
+  band: z.enum(['hot', 'warm', 'cold']).optional().catch(undefined),
+  /** §7.6. */
+  lostReason: z.enum(LOST_REASONS as unknown as [string, ...string[]]).optional().catch(undefined),
   from: z.string().date().optional().catch(undefined),
   to: z.string().date().optional().catch(undefined),
 });
@@ -81,6 +91,7 @@ export type LeadFilters = z.infer<typeof leadFilters>;
 // each. All are Lead scalars — the allow-list is what keeps `?sort=` out of a relation
 // or an arbitrary field.
 const SORTABLE = [
+  'segment', 'lostReason',
   'createdAt', 'updatedAt', 'status', 'score', 'firstName',
   'companyName', 'sourceType', 'sourceDetail', 'ownerEmail',
 ] as const;
@@ -205,6 +216,16 @@ export async function leadWhere(filters: LeadFilters, q: ListQuery, window?: { f
   }
   if (filters.campaignId) where.campaignId = filters.campaignId;
   if (filters.channelId) where.channelId = filters.channelId;
+  // Null is the bucket, not the absence of one — 26,331 leads said nothing about
+  // themselves and "Unsegmented" is the honest name for the largest group on the page.
+  if (filters.segment) where.segment = filters.segment === 'unsegmented' ? null : filters.segment;
+  if (filters.lostReason) where.lostReason = filters.lostReason;
+  if (filters.band) {
+    // The same cuts scoreBand makes, kept in one place there and applied here as a range
+    // so the filter and the badge on the row can never disagree.
+    where.score =
+      filters.band === 'hot' ? { gte: 60 } : filters.band === 'warm' ? { gte: 35, lt: 60 } : { lt: 35 };
+  }
 
   if (filters.from || filters.to) {
     where.createdAt = {
@@ -575,4 +596,73 @@ export async function setLeadOwner(id: string, ownerEmail: string | null, actorE
     },
   });
   return { ok: true };
+}
+
+/**
+ * Lead mix by segment, for §7.4's "renders on the dashboard".
+ *
+ * Reported with the unsegmented bucket included and named. 26,331 of 27,575 leads said
+ * nothing about themselves, so a chart of the other 1,244 would show a clean five-way
+ * split over 4.5% of the lead base and read as the whole picture — which is the
+ * proportion the mix exists to make visible, not to hide.
+ */
+export async function segmentMix(range: { from: Date; to: Date }) {
+  const rows = await db().lead.groupBy({
+    by: ['segment'],
+    where: { createdAt: { gte: range.from, lte: range.to } },
+    _count: { _all: true },
+    _avg: { score: true },
+  });
+
+  const total = rows.reduce((sum, r) => sum + r._count._all, 0);
+
+  return {
+    total,
+    /** How much of the mix is a real answer. The figure that says whether the rest of
+     *  this chart is worth reading. */
+    known: rows.filter((r) => r.segment !== null).reduce((sum, r) => sum + r._count._all, 0),
+    rows: rows
+      .map((r) => ({
+        segment: r.segment,
+        label: segmentLabel(r.segment),
+        leads: r._count._all,
+        share: total === 0 ? 0 : (r._count._all / total) * 100,
+        /** Mean quality inside the segment. The number §7.3 exists to make possible —
+         *  "this segment's leads got worse" is answerable before the conversions are. */
+        meanScore: r._avg.score === null ? null : Math.round(r._avg.score),
+      }))
+      // Unsegmented last whatever its size, so the named segments are read first and the
+      // scale of the unknown is read as the qualification it is.
+      .sort((a, b) => (a.segment === null ? 1 : b.segment === null ? -1 : b.leads - a.leads)),
+  };
+}
+
+/** Why leads were lost, for §7.6's lost-reason concentration. */
+export async function lostReasonMix(range: { from: Date; to: Date }) {
+  const rows = await db().lead.groupBy({
+    by: ['lostReason'],
+    where: { createdAt: { gte: range.from, lte: range.to }, lostReason: { not: null } },
+    _count: { _all: true },
+  });
+
+  const total = rows.reduce((sum, r) => sum + r._count._all, 0);
+  // The reasons that actually name a reason. `unstated` is the largest bucket today —
+  // 11,762 leads — and a concentration measured over the whole set would report that
+  // "no reason given" is the firm's main reason for losing, which is true and useless.
+  const stated = rows.filter((r) => r.lostReason !== 'unstated');
+  const statedTotal = stated.reduce((sum, r) => sum + r._count._all, 0);
+
+  return {
+    total,
+    statedTotal,
+    rows: rows
+      .map((r) => ({
+        reason: r.lostReason,
+        label: lostReasonLabel(r.lostReason),
+        leads: r._count._all,
+        /** Share of the losses that give a reason, not of all losses. */
+        share: statedTotal === 0 || r.lostReason === 'unstated' ? null : (r._count._all / statedTotal) * 100,
+      }))
+      .sort((a, b) => (a.reason === 'unstated' ? 1 : b.reason === 'unstated' ? -1 : b.leads - a.leads)),
+  };
 }

@@ -1289,9 +1289,30 @@ async function convertedLeads(range: Range): Promise<number> {
 }
 
 /** Leads: New · Converted · Qualified · Cost per lead · Median response · Unassigned. */
+/**
+ * Median lead quality in a period. §7.3.
+ *
+ * Median, not mean: 24,762 of 27,575 leads score under 35 because they arrived through a
+ * chat thread that asked them nothing, and a mean over that tail moves with volume rather
+ * than with quality — which is the opposite of what the score is for.
+ *
+ * Only leads the rules have actually scored. A row with a null `scoreVersion` carries the
+ * column's placeholder 0, and folding those in would report a collapse in quality on the
+ * day the feature shipped.
+ */
+export async function medianLeadScore(range: Range): Promise<number | null> {
+  const rows = await db().$queryRaw<{ median: number | null }[]>`
+    SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY score)::float AS median
+      FROM lead
+     WHERE "createdAt" >= ${range.from} AND "createdAt" <= ${range.to}
+       AND "scoreVersion" IS NOT NULL`;
+  const median = rows[0]?.median;
+  return median === null || median === undefined ? null : Math.round(median);
+}
+
 export async function leadsKpis(spec: number | Range) {
   const { current, previous } = windowFor(spec);
-  const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday, convNow, convBefore] =
+  const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday, convNow, convBefore, medianScoreNow, medianScoreBefore] =
     await Promise.all([
       funnel(current),
       funnel(previous),
@@ -1302,6 +1323,8 @@ export async function leadsKpis(spec: number | Range) {
       leadsByWeekday(current),
       convertedLeads(current),
       convertedLeads(previous),
+      medianLeadScore(current),
+      medianLeadScore(previous),
     ]);
 
   const cards: Kpi[] = [
@@ -1312,12 +1335,16 @@ export async function leadsKpis(spec: number | Range) {
     // "Semi-Qualified Lead" is the stage this team actually works: 1,713 leads against 3.
     { key: 'semiQualified', label: 'Semi-qualified', value: now.semiQualified, previous: before.semiQualified, format: 'number', higherIsBetter: true, hint: 'Reached at least semi-qualified — the stage this CRM actually works' },
     { key: 'converted', label: 'Converted', value: convNow, previous: convBefore, format: 'number', higherIsBetter: true, hint: 'Counted on the day the CRM converted them' },
-    // Blended, and labelled as such. Spend is Meta's alone — the only paid channel
-    // connected — while the lead count is every lead however it arrived, most of them
-    // referrals and inbound. Dividing one by the other is a useful number only if the
-    // reader knows that is what it is; unlabelled it reads as the price of a Meta lead,
-    // which it is not.
-    { key: 'cpl', label: 'Cost per lead', value: costPer(now.spend, now.leads), previous: costPer(before.spend, before.leads), format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Blended: all paid spend over all leads, however they arrived' },
+    // §7.1: the blended cost per lead used to sit here. It divided all paid spend by all
+    // leads however they arrived — most of them referrals and inbound — so it read as the
+    // price of a Meta lead and was not. "Nobody can buy blended." The per-channel figures
+    // are on the Cost per lead by channel card below the table, where a channel's own
+    // spend sits beside its own leads.
+    //
+    // Median rather than mean quality, and for the usual reason: 24,762 leads score under
+    // 35 and 121 score above 60, so a mean is dragged by a long tail of leads that said
+    // nothing about themselves.
+    { key: 'quality', label: 'Median lead quality', value: medianScoreNow, previous: medianScoreBefore, format: 'number', higherIsBetter: true, hint: 'Deterministic 0–100 from source, company email, phone, segment and stated intent. Computed in code, never by the model.' },
     { key: 'response', label: 'Median response', value: medianNow, previous: medianBefore, format: 'duration', higherIsBetter: false, hint: 'First outbound touch; untouched leads excluded' },
     // Reads zero on this workspace and that is the truth, not a gap: the CRM assigns an
     // owner on creation, so all 27,256 imported leads have one. The hint says so rather

@@ -23,6 +23,7 @@ import { campaignPerformance } from '@/lib/campaigns';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
+import { segmentMix } from '@/lib/leads';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
 
@@ -55,13 +56,15 @@ export default async function DashboardPage({
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const { current } = windowFor(spec);
 
-  const [dash, pipeline, series, channels, campaigns, recentLeads, tasks, insights] =
+  const [dash, pipeline, series, channels, campaigns, segments, recentLeads, tasks, insights] =
     await Promise.all([
       dashboardBand(spec, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
       campaignPerformance(current),
+      // §7.4: "Lead mix by segment renders on the dashboard."
+      segmentMix(current),
       db().lead.findMany({
         orderBy: { createdAt: 'desc' },
         take: 6,
@@ -388,6 +391,41 @@ export default async function DashboardPage({
               <Link href="/ai" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
                 All insights <ArrowRight className="size-3" />
               </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Lead mix by segment</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              {segments.total === 0 ? (
+                <p className="text-xs text-muted-foreground">No leads in this period.</p>
+              ) : (
+                <>
+                  {segments.rows.map((r) => (
+                    <div
+                      key={r.segment ?? 'unsegmented'}
+                      className="flex items-center justify-between gap-2 text-xs"
+                    >
+                      <span className={r.segment ? 'truncate' : 'truncate text-muted-foreground'}>
+                        {r.label}
+                      </span>
+                      <span className="shrink-0 tnum text-muted-foreground">
+                        {fmtNumber(r.leads)} · {fmtPercent(r.share, 1)}
+                      </span>
+                    </div>
+                  ))}
+                  {/* The qualification, not a footnote. Four fifths of these leads arrived
+                      through a chat thread that asked them nothing, and a five-way split
+                      over the remaining fifth reads as the whole picture unless the page
+                      says how much of it is missing. */}
+                  <p className="pt-1 text-[11px] text-muted-foreground">
+                    {fmtNumber(segments.known)} of {fmtNumber(segments.total)} leads said what
+                    kind of business they are. The rest came through channels that never asked.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
 

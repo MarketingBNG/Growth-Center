@@ -123,12 +123,12 @@ export const GLOSSARY: GlossaryTerm[] = [
     slug: 'cpql',
     term: 'CPQL',
     definition:
-      'Not reported, because it has no numerator: see Qualified lead. Cost per lead is reported instead, and is labelled blended — all paid spend over all leads however they arrived, most of them referrals and inbound.',
+      'Not reported, because it has no numerator: see Qualified lead. Cost per lead is reported instead, per channel, on the Cost per lead by channel card — a channel’s own spend over its own leads. The blended figure the manual objects to has been removed from the primary row.',
     manual: 'Acquisition spend (excluding hiring) ÷ qualified leads, by channel',
     agreement: 'not-computed',
     note:
-      'Also blocked at the denominator: per-channel spend exists only for Meta, the one paid channel connected. An unlabelled blended CPL reads as the price of a Meta lead, which it is not, so the card says so.',
-    where: 'lib/metrics.ts — the cpl card carries the hint',
+      'The denominator half is now done: hiring spend is excluded (G4, lib/campaign-objective.ts) and CPL is reported per channel rather than blended. The numerator is still blocked — nothing in this CRM records a consultation being booked.',
+    where: 'lib/metrics.ts — costPer inside readChannelPerformance',
     defaultOwner: 'Metrics layer',
   },
   {

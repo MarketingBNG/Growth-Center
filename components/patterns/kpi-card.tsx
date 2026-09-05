@@ -68,6 +68,7 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   cac: Scale,
   roas: Trophy,
   cpl: Scale,
+  quality: Scale,
   response: Clock,
   unassigned: UserX,
   companies: Building2,

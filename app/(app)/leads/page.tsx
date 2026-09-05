@@ -26,10 +26,21 @@ import { LEAD_STATUSES } from '@/lib/enums';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
 import { fmtRelative } from '@/lib/format';
+import { LEAD_SEGMENTS, SEGMENT_LABELS, segmentLabel } from '@/lib/lead-segment';
+import { LOST_REASONS, LOST_REASON_LABELS, lostReasonLabel } from '@/lib/lead-lost-reason';
+import { scoreBand } from '@/lib/lead-score';
 import { NewLeadButton } from './NewLeadButton';
 import { RebalanceButton } from './RebalanceButton';
+import { LeadQuality } from './LeadQuality';
 
 export const metadata = { title: 'Leads · Growth Center' };
+
+/** Hot reads as a decision, not as decoration: these are the leads worth ringing. */
+const BAND_TONE: Record<'hot' | 'warm' | 'cold', string> = {
+  hot: 'font-semibold text-success',
+  warm: 'text-foreground',
+  cold: 'text-muted-foreground',
+};
 
 const filtersFor = (
   people: AppUser[],
@@ -53,6 +64,36 @@ const filtersFor = (
   // Zoho stamps no campaign on a lead and every UTM column is empty, so that column is
   // null on all 27,401 of them. This is the only campaign the data actually contains.
   { name: 'leadCampaign', label: 'Campaign', options: campaigns },
+  // §7.4. "Unsegmented" is offered explicitly and not implied by clearing the filter:
+  // it is 26,331 of 27,575 leads, which makes it the largest selectable group on the
+  // page rather than an absence.
+  {
+    name: 'segment',
+    label: 'Segment',
+    options: [
+      ...LEAD_SEGMENTS.map((value) => ({ value, label: SEGMENT_LABELS[value] })),
+      { value: 'unsegmented', label: 'Unsegmented' },
+    ],
+  },
+  // §7.3. Bands, not a number. A filter is a decision about who to ring today and
+  // nobody makes that decision at a threshold of 61.
+  {
+    name: 'band',
+    label: 'Quality',
+    options: [
+      { value: 'hot', label: 'Hot (60+)' },
+      { value: 'warm', label: 'Warm (35–59)' },
+      { value: 'cold', label: 'Cold (under 35)' },
+    ],
+  },
+  // §7.6. `unstated` is on the list because it is the largest bucket — 11,762 leads —
+  // and the question "how many of our losses tell us nothing" is one worth being able
+  // to ask directly.
+  {
+    name: 'lostReason',
+    label: 'Lost because',
+    options: LOST_REASONS.map((value) => ({ value, label: LOST_REASON_LABELS[value] })),
+  },
   {
     name: 'ownerEmail',
     label: 'Owner',
@@ -86,7 +127,7 @@ export default async function LeadsPage({
 
   const q = pageQuery(params);
   const { value, days, bucket: presetBucket } = rangeParam(params);
-  const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'leadSource', 'leadCampaign', 'ownerEmail', 'campaignId', 'channelId', 'from', 'to']));
+  const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'leadSource', 'leadCampaign', 'ownerEmail', 'campaignId', 'channelId', 'segment', 'band', 'lostReason', 'from', 'to']));
   // The window the picker resolved, handed to the list as well as the band so the table
   // and the cards above it describe the same period. A hand-picked ?from=&to= wins, which
   // is what the CRM page's owner links carry.
@@ -136,6 +177,12 @@ export default async function LeadsPage({
 
       <Suspense fallback={<Skeleton className="h-[420px] rounded-2xl" />}>
         <LeadsTable filters={filters} q={q} window={window} />
+      </Suspense>
+
+      {/* Below the table and behind its own boundary: three aggregate reads over the
+          whole period, and none of them should delay the rows anybody came to look at. */}
+      <Suspense fallback={<Skeleton className="mt-[18px] h-[300px] rounded-2xl" />}>
+        <LeadQuality window={window} />
       </Suspense>
     </>
   );
@@ -216,6 +263,11 @@ async function LeadsTable({
                     {/* Derived from sourceDetail, so there is nothing to sort on that the
                         Source header does not already sort by. */}
                     <TH>Campaign</TH>
+                    {/* §7.3 and §7.4, side by side deliberately: a score is only
+                        readable next to what the lead said about themselves, and a
+                        segmented lead averages 48 against an unsegmented one's 16. */}
+                    <SortHeader name="score" align="right">Quality</SortHeader>
+                    <SortHeader name="segment">Segment</SortHeader>
                     <SortHeader name="ownerEmail">Owner</SortHeader>
                     <SortHeader name="createdAt" align="right">Created</SortHeader>
                   </TR>
@@ -262,6 +314,22 @@ async function LeadsTable({
                           guess here would be a campaign nobody ran. */}
                       <TD className="text-muted-foreground">
                         {leadCampaign(lead.sourceDetail) ?? '—'}
+                      </TD>
+                      {/* Null scoreVersion means the row predates the rules and its 0 is
+                          a placeholder, not a judgement — the state the column was in on
+                          all 27,575 rows. An em-dash says so; a 0 would not. */}
+                      <TD className="text-right tnum">
+                        {lead.scoreVersion === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <span className={BAND_TONE[scoreBand(lead.score)]}>{lead.score}</span>
+                        )}
+                      </TD>
+                      <TD className="text-muted-foreground">
+                        {lead.segment ? segmentLabel(lead.segment) : '—'}
+                        {lead.lostReason && lead.lostReason !== 'unstated' ? (
+                          <p className="mt-0.5 text-xs">Lost: {lostReasonLabel(lead.lostReason)}</p>
+                        ) : null}
                       </TD>
                       <TD className="text-muted-foreground">
                         {lead.ownerEmail ? lead.ownerEmail.split('@')[0] : 'Unassigned'}

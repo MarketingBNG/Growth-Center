@@ -425,9 +425,50 @@ model Lead {
   sourceType SourceType @default(manual)
   ownerEmail String?
 
-  /// Column only — no scoring rules yet. Present so adding them later is a write path,
-  /// not a migration.
+  /// Deterministic lead quality, 0-100. §7.3.
+  ///
+  /// Was a column with no rules behind it and 0 on all 27,575 rows, which reads on screen
+  /// as a score of zero rather than as no score. Now computed in lib/lead-score.ts from
+  /// five named components — source tier, company email, phone, segment and stated intent
+  /// — and never by the model: a score the agent assigned would not be reproducible from
+  /// the record, which is the whole point of it.
   score Int @default(0)
+
+  /// Which version of the formula produced `score`.
+  ///
+  /// Null means the score predates the rules and is the placeholder zero, not a genuine
+  /// zero. Without this the two are indistinguishable, and the trend the score exists to
+  /// serve would silently compare leads scored under different formulas.
+  scoreVersion Int?
+
+  /// One of the segments in lib/lead-segment.ts, or null where the lead did not say.
+  ///
+  /// §7.4. Read from the answer the person gave on the lead form — Zoho has no segment
+  /// field, and one added for somebody to fill in across 27,575 leads is a field that
+  /// stays empty. Null on the 22,914 leads that carry no message: inventing a segment for
+  /// four fifths of the base would make the mix on the dashboard describe nothing.
+  segment String?
+
+  /// Why a lost lead was lost. §7.6, and null unless the lead is lost or unqualified.
+  ///
+  /// `unstated` is a real value and the largest bucket: "Dead Lead" says the lead is dead
+  /// and not why, and mapping 9,867 of those onto one of the six named reasons would
+  /// manufacture the concentration the lost-reason insight looks for.
+  lostReason String?
+
+  /// How much the channel on this row is worth as evidence. G1.2.
+  ///
+  /// `reported` — the CRM's own source string matched a rule written against this
+  /// account's 56 measured values. `inferred` — the string meant nothing, but the
+  /// `sourceType` enum knew a category. `none` — nothing reached a channel.
+  ///
+  /// Every channel figure previously treated the first two as equally certain facts.
+  attributionConfidence String?
+
+  /// Suppression flags. §7.7: "a client receiving a cold sequence is a relationship
+  /// event, not a metric." The Outreach control in §14 cannot exist without them.
+  isClient          Boolean @default(false)
+  isReferralPartner Boolean @default(false)
 
   campaignId String?
   channelId  String?
@@ -579,6 +620,12 @@ model Opportunity {
   channelId  String?
 
   lostReason String?
+
+  /// The deal's channel as evidence. G1.2, and weaker than a lead's by construction: a
+  /// deal has no source string of its own here, so its channel is inherited from the lead
+  /// it converted from — and 90% of deals were never converted from one. See
+  /// lib/attribution-confidence.ts.
+  attributionConfidence String?
 
   pipeline   Pipeline      @relation(fields: [pipelineId], references: [id])
   stage      PipelineStage @relation(fields: [stageId], references: [id])

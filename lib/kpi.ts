@@ -67,6 +67,9 @@ export const KPI_SERIES: Record<string, KpiSeries[]> = {
   unassigned: ['leads'],
   response: ['leads'],
   duplicates: ['leads'],
+  // Read off the lead rows themselves, so it needs no spend series behind it — which is
+  // exactly why it can sit in the primary row where the blended CPL could not.
+  quality: ['leads'],
   converted: ['leads'],
 
   opportunities: ['deals'],

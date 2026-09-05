@@ -4,6 +4,9 @@ import { hasEncryptionKey, open, seal } from '../crypto.ts';
 import { dispatch } from '../events.ts';
 import { channelSlugFor, cleanImportedName, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from './crm-mapping.ts';
 import { normalizeCompanyName } from '../dedupe.ts';
+import { resolveAttribution } from '../attribution-confidence.ts';
+import { lostReasonOf } from '../lead-lost-reason.ts';
+import { SCORE_VERSION, scoreLead } from '../lead-score.ts';
 import { parseDealName } from '../deal-name.ts';
 import { applyHistoryOrigins } from '../deal-origin.ts';
 import { currencySettings } from '../settings.ts';
@@ -1243,6 +1246,17 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
     const convertedAt = m.converted ? new Date(String(m.convertedAt ?? '')) : null;
     const converted = convertedAt && !Number.isNaN(convertedAt.getTime()) ? convertedAt : null;
 
+    // Scored from the same fields being written, so the stored score always describes the
+    // stored record. Computing it in a later pass is how the two come apart.
+    const quality = scoreLead({
+      channelSlug,
+      email: importedEmail(m.email),
+      phone: str(m.phone),
+      message: str(m.message),
+      sourceDetail,
+      companyName: str(m.companyName),
+    });
+
     return [
       name.firstName,
       name.lastName,
@@ -1263,16 +1277,25 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
       reachedQualified || converted ? (converted ?? createdAtOf(p)) : null,
       converted,
       createdAtOf(p),
+      // §7.3, §7.4, §7.6 and G1.2, written on every sync rather than only by the
+      // backfill. A lead imported tomorrow that is never scored would sit at the
+      // column's default 0 — indistinguishable from a genuinely worthless lead, which
+      // is the state `score` was already in on all 27,575 rows.
+      quality.total,
+      SCORE_VERSION,
+      quality.segment,
+      lostReasonOf({ status: m.converted ? 'converted' : status, sourceStatus: str(m.status), message: str(m.message) }),
+      resolveAttribution(sourceType, sourceDetail).confidence,
       providerId,
       externalId,
     ];
   });
   const leadsTouched = await bulkUpsert(
     'lead',
-    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceStatus', 'sourceDetail', 'sourceType', 'channelId', 'ownerEmail', 'qualifiedAt', 'convertedAt', 'createdAt', 'source', 'externalId'],
+    ['firstName', 'lastName', 'email', 'phone', 'companyName', 'title', 'message', 'status', 'sourceStatus', 'sourceDetail', 'sourceType', 'channelId', 'ownerEmail', 'qualifiedAt', 'convertedAt', 'createdAt', 'score', 'scoreVersion', 'segment', 'lostReason', 'attributionConfidence', 'source', 'externalId'],
     leadRows,
     '"source", "externalId"',
-    { status: '"LeadStatus"', sourceType: '"SourceType"', qualifiedAt: 'timestamp(3)', convertedAt: 'timestamp(3)', createdAt: 'timestamp(3)' },
+    { status: '"LeadStatus"', sourceType: '"SourceType"', qualifiedAt: 'timestamp(3)', convertedAt: 'timestamp(3)', createdAt: 'timestamp(3)', score: 'int', scoreVersion: 'int' },
   );
   written += leadsTouched.length;
 
@@ -1366,6 +1389,12 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
           named.engagementType,
           named.sequenceNo,
           createdAtOf(p),
+          // G1.2. A deal in this CRM carries its own Lead_Source, so its confidence is
+          // read from that rather than inherited — but most deals carry none, which is
+          // why revenue attribution reaches 10.2% while leads reach 99.6%. A deal with no
+          // source of its own and a lead behind it is weakened one step by the backfill;
+          // see inheritedConfidence.
+          resolveAttribution(leadSourceType(dealSource), dealSource).confidence,
           providerId,
           externalId,
         ]);
@@ -1381,7 +1410,7 @@ async function writeCrmRecords(providerId: string, points: MetricPoint[]): Promi
 
       const dealsTouched = await bulkUpsert(
         'opportunity',
-        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'dealOrigin', 'originSource', 'engagementType', 'accountSequenceNo', 'createdAt', 'source', 'externalId'],
+        ['name', 'pipelineId', 'stageId', 'value', 'currency', 'probability', 'lostReason', 'expectedCloseDate', 'closedAt', 'companyId', 'contactId', 'sourceDetail', 'channelId', 'metadata', 'ownerEmail', 'dealOrigin', 'originSource', 'engagementType', 'accountSequenceNo', 'createdAt', 'attributionConfidence', 'source', 'externalId'],
         dealRows,
         '"source", "externalId"',
         { value: 'numeric', probability: 'int', accountSequenceNo: 'int', expectedCloseDate: 'timestamp(3)', closedAt: 'timestamp(3)', metadata: 'jsonb', createdAt: 'timestamp(3)' },
