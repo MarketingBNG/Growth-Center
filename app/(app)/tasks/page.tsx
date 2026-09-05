@@ -6,7 +6,7 @@ import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { PriorityBadge } from '@/components/patterns/badges';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
@@ -16,6 +16,7 @@ import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/enums'
 import { ProgressLink } from '@/components/NavProgress';
 import { fmtDate, fmtNumber, fmtRelative } from '@/lib/format';
 import { sourceMeta } from '@/lib/sources';
+import { taskLoad } from '@/lib/scorecard';
 import { CompleteButton } from './CompleteButton';
 
 export const metadata = { title: 'Tasks · Growth Center' };
@@ -97,7 +98,7 @@ async function TasksBody({
   // window the page is showing, not over the whole table — a "Delivery 42" beside a list
   // of open tasks must mean 42 open ones, or the number is a different question wearing
   // the same label.
-  const [crmCount, deliveryCount, ageing, oldest] = await Promise.all([
+  const [crmCount, deliveryCount, ageing, oldest, load] = await Promise.all([
     db().task.count({ where: { ...scope, ...taskKindWhere('crm') } }),
     db().task.count({ where: { ...scope, ...taskKindWhere('delivery') } }),
     // §19.2's hygiene metric: "tasks older than 90 days", shown until it reaches zero.
@@ -112,6 +113,7 @@ async function TasksBody({
       orderBy: { createdAt: 'asc' },
       select: { createdAt: true },
     }),
+    taskLoad(),
   ]);
 
   const today = new Date();
@@ -163,6 +165,49 @@ async function TasksBody({
           from when the task was raised, not from its due date — re-dating a task forward does not
           make it younger, and it is the commonest way a board stops carrying signal.
         </div>
+      ) : null}
+
+      {/* §19.4's "overdue counts by owner". The per-task-type SLA the clause also asks
+          for needs a task type, and neither Zoho CRM nor Zoho Projects sends one this app
+          can read — every imported task is a title and a due date. So this reports what
+          the data supports rather than inventing a classification to hang three
+          thresholds off. */}
+      {load.length > 0 ? (
+        <Card className="mb-4 overflow-hidden">
+          <CardHeader>
+            <CardTitle>Open work by owner</CardTitle>
+          </CardHeader>
+          <TableWrap>
+            <Table className="min-w-[520px]">
+              <THead>
+                <TR>
+                  <TH>Owner</TH>
+                  <TH className="text-right">Open</TH>
+                  <TH className="text-right">Overdue</TH>
+                  <TH className="text-right">Over 90 days</TH>
+                  <TH className="text-right">Oldest</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {load.slice(0, 12).map((r) => (
+                  <TR key={r.assigneeEmail ?? 'unassigned'}>
+                    <TD className={r.assigneeEmail ? 'font-medium' : 'font-medium text-muted-foreground'}>
+                      {r.name}
+                    </TD>
+                    <TD className="text-right tnum">{fmtNumber(r.open)}</TD>
+                    <TD className={`text-right tnum ${r.overdue > 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {fmtNumber(r.overdue)}
+                    </TD>
+                    <TD className="text-right tnum text-muted-foreground">{fmtNumber(r.ageing)}</TD>
+                    <TD className="text-right tnum text-muted-foreground">
+                      {r.oldestDays === null ? '—' : `${fmtNumber(r.oldestDays)}d`}
+                    </TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          </TableWrap>
+        </Card>
       ) : null}
 
       <Card className="overflow-hidden">

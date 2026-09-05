@@ -32,6 +32,7 @@ import { scoreBand } from '@/lib/lead-score';
 import { NewLeadButton } from './NewLeadButton';
 import { RebalanceButton } from './RebalanceButton';
 import { LeadQuality } from './LeadQuality';
+import { OwnerScorecard } from './OwnerScorecard';
 
 export const metadata = { title: 'Leads · Growth Center' };
 
@@ -183,6 +184,12 @@ export default async function LeadsPage({
           whole period, and none of them should delay the rows anybody came to look at. */}
       <Suspense fallback={<Skeleton className="mt-[18px] h-[300px] rounded-2xl" />}>
         <LeadQuality window={window} />
+      </Suspense>
+
+      {/* §7.5, last on the page and behind its own boundary. It reads every lead in the
+          period with its first activity, which is the heaviest query here. */}
+      <Suspense fallback={<Skeleton className="mt-[18px] h-[260px] rounded-2xl" />}>
+        <OwnerScorecard window={window} />
       </Suspense>
     </>
   );
