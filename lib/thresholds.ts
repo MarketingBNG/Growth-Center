@@ -58,6 +58,24 @@ export const THRESHOLDS = {
     default: 48,
     hint: 'G5.2 names two thresholds, not one: amber at 24 hours is a run that was missed, red at 48 is two, which is a system that has stopped rather than a night that went wrong.',
   },
+  'crm.duplicateBacklog': {
+    label: 'Duplicate pairs waiting before it is raised',
+    unit: 'pairs',
+    default: 25,
+    hint: '§8’s monthly rule: "duplicate candidates above threshold". A handful is a morning’s work; a backlog means nobody is working the queue and the customer count is drifting.',
+  },
+  'crm.partnerSilentDays': {
+    label: 'Referral partner silent for',
+    unit: 'days',
+    default: 60,
+    hint: '§8.5 names 60. Measured from the last recorded contact, or from when the partner was added where there has never been one — a partner entered six months ago and never rung is exactly the case worth raising.',
+  },
+  'leads.qualityFloor': {
+    label: 'Lead quality floor',
+    unit: 'score',
+    default: 30,
+    hint: '§7.3: "campaigns whose lead quality median falls below floor". A median, so one bad week of traffic does not trip it — and a source below this is producing leads nobody can work.',
+  },
   'seo.highSeverityIssues': {
     label: 'Pages with a serious speed fault before it is raised',
     unit: 'pages',

@@ -12,6 +12,12 @@ import { hasDb } from '@/lib/prisma';
 import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
 import { convert } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
+import {
+  COMPANY_SEGMENT_LABELS,
+  entityTypeLabel,
+  jurisdictionLabels,
+  jurisdictionWarning,
+} from '@/lib/company-facts';
 
 export const metadata = { title: 'Company · Growth Center' };
 
@@ -91,7 +97,29 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <Detail label="Country" value={company.country} />
               <Detail label="Size" value={company.size} />
               <Detail label="Owner" value={company.ownerEmail ?? 'Unassigned'} />
+              {/* §8.4. Empty until somebody enters them: this is knowledge the delivery
+                  team holds and Zoho does not carry, so there is nothing to import and
+                  any inference would be marketing acting on something nobody checked. */}
+              <Detail label="Segment" value={company.segment ? COMPANY_SEGMENT_LABELS[company.segment as keyof typeof COMPANY_SEGMENT_LABELS] : null} />
+              <Detail label="Entity type" value={entityTypeLabel(company.entityType)} />
+              <Detail
+                label="Jurisdictions"
+                value={
+                  company.jurisdictions.length > 0
+                    ? jurisdictionLabels(company.jurisdictions).join(' · ')
+                    : null
+                }
+              />
             </CardContent>
+            {/* A US state filing implies a federal one, so a state-only record drops out
+                of every federal compliance list while looking complete on screen. Said
+                rather than silently corrected — adding a jurisdiction nobody entered
+                would stop this being a record of what somebody actually said. */}
+            {jurisdictionWarning(company.jurisdictions) ? (
+              <p className="border-t border-border px-4 py-2.5 text-xs text-warning-strong">
+                {jurisdictionWarning(company.jurisdictions)}
+              </p>
+            ) : null}
           </Card>
 
           <Card>

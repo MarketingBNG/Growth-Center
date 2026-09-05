@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { recordId } from './id.ts';
 import { db } from './prisma.ts';
+import { COMPANY_SEGMENTS, ENTITY_TYPES, JURISDICTIONS } from './company-facts.ts';
 import { normalizeCompanyName, normalizeDomain, normalizeEmail } from './dedupe.ts';
 import { INTERNAL_SOURCE } from './sources.ts';
 import { phoneMatches } from './phone.ts';
@@ -17,6 +18,13 @@ export const companyInput = z.object({
   notes: z.string().trim().max(4000).optional(),
   ownerEmail: z.string().trim().email().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+
+  // §8.4: the dual-jurisdiction facts the delivery team holds and Zoho does not carry.
+  // Nullable rather than optional-only, so a value entered by mistake can be cleared —
+  // a field that can only be set is a field that drifts one way.
+  segment: z.enum(COMPANY_SEGMENTS).nullable().optional(),
+  entityType: z.enum(ENTITY_TYPES).nullable().optional(),
+  jurisdictions: z.array(z.enum(JURISDICTIONS)).max(JURISDICTIONS.length).optional(),
 });
 
 export const contactInput = z.object({
@@ -29,6 +37,13 @@ export const contactInput = z.object({
   companyId: recordId.optional(),
   ownerEmail: z.string().trim().email().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+
+  // §8.4: the dual-jurisdiction facts the delivery team holds and Zoho does not carry.
+  // Nullable rather than optional-only, so a value entered by mistake can be cleared —
+  // a field that can only be set is a field that drifts one way.
+  segment: z.enum(COMPANY_SEGMENTS).nullable().optional(),
+  entityType: z.enum(ENTITY_TYPES).nullable().optional(),
+  jurisdictions: z.array(z.enum(JURISDICTIONS)).max(JURISDICTIONS.length).optional(),
 });
 
 export const noteInput = z.object({

@@ -38,11 +38,17 @@ import type { InsightKind } from './enums.ts';
 //   No field exists for it:
 //     CPQL over/under target      `qualifiedAt` means converted here; Zoho Bookings is
 //                                 not integrated, so the numerator has no signal at all.
-//     Lead quality drop           There is no quality score on Lead.
+//     Lead quality drop           [built 5 Sep] Lead.score now carries a deterministic
+//                                 0-100 (lib/lead-score.ts), so this is live as
+//                                 `lead_quality_below_floor` — per channel, because
+//                                 campaignId is still null on every lead.
 //     Commercial keyword drop     Rankings are stored; nothing marks a term commercial.
 //     AI citation lost            No tracked-question table.
-//     Suppression breach          Is_Client / Is_Referral_Partner are not in the Zoho
-//                                 Contacts field list, so the flags cannot be read.
+//     Suppression breach          The columns exist now (§7.7) and nothing populates
+//                                 them: Is_Client and Is_Referral_Partner are not in the
+//                                 Zoho Contacts field list, so there is still nothing to
+//                                 read them from. A rule over a column that is false on
+//                                 every row would report perfect compliance.
 //
 //   The table is empty, so the rule would be a rule about nothing:
 //     Deliverability threshold    outreach_message holds 0 rows.
@@ -57,9 +63,14 @@ import type { InsightKind } from './enums.ts';
 //                                 per-campaign lead count is structurally uncomputable.
 //                                 Reported per channel instead, where the data is real.
 //
-// That leaves the thirteen below. Each was checked against the live database before it
-// was written, which is how the notes above are so specific — and why two of them turned
-// out to be stale.
+// That leaves the sixteen below. Each was checked against the live database before it was
+// written, which is how the notes above are so specific — and why several of them turned
+// out to be stale on re-reading.
+//
+// Three were added on 5 September once the work they depend on existed: the duplicate
+// merge queue (§8.1), the referral partner registry (§8.5) and the lead quality score
+// (§7.3). None of them was ever blocked on anything outside the repository; they were
+// waiting on a table with rows in it.
 
 export type RuleSection =
   | 'dashboard'
@@ -791,6 +802,183 @@ const lostReasonRule: Rule = {
   },
 };
 
+// §8's monthly rule: "duplicate candidates above threshold".
+//
+// The pair count, not the merge count. A queue growing is a statement about the customer
+// count drifting; a queue being worked is not a finding at all.
+const duplicateBacklogRule: Rule = {
+  id: 'duplicate_backlog',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Duplicate pairs waiting in the merge queue, above the stored threshold',
+  async run(ctx) {
+    const floor = ctx.thresholds['crm.duplicateBacklog'];
+
+    const [pending, oldest, resolvedRecently] = await Promise.all([
+      db().duplicateCandidate.count({ where: { status: 'pending' } }),
+      db().duplicateCandidate.findFirst({
+        where: { status: 'pending' },
+        orderBy: { detectedAt: 'asc' },
+        select: { detectedAt: true },
+      }),
+      db().duplicateCandidate.count({
+        where: { status: { in: ['merged', 'dismissed'] }, resolvedAt: { gte: daysAgo(ctx.now, 30) } },
+      }),
+    ]);
+
+    if (pending <= floor) return [];
+
+    return [
+      {
+        subject: 'duplicate-merge-queue-backlog',
+        evidence: {
+          pendingPairs: pending,
+          threshold: floor,
+          oldestWaitingDays: oldest
+            ? Math.floor((ctx.now.getTime() - oldest.detectedAt.getTime()) / 86_400_000)
+            : null,
+          // Whether anybody is working it at all, which is the difference between a busy
+          // month and an abandoned queue.
+          resolvedLast30Days: resolvedRecently,
+        },
+        // High once nothing has been resolved in a month: a queue nobody touches is not a
+        // backlog, it is a feature switched off by neglect.
+        severity: resolvedRecently === 0 ? 'high' : 'medium',
+        proposedAction:
+          'Work the duplicate queue on the CRM page. Every unresolved pair is a customer counted twice in CAC and in every per-account average.',
+      },
+    ];
+  },
+};
+
+// §8.5's monthly rule: "referral partners silent beyond 60 days".
+//
+// Two findings, not one, and the second is the sharper: a partner who sent work and was
+// never thanked is a specific debt, where a partner nobody has rung is a lapse.
+const silentPartnerRule: Rule = {
+  id: 'referral_partner_silent',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'opportunity',
+  test: 'Active referral partners with no contact inside the window, and referrals never acknowledged',
+  async run(ctx) {
+    const days = ctx.thresholds['crm.partnerSilentDays'];
+    const cutoff = daysAgo(ctx.now, days);
+
+    const partners = await db().referralPartner.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        ownerEmail: true,
+        lastTouchAt: true,
+        acknowledgementSentAt: true,
+        createdAt: true,
+        leads: { select: { createdAt: true } },
+      },
+    });
+    if (partners.length === 0) return [];
+
+    // Measured from when the partner was added where there has never been a touch. A
+    // partner entered six months ago and never rung is exactly the case §8.5 is about,
+    // and measuring from a null would have excluded them.
+    const silent = partners.filter((p) => (p.lastTouchAt ?? p.createdAt) < cutoff);
+    const unacknowledged = (p: (typeof partners)[number]) =>
+      p.leads.filter((l) => !p.acknowledgementSentAt || l.createdAt > p.acknowledgementSentAt).length;
+    const owed = partners.filter((p) => unacknowledged(p) > 0);
+
+    const findings: Finding[] = [];
+
+    if (silent.length > 0) {
+      findings.push({
+        subject: 'referral-partners-not-spoken-to',
+        evidence: {
+          silentPartners: silent.length,
+          activePartners: partners.length,
+          windowDays: days,
+          neverContacted: silent.filter((p) => p.lastTouchAt === null).length,
+        },
+        proposedAction: `Ring the ${silent.length} referral partner${silent.length === 1 ? '' : 's'} nobody has spoken to in ${days} days. Referral is the highest-trust channel the firm has and it goes quiet without being worked.`,
+      });
+    }
+
+    // Per partner, because a thank-you is owed by a person to a person, and "four
+    // partners are owed" is not something anybody can act on as one item.
+    for (const partner of owed) {
+      const count = unacknowledged(partner);
+      findings.push({
+        subject: `referral-unacknowledged-${slug(partner.id)}`,
+        evidence: {
+          partner: partner.name,
+          unacknowledgedReferrals: count,
+          lastAcknowledgedAt: partner.acknowledgementSentAt?.toISOString() ?? null,
+        },
+        severity: 'high',
+        ownerEmail: partner.ownerEmail,
+        proposedAction: `Thank ${partner.name} for ${count} referral${count === 1 ? '' : 's'} and record it on the partner registry.`,
+      });
+    }
+
+    return findings;
+  },
+};
+
+// §7.3's daily rule: "campaigns whose lead quality median falls below floor".
+//
+// Per channel rather than per campaign, and the rule says so in its own evidence rather
+// than letting the substitution pass unnoticed: `campaignId` is null on all 27,575 leads,
+// so there is no campaign to group by. The CRM's channel is the finest grain the data
+// actually supports.
+const leadQualityFloorRule: Rule = {
+  id: 'lead_quality_below_floor',
+  scope: 'period',
+  version: 1,
+  section: 'leads',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Channels whose median lead quality in the period sits under the stored floor',
+  async run(ctx) {
+    const floor = ctx.thresholds['leads.qualityFloor'];
+
+    // Median per channel, in SQL — the arithmetic is the query, as it is for the renewal
+    // rule. Scored leads only: a row with a null scoreVersion carries the column's
+    // placeholder zero, and folding those in would report every channel as collapsed on
+    // the day the score shipped.
+    //
+    // Twenty leads is a floor of meaningfulness rather than a tuning knob: below it a
+    // median moves several points on one lead and the rule fires on noise.
+    const rows = await db().$queryRaw<{ channel: string; median: number; leads: bigint }[]>`
+      SELECT c.name AS channel,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY l.score)::float AS median,
+             count(*) AS leads
+        FROM lead l
+        JOIN channel c ON c.id = l."channelId"
+       WHERE l."createdAt" >= ${ctx.from} AND l."createdAt" <= ${ctx.to}
+         AND l."scoreVersion" IS NOT NULL
+       GROUP BY c.name
+      HAVING count(*) >= 20`;
+
+    return rows
+      .filter((r) => r.median < floor)
+      .map((r) => ({
+        subject: `lead-quality-${slug(r.channel)}`,
+        evidence: {
+          channel: r.channel,
+          medianScore: Math.round(r.median),
+          floor,
+          leads: Number(r.leads),
+          groupedBy: 'channel, because no lead in this CRM carries a campaign',
+        },
+        proposedAction: `Review what ${r.channel} is being asked to deliver. Its leads score ${Math.round(r.median)} against a floor of ${floor} — mostly no company email, no stated segment and no stated intent.`,
+      }));
+  },
+};
+
 export const RULES: Rule[] = [
   attributionRule,
   placeholderRule,
@@ -805,6 +993,9 @@ export const RULES: Rule[] = [
   seoCtrRule,
   seoTechnicalIssueRule,
   lostReasonRule,
+  duplicateBacklogRule,
+  silentPartnerRule,
+  leadQualityFloorRule,
 ];
 
 export const RULE_IDS = RULES.map((r) => r.id);

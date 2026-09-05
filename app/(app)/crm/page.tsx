@@ -6,6 +6,7 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { currentUser } from '@/lib/auth';
 import { can } from '@/lib/roles';
 import { DuplicateQueue } from './DuplicateQueue';
+import { Lifecycle } from './Lifecycle';
 import { duplicateCounts, duplicateQueue } from '@/lib/duplicate-queue';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
@@ -63,7 +64,11 @@ export default async function CrmPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const tab = params.tab === 'contacts' ? 'contacts' : 'companies';
+  // §8.2's client lifecycle is a third tab rather than a panel: it is about the accounts
+  // already won, and the two lists beside it are about everyone the firm has ever spoken
+  // to. Mixing them on one screen was the manual's complaint about this page.
+  const tab =
+    params.tab === 'contacts' ? 'contacts' : params.tab === 'lifecycle' ? 'lifecycle' : 'companies';
 
   if (!hasDb()) {
     return (
@@ -83,14 +88,14 @@ export default async function CrmPage({
   //
   // `page` is the one thing deliberately dropped: the tabs hold different numbers of
   // records, and arriving on page 5 of a shorter list shows nothing at all.
-  const tabHref = (next: 'companies' | 'contacts') => {
+  const tabHref = (next: 'companies' | 'contacts' | 'lifecycle') => {
     const carried = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) {
       if (k === 'tab' || k === 'page') continue;
       const value = Array.isArray(v) ? v[0] : v;
       if (value) carried.set(k, value);
     }
-    if (next === 'contacts') carried.set('tab', 'contacts');
+    if (next !== 'companies') carried.set('tab', next);
     const query = carried.toString();
     return query ? `/crm?${query}` : '/crm';
   };
@@ -123,7 +128,9 @@ export default async function CrmPage({
     currentUser(),
     listAssignable(),
     peopleOn(tab === 'companies' ? 'company' : 'contact', 'ownerEmail'),
-    tab === 'companies'
+    tab === 'lifecycle'
+      ? Promise.resolve({ rows: [], total: 0 })
+      : tab === 'companies'
       ? listCompanies(q, {
           ownerEmail: owner,
           status: status === 'customer' || status === 'prospect' ? status : undefined,
@@ -181,16 +188,28 @@ export default async function CrmPage({
         <Button asChild variant={tab === 'contacts' ? 'secondary' : 'ghost'} size="sm">
           <ProgressLink href={tabHref('contacts')}>Contacts</ProgressLink>
         </Button>
+        <Button asChild variant={tab === 'lifecycle' ? 'secondary' : 'ghost'} size="sm">
+          <ProgressLink href={tabHref('lifecycle')}>Client lifecycle</ProgressLink>
+        </Button>
         {/* The date range drives the panels above and nothing below. Windowing the book
             as well would leave 88 of 2,953 companies on screen and make the one place
             you can look a client up useless for looking anyone up. That is the right
-            behaviour, but the picker gave no hint of it — so the list says so itself. */}
-        <p className="ml-auto text-xs text-muted-foreground">
-          {filtered ? `${fmtNumber(data.total)} matching` : `All ${fmtNumber(data.total)} ${tab}`} · the
-          date range applies to the panels above
-        </p>
+            behaviour, but the picker gave no hint of it — so the list says so itself.
+
+            The lifecycle tab is a snapshot of who is a client now, not of a period, so
+            the note would be misleading there and is left off. */}
+        {tab === 'lifecycle' ? null : (
+          <p className="ml-auto text-xs text-muted-foreground">
+            {filtered ? `${fmtNumber(data.total)} matching` : `All ${fmtNumber(data.total)} ${tab}`} ·
+            the date range applies to the panels above
+          </p>
+        )}
       </div>
 
+      {tab === 'lifecycle' ? (
+        <Lifecycle canManage={user ? can(user.role, 'crm:write') : false} />
+      ) : (
+        <>
       {/* Both lists were unfilterable, though every row carries an owner and the leads
           table beside them has had these dropdowns all along. */}
       <FilterBar
@@ -224,6 +243,8 @@ export default async function CrmPage({
           </>
         )}
       </Card>
+        </>
+      )}
     </>
   );
 }

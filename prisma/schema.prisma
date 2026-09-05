@@ -336,6 +336,20 @@ model Company {
 
   ownerEmail String?
 
+  /// §8.4: "the dual-jurisdiction facts the delivery team already knows and marketing
+  /// cannot target without."
+  ///
+  /// Free text against a documented vocabulary rather than enums, because these are
+  /// entered by hand and an enum turns a new jurisdiction into a migration. The
+  /// vocabularies live in lib/company-facts.ts, where the form reads them.
+  ///
+  /// Null everywhere until somebody fills them in. The manual's own "done when" is the
+  /// top hundred accounts, not all 2,953 — this is knowledge the delivery team holds and
+  /// nothing in Zoho carries, so there is nothing to import and nothing to infer.
+  segment      String?
+  entityType   String?
+  jurisdictions String[] @default([])
+
   contacts      Contact[]
   leads         Lead[]
   opportunities Opportunity[]
@@ -470,6 +484,11 @@ model Lead {
   isClient          Boolean @default(false)
   isReferralPartner Boolean @default(false)
 
+  /// Which registered partner sent this lead. §8.5. Null on the 217 referral leads that
+  /// predate the registry — their partner is free text inside `sourceDetail` and cannot
+  /// be resolved without guessing.
+  referralPartnerId String?
+
   campaignId String?
   channelId  String?
 
@@ -493,6 +512,7 @@ model Lead {
 
   campaign      Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   channel       Channel?      @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  referralPartner ReferralPartner? @relation(fields: [referralPartnerId], references: [id], onDelete: SetNull)
   contact       Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   company       Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   opportunities Opportunity[]
@@ -627,6 +647,9 @@ model Opportunity {
   /// lib/attribution-confidence.ts.
   attributionConfidence String?
 
+  /// Which registered partner this deal came through. §8.5.
+  referralPartnerId String?
+
   pipeline   Pipeline      @relation(fields: [pipelineId], references: [id])
   stage      PipelineStage @relation(fields: [stageId], references: [id])
   lead       Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
@@ -634,6 +657,7 @@ model Opportunity {
   company    Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   campaign   Campaign?     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   channel    Channel?      @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  referralPartner ReferralPartner? @relation(fields: [referralPartnerId], references: [id], onDelete: SetNull)
   customer   Customer?
   activities Activity[]
   noteEntries Note[]
@@ -670,6 +694,28 @@ model Customer {
 
   wonAt    DateTime
   churnedAt DateTime?
+
+  /// §8.2's four lifecycle flags, as dates rather than booleans.
+  ///
+  /// "Renewal and referral are the cheapest revenue in the firm and currently have no
+  /// system of record anywhere." These four columns are that record.
+  ///
+  /// Dates, not booleans, and the difference matters: "a review was requested" is a
+  /// weaker fact than "a review was requested in March", and the flag §8.2 actually asks
+  /// for is "no review requested" — which is a question about recency for a client of
+  /// three years, not about whether it ever happened once.
+  ///
+  /// Null means never, and stays null until somebody records it. Nothing infers these
+  /// from activity: a call logged against an account is not evidence that a referral was
+  /// asked for, and treating it as such would fill the registry with work nobody did.
+  reviewRequestedAt  DateTime?
+  referralAskedAt    DateTime?
+  crossSellOfferedAt DateTime?
+
+  /// When the retainer comes up. Null for a one-off engagement and for any retainer whose
+  /// term nobody has entered — §8.2's "retainer renewal inside 60 days" flag needs a date
+  /// and this CRM records none, so it is entered here or it is not known.
+  renewalDueAt DateTime?
 
   company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   opportunity Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
@@ -1478,6 +1524,53 @@ model DuplicateCandidate {
   @@unique([entityType, primaryId, duplicateId])
   @@index([status, confidence])
   @@map("duplicate_candidate")
+}
+
+/// §8.5: "Referral is our highest-trust channel and it has no home in any system today.
+/// What is not recorded is not followed up."
+///
+/// A registry, not a report. The referral channel carries 217 leads and every one of them
+/// came from somebody the firm knows — but which somebody is recorded, when it is
+/// recorded at all, as free text in a lead's source string: "Ref by NG". That string
+/// cannot be counted, cannot be thanked and cannot be asked again.
+model ReferralPartner {
+  id   String @id @default(cuid())
+  name String
+
+  /// ca_firm | law_firm | incubator | bank | immigration_adviser | other.
+  /// The five §8.5 names plus an escape, as text — see lib/referrals.ts.
+  partnerType String @default("other")
+
+  email   String?
+  phone   String?
+  company String?
+  notes   String?
+
+  /// Who owns the relationship. A partner with no owner is a partner nobody rings.
+  ownerEmail String?
+
+  /// The last time anybody spoke to them, and the last time they were thanked.
+  ///
+  /// Separate columns because they are different obligations: "silent beyond 60 days" is
+  /// a prompt to make contact, and an unacknowledged referral is a debt. A partner who
+  /// sent three clients and was never thanked is the specific failure this table exists
+  /// to make visible.
+  lastTouchAt        DateTime?
+  acknowledgementSentAt DateTime?
+
+  active Boolean @default(true)
+
+  /// The leads and deals credited to this partner. Nullable on both sides: most referral
+  /// leads predate the registry and will never be attributed to a named partner, and
+  /// pretending otherwise would invent a history.
+  leads         Lead[]
+  opportunities Opportunity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, partnerType])
+  @@map("referral_partner")
 }
 
 model Notification {
