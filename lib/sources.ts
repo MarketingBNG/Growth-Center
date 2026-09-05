@@ -74,6 +74,18 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Measured by Google PageSpeed Insights. Lab figures are a single run on each page; field figures are real Chrome users over the last 28 days.',
   },
+  google_business: {
+    label: 'GBP',
+    name: 'Google Business Profile',
+    tone: 'live',
+    hint: 'Reported by Google Business Profile — how the listing was found, and what people did next.',
+  },
+  youtube: {
+    label: 'YouTube',
+    name: 'YouTube',
+    tone: 'live',
+    hint: 'Reported by the YouTube Data and Analytics APIs on each sync.',
+  },
   zoho_projects: {
     label: 'Projects',
     name: 'Zoho Projects',
