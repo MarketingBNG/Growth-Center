@@ -15,10 +15,12 @@ type Ctx = { params: Promise<{ id: string }> };
  */
 export const maxDuration = 300;
 
-export const POST = route<unknown, Ctx>('integrations:manage', async (_user, _req, ctx) => {
+export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req, ctx) => {
   const { id } = await ctx.params;
   try {
-    const result = await sync(id);
+    // Named on the run row. Null there means the cron, and "who started this" is the
+    // first question asked of a run that overlapped another one.
+    const result = await sync(id, 30, user.email);
     await invalidate(TAGS.integrations, TAGS.metrics, TAGS.seo, TAGS.social);
     return result;
   } catch (e) {

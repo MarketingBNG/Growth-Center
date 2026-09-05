@@ -1691,7 +1691,7 @@ async function claimSync(integrationId: string, providerName: string): Promise<v
   }
 }
 
-export async function sync(id: string, days = 30) {
+export async function sync(id: string, days = 30, actorEmail: string | null = null) {
   const provider = requireProvider(id);
 
   const integration = await db().integration.findUnique({
@@ -1711,6 +1711,34 @@ export async function sync(id: string, days = 30) {
   }
 
   await claimSync(integration.id, provider.name);
+
+  // G5.1. Opened before the work starts and closed on both outcomes, so a run killed by
+  // the platform mid-flight leaves a row saying 'running' with no finish — which is the
+  // signature of a timeout and the one failure Integration's three columns could never
+  // record, because nothing ever got as far as writing them.
+  const run = await db().syncRun.create({
+    data: { provider: id, status: 'running', actorEmail },
+    select: { id: true, startedAt: true },
+  });
+  type RunClose = {
+    status: 'succeeded' | 'failed';
+    rows?: number;
+    detail?: string;
+    error?: string;
+    complete: boolean;
+  };
+  const closeRun = (data: RunClose) =>
+    db()
+      .syncRun.update({
+        where: { id: run.id },
+        data: { ...data, finishedAt: new Date(), durationMs: Date.now() - run.startedAt.getTime() },
+      })
+      // A run row is a record of the sync, not part of it. Losing one must not turn a
+      // successful import into a failed one, nor mask the real error behind a write
+      // error about the audit trail.
+      .catch((e: unknown) => {
+        console.warn(`[integrations] could not close the run row for ${id}:`, e);
+      });
 
   const to = new Date();
   const from = new Date(to);
@@ -1737,6 +1765,13 @@ export async function sync(id: string, days = 30) {
       },
     });
 
+    await closeRun({
+      status: 'succeeded',
+      rows: outcome.rows,
+      detail: outcome.detail,
+      complete: outcome.done,
+    });
+
     return outcome;
   } catch (e) {
     const message = e instanceof IntegrationError ? e.message : ((e as Error).message ?? 'Sync failed.');
@@ -1744,6 +1779,7 @@ export async function sync(id: string, days = 30) {
       where: { id: integration.id },
       data: { state: 'error', lastError: message, lastErrorAt: new Date() },
     });
+    await closeRun({ status: 'failed', error: message, complete: false });
     await dispatch({ type: 'integration.sync_failed', provider: id, message });
     throw new IntegrationError(message);
   }

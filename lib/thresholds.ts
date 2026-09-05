@@ -52,6 +52,12 @@ export const THRESHOLDS = {
     default: 24,
     hint: '§20.5 names 24 hours. The nightly job runs once, so anything past this means a run was missed or failed.',
   },
+  'sync.failedHours': {
+    label: 'Sync considered broken after',
+    unit: 'hours',
+    default: 48,
+    hint: 'G5.2 names two thresholds, not one: amber at 24 hours is a run that was missed, red at 48 is two, which is a system that has stopped rather than a night that went wrong.',
+  },
   'seo.highSeverityIssues': {
     label: 'Pages with a serious speed fault before it is raised',
     unit: 'pages',

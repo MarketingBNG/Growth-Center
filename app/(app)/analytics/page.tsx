@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ChartLine, Plug } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { SyncRuns } from './SyncRuns';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
@@ -222,6 +223,8 @@ export default async function AnalyticsPage({
             </TableWrap>
           )}
         </Card>
+
+        <SyncRuns />
       </div>
     </>
   );

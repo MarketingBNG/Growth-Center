@@ -316,18 +316,34 @@ const taskDebtRule: Rule = {
 const syncStaleRule: Rule = {
   id: 'sync_stale_or_failed',
   scope: 'standing',
-  version: 1,
+  // Bumped when the rule started reading SyncRun. G5.2 asks for two thresholds and this
+  // had one, so a night that went wrong and a system that had stopped two days ago
+  // produced the same finding at the same severity.
+  version: 2,
   section: 'analytics',
   severity: 'high',
   kind: 'risk',
-  test: 'Connected integrations that have not synced inside the stale window, or errored',
+  test: 'Connected integrations with no successful run inside the stale window, or errored',
   async run(ctx) {
     const stale = hoursAgo(ctx.now, ctx.thresholds['sync.staleHours']);
+    const brokenAfter = ctx.thresholds['sync.failedHours'];
 
     const live = await db().integration.findMany({
       where: { state: { in: ['connected', 'syncing', 'error'] } },
       select: { provider: true, state: true, lastSyncAt: true, lastError: true, lastErrorAt: true },
     });
+
+    // G5.1. Freshness is measured from the last *successful* run, not the last attempt.
+    // `lastSyncAt` is only written on success today, but reading the run log makes that a
+    // property of the query rather than of a write somewhere else — and it is the only
+    // source that can say how often a provider has been failing rather than whether it
+    // failed last night.
+    const health = await db().syncRun.groupBy({
+      by: ['provider'],
+      where: { status: 'succeeded' },
+      _max: { finishedAt: true },
+    });
+    const lastSuccess = new Map(health.map((h) => [h.provider, h._max.finishedAt]));
 
     const broken = live.filter(
       (i) => i.state === 'error' || i.lastError !== null || !i.lastSyncAt || i.lastSyncAt < stale,
@@ -346,11 +362,23 @@ const syncStaleRule: Rule = {
           ? Math.floor((ctx.now.getTime() - i.lastSyncAt.getTime()) / 3_600_000)
           : null,
         staleAfterHours: ctx.thresholds['sync.staleHours'],
+        brokenAfterHours: brokenAfter,
+        lastSuccessAt: lastSuccess.get(i.provider)?.toISOString() ?? null,
         lastError: i.lastError,
       },
       // A stuck sync is worse than a late one: 'syncing' with an old timestamp means a
       // run started and never finished, so nothing will pick it up on its own.
-      severity: i.state === 'error' || i.state === 'syncing' ? 'high' : 'medium',
+      //
+      // And a provider past the second threshold is high whatever its state says. One
+      // missed night is a night; two is a system that has stopped, which is the
+      // distinction G5.2 asks for and the reason there are two numbers rather than one.
+      severity:
+        i.state === 'error' ||
+        i.state === 'syncing' ||
+        !i.lastSyncAt ||
+        i.lastSyncAt < hoursAgo(ctx.now, brokenAfter)
+          ? 'high'
+          : 'medium',
       proposedAction:
         i.state === 'syncing'
           ? 'Clear the stuck sync and run it again — a run started and never finished, so nothing will retry it.'

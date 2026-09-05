@@ -8,6 +8,7 @@ import { cards } from '@/lib/integrations/service';
 import { can } from '@/lib/roles';
 import { currentUser } from '@/lib/auth';
 import { IntegrationGrid } from './IntegrationGrid';
+import { SyncHealth } from './SyncHealth';
 
 export const metadata = { title: 'Integrations · Growth Center' };
 
@@ -68,6 +69,8 @@ export default async function IntegrationsPage({
           {params.connected} connected. Run a sync to pull its data in.
         </div>
       ) : null}
+
+      <SyncHealth />
 
       <IntegrationGrid cards={list} canManage={can(user.role, 'integrations:manage')} />
     </>

@@ -831,6 +831,56 @@ model Integration {
   @@map("integration")
 }
 
+/// One row per attempt to sync one provider. G5.1.
+///
+/// Integration carries only `lastSyncAt`, `lastSyncRows` and `lastError`, so each run
+/// overwrote the one before it. A provider that failed for six nights and then succeeded
+/// looked, the next morning, exactly like one that had never failed — there was no way to
+/// tell a healthy integration from a lucky one, and no way to see that a nightly sync had
+/// been importing four rows since April.
+///
+/// Written on both outcomes. A run that failed is the row most worth having; recording
+/// only the successes would reproduce the same blind spot with more storage.
+model SyncRun {
+  id       String @id @default(cuid())
+  provider String
+
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  /// running | succeeded | failed | skipped.
+  ///
+  /// Text rather than an enum because a run's outcome is written by the sync loop and
+  /// read by a panel; adding an outcome should not be a migration on a hot table.
+  status String @default("running")
+
+  /// Rows written. Zero on a failure, and zero is a real answer on a success too — a
+  /// provider with nothing new to report is not the same as one that broke.
+  rows Int @default(0)
+
+  /// Wall-clock milliseconds. The number that says a nightly sync is drifting towards the
+  /// platform's 300-second ceiling before it starts being killed there.
+  durationMs Int?
+
+  /// The provider's own summary, and the error when there was one. Both nullable: a
+  /// successful run has no error, and a run killed by the platform has no summary.
+  detail String?
+  error  String?
+
+  /// False when a paged backfill ran out of time and has more to fetch. A run that ended
+  /// incomplete succeeded at what it attempted, which is not the same as being finished.
+  complete Boolean @default(true)
+
+  /// Who asked. Null is the cron; an email is somebody pressing Sync now.
+  actorEmail String?
+
+  /// Indexed by provider and start, because every query here is "the last N runs of this
+  /// provider" and there will eventually be tens of thousands of rows.
+  @@index([provider, startedAt])
+  @@index([startedAt])
+  @@map("sync_run")
+}
+
 /// Split from Integration so a query that renders a card cannot accidentally select a
 /// secret. `ciphertext` is AES-256-GCM under APP_ENCRYPTION_KEY — see lib/crypto.ts.
 model IntegrationCredential {
