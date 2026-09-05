@@ -15,6 +15,8 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { hasDb } from '@/lib/prisma';
 import { ProgressLink } from '@/components/NavProgress';
 import { leadsBand } from '@/lib/band';
+import { speedToLead } from '@/lib/speed-to-lead';
+import { SpeedToLead } from './SpeedToLead';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
 import { pageQuery, pick } from '@/lib/query';
@@ -121,6 +123,13 @@ export default async function LeadsPage({
         <Band spec={picked ?? days} bucket={bucket} />
       </Suspense>
 
+      {/* Its own boundary, below the band and above the filters. It is two queries over
+          every lead in the period and must not hold up the cards, which are the first
+          thing anybody reads. */}
+      <Suspense fallback={<Skeleton className="mb-[18px] h-[260px] rounded-2xl" />}>
+        <Speed window={window} />
+      </Suspense>
+
       <Suspense fallback={<Skeleton className="mb-[18px] h-[38px] w-full rounded-xl" />}>
         <Filters />
       </Suspense>
@@ -144,6 +153,10 @@ function BandSkeleton() {
 
 async function Band({ spec, bucket }: { spec: number | ReturnType<typeof customRange>; bucket: 'day' | 'month' }) {
   return <MetricsBand {...(await leadsBand(spec as Parameters<typeof leadsBand>[0], bucket))} />;
+}
+
+async function Speed({ window }: { window: { from: Date; to: Date } }) {
+  return <SpeedToLead data={await speedToLead(window)} />;
 }
 
 /** Its own boundary: the roster and the owner list are two more queries, and the filter

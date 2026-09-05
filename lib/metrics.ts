@@ -921,7 +921,9 @@ export type ChannelRow = Awaited<ReturnType<typeof channelPerformance>>[number];
 
 /** An outbound touch. A status flip to `contacted` is not one — someone can change a
  *  dropdown without ever having contacted the lead. */
-const CONTACT_TYPES = ['email', 'call', 'meeting'] as const;
+// Exported so lib/speed-to-lead.ts measures the same event this does. Two definitions of
+// "an outbound touch" would put two different response figures on two screens.
+export const CONTACT_TYPES = ['email', 'call', 'meeting'] as const;
 
 /**
  * Median hours from a lead arriving to the first outbound touch, over leads created in
