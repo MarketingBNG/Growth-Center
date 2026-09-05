@@ -2,6 +2,7 @@ import { db } from './prisma.ts';
 import { ADMIN_EMAILS } from './roles.ts';
 import { insightHealth } from './insight-health.ts';
 import { provider } from './email.ts';
+import { cliqConfigured, renderCliqDigest, sendToCliq } from './cliq.ts';
 import { thresholds } from './settings.ts';
 
 // §20.6's daily digest: the findings waiting on a decision, ranked, in one message.
@@ -207,6 +208,10 @@ export type DigestResult = {
   providerId: string;
   waiting: number;
   errors: string[];
+  /** Whether the same digest also reached Zoho Cliq, and null when no webhook is set.
+   *  Reported separately from `sent` because the two can genuinely disagree — mail has
+   *  been refused for weeks while chat would have gone through. */
+  cliq: 'sent' | 'failed' | null;
 };
 
 /**
@@ -219,7 +224,7 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
   const waiting = digest.items.length + digest.others;
 
   if (!worthSending(digest)) {
-    return { sent: 0, skipped: 'nothing-waiting', providerId: p.id, waiting, errors: [] };
+    return { sent: 0, skipped: 'nothing-waiting', providerId: p.id, waiting, errors: [], cliq: null };
   }
 
   const { subject, body } = renderDigest(digest, baseUrl);
@@ -232,5 +237,16 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
     else errors.push(`${to}: ${result.error}`);
   }
 
-  return { sent, skipped: null, providerId: p.id, waiting, errors };
+  // Chat as well as mail, and independent of it. Posted after the email loop rather than
+  // inside it: Cliq is one channel the whole team reads, not one message per recipient,
+  // and a mail failure must not stop it — that combination is the current situation
+  // exactly, with SMTP refused for weeks and the findings reaching nobody.
+  let cliq: DigestResult['cliq'] = null;
+  if (cliqConfigured()) {
+    const posted = await sendToCliq(renderCliqDigest(digest.items, digest.others, baseUrl));
+    cliq = posted.ok ? 'sent' : 'failed';
+    if (!posted.ok) errors.push(`cliq: ${posted.error}`);
+  }
+
+  return { sent, skipped: null, providerId: p.id, waiting, errors, cliq };
 }

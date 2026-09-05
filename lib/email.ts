@@ -6,7 +6,20 @@
 //
 // ── Why SMTP and not a sending API ────────────────────────────────────────────────────
 //
-// The firm runs on Zoho, so Zoho Mail SMTP means no new vendor, no new bill, and mail
+// Provider-agnostic on purpose: host, port, user and password are all configuration, and
+// nothing here knows or cares which server answers. That was written for Zoho Mail and is
+// what makes moving to Gmail a change of four environment variables and no code — which
+// is the move being made, Zoho having refused the mailbox for weeks with a 535 that needs
+// an administrator to clear.
+//
+// Gmail: smtp.gmail.com:465, the address as SMTP_USER, and a 16-character **App
+// Password** as SMTP_PASSWORD — an ordinary account password is refused with the same 535
+// as a wrong one, which is precisely the ambiguity that made the Zoho failure expensive to
+// diagnose. It needs 2-step verification switched on before one can be created.
+//
+// The original reasoning, still true of whichever server is used:
+//
+// A mail server the firm already runs means no new vendor, no new bill, and mail
 // leaving the domain it claims to come from. A sending API would add a second vendor and a
 // second deliverability reputation to warm up, for an internal digest read by three people.
 //
@@ -42,17 +55,18 @@ const smtpConfigured = () =>
  * Held between calls.
  *
  * A transport opens a connection pool, and building one per message would open a TCP
- * connection and a TLS handshake to Zoho for every recipient of a digest.
+ * connection and a TLS handshake for every recipient of a digest.
  */
 let transport: Transporter | null = null;
 
 function smtpTransport(): Transporter {
   if (transport) return transport;
 
-  // 465 with implicit TLS is Zoho's documented default and the safer of the two: on 587
-  // the connection starts in the clear and upgrades, and a misconfigured server that
-  // declines the upgrade sends the credentials in plaintext. `secure` is derived from the
-  // port rather than configured separately so the two can never disagree.
+  // 465 with implicit TLS is the documented default for both Zoho and Gmail, and the
+  // safer of the two: on 587 the connection starts in the clear and upgrades, and a
+  // misconfigured server that declines the upgrade sends the credentials in plaintext.
+  // `secure` is derived from the port rather than configured separately so the two can
+  // never disagree.
   const port = Number(process.env.SMTP_PORT ?? 465);
 
   transport = createTransport({
@@ -72,9 +86,10 @@ function smtpTransport(): Transporter {
 /**
  * The address mail is sent from.
  *
- * Falls back to the authenticating user, which is what Zoho expects: it refuses a `From`
- * the account does not own, so a mismatched `SMTP_FROM` produces a rejection at send time
- * rather than a quietly rewritten header.
+ * Falls back to the authenticating user, which is what both Zoho and Gmail expect: each
+ * refuses a `From` the account does not own, so a mismatched `SMTP_FROM` produces a
+ * rejection at send time rather than a quietly rewritten header. Gmail will accept an
+ * alias here, but only one already verified under Settings → Accounts.
  */
 function fromAddress(): string {
   return process.env.SMTP_FROM || process.env.SMTP_USER || '';

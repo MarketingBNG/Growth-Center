@@ -14,6 +14,7 @@ import { describeRow, phraseAction, recentAuditEvents } from '@/lib/audit';
 import { AI_KEY_ENV } from '@/lib/enums';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { emailStatus } from '@/lib/email';
+import { cliqConfigured } from '@/lib/cliq';
 import { fmtDate, fmtRelative } from '@/lib/format';
 import { attributionHealth } from '@/lib/attribution';
 import { thresholds } from '@/lib/settings';
@@ -90,6 +91,17 @@ export default async function SettingsPage() {
     },
     { label: 'AI insights', ok: ai.configured, required: false, detail: AI_KEY_ENV },
     { label: 'Email sending', ok: email.sends, required: false, detail: email.detail },
+    {
+      label: 'Cliq notifications',
+      ok: cliqConfigured(),
+      required: false,
+      // Not required, and said so: mail and chat are independent, and the digest runs with
+      // either, both or neither. Worth showing because a refused mailbox is the current
+      // state, and chat is the route that would still get through.
+      detail: cliqConfigured()
+        ? 'The daily digest also posts to Zoho Cliq.'
+        : 'Not set. CLIQ_WEBHOOK_URL posts the digest to a Cliq channel as well as by email.',
+    },
   ];
 
   return (
