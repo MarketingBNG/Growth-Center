@@ -22,6 +22,7 @@ import { AI_KEY_ENV } from '@/lib/enums';
 import { campaignPerformance } from '@/lib/campaigns';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
+import { WEB_LEAD_BASIS } from '@/lib/web-leads';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
 
@@ -461,7 +462,16 @@ export default async function DashboardPage({
         {/* Dropped rather than printed when sessions cover less of the period than leads
             do — leads over a shorter visitor series is not a conversion rate, and over
             twelve months it read as 251.13%. */}
-        {visitorsFrom ? null : <>{fmtPercent(f.visitorToLead ?? 0, 2)} visitor → lead · </>}
+        {/* §16: the numerator is the leads that arrived through the site, not all of
+            them. Blended it divided 15,830 leads — 12,614 filled on Meta, LinkedIn or
+            WhatsApp without loading a page — by the website's sessions, and rose whenever
+            the website's traffic fell. */}
+        {visitorsFrom ? null : (
+          <>
+            <span title={WEB_LEAD_BASIS}>{fmtPercent(f.visitorToLead ?? 0, 2)} visitor → lead</span>{' '}
+            ({fmtNumber(f.webLeads)} of {fmtNumber(f.leads)} leads came through the site) ·{' '}
+          </>
+        )}
         {fmtPercent(f.leadToQualified ?? 0)} lead → qualified ·{' '}
         {fmtPercent(f.opportunityToCustomer ?? 0)} opportunity → customer
         {visitorsFrom ? (

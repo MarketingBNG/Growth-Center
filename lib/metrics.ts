@@ -9,6 +9,7 @@ import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { cache } from 'react';
 import { OPEN_DEAL } from './pipeline.ts';
 import { ACQUISITION_CAMPAIGN, isAcquisition } from './campaign-objective.ts';
+import { WEB_ARRIVING_LEAD } from './web-leads.ts';
 import { TAGS, cached } from './cache.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
@@ -392,10 +393,15 @@ export async function funnel(range: Range, channelId?: string) {
   ];
   const paidChannel = { channelId: { in: paidChannelIds } };
 
-  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, inferredNewRevenueAgg, repeatRevenueAgg, spendAgg, acquisitionSpendAgg, paidRevenueAgg, paidCustomers] =
+  const [visitors, leads, webLeads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, inferredNewRevenueAgg, repeatRevenueAgg, spendAgg, acquisitionSpendAgg, paidRevenueAgg, paidCustomers] =
     await Promise.all([
       channelId ? Promise.resolve(0) : sessions(range),
       db().lead.count({ where: { createdAt: window, ...byChannel } }),
+      // §16. The leads a website conversion rate is entitled to count — see lib/web-leads.ts.
+      // Counted alongside `leads` rather than replacing it: the funnel's Leads step is
+      // every lead the firm got, and only the visitor→lead ratio above it is about the
+      // website.
+      channelId ? Promise.resolve(0) : db().lead.count({ where: { createdAt: window, ...WEB_ARRIVING_LEAD } }),
       db().lead.count({
         where: {
           createdAt: window,
@@ -525,6 +531,10 @@ export async function funnel(range: Range, channelId?: string) {
     unconverted: [...revenueSum.unconverted, ...spendSum.unconverted],
     visitors,
     leads,
+    /** Of those, the ones that arrived through the measured website. The numerator
+     *  `visitorToLead` divides by sessions; see lib/web-leads.ts for why every lead is
+     *  the wrong one. */
+    webLeads,
     semiQualified,
     qualified,
     opportunities,
@@ -556,7 +566,12 @@ export async function funnel(range: Range, channelId?: string) {
     /** Customers won through a channel that carried spend — the denominator CAC is
      *  actually entitled to. */
     paidCustomers,
-    visitorToLead: rate(leads, visitors),
+    // §16: web-arriving leads over website sessions, not every lead over website
+    // sessions. Blended, this divided 15,830 leads — 12,614 of them filled on Meta,
+    // LinkedIn or WhatsApp without ever loading a page — by 191,950 sessions, and
+    // reported the result as the site's conversion rate. It would also have risen every
+    // time the website's traffic fell.
+    visitorToLead: rate(webLeads, visitors),
     leadToSemiQualified: rate(semiQualified, leads),
     leadToQualified: rate(qualified, leads),
     qualifiedToOpportunity: rate(opportunities, qualified),

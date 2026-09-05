@@ -3,6 +3,7 @@ import { OPEN_DEAL } from './pipeline.ts';
 import { convert, symbolOf, type CurrencySettings } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { channelPerformance, funnel, openPipeline, windowFor, type Range } from './metrics.ts';
+import { WEB_LEAD_BASIS } from './web-leads.ts';
 import { campaignPerformance, campaignTotals } from './campaigns.ts';
 import { leadSourceLabel } from './integrations/crm-mapping.ts';
 import { fairShare } from './calc.ts';
@@ -330,7 +331,15 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
           title: 'Funnel',
           rows: [
             { label: 'Visitors', value: int(now.visitors) },
-            { label: 'Leads', value: int(now.leads), hint: `${pct(now.visitorToLead, 2)} of visitors` },
+            { label: 'Leads', value: int(now.leads) },
+            // §16: the rate belongs to the leads that came through the site, not to every
+            // lead. Hung off its own row rather than the Leads row's hint, because
+            // "x% of visitors" under a count of all leads is the claim being retired.
+            {
+              label: 'Leads from the website',
+              value: int(now.webLeads),
+              hint: `${pct(now.visitorToLead, 2)} of visitors. ${WEB_LEAD_BASIS}`,
+            },
             { label: 'Qualified leads', value: int(now.qualified), hint: `${pct(now.leadToQualified)} of leads` },
             { label: 'Opportunities', value: int(now.opportunities) },
             { label: 'New customers', value: int(now.customers), hint: `${pct(now.opportunityToCustomer)} of opportunities` },
