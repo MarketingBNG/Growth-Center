@@ -219,5 +219,85 @@ async function readSearchTrend(days = 28) {
  * SEO page was paying three round trips per view to redraw figures that had not moved.
  * Both reads drop on the `seo` tag when a sync writes.
  */
+
+/**
+ * Core Web Vitals, as measured by PageSpeed Insights.
+ *
+ * Two kinds of number that must never be printed as if they were one:
+ *
+ *   **Field** is CrUX — real Chrome users, 28-day rolling, the data Google actually ranks
+ *   on. It exists per URL only for pages with enough traffic to make a sample. On this
+ *   site that is the homepage and nothing else, so the per-page field figures Google
+ *   returns for everything else are the *origin's* numbers wearing the page's URL. Those
+ *   are stored once against the origin and read here as a site-wide figure, never per
+ *   page. See `origin_fallback` in the provider.
+ *
+ *   **Lab** is a single Lighthouse run in a datacentre. Genuinely about the page it was
+ *   run on, which is what makes it the honest per-page number — and not a substitute for
+ *   field data, because one run on a fast machine is not what a person on a phone gets.
+ *
+ * INP is field-only by nature: it needs a real person interacting, so no lab run can
+ * produce one. A page with no field sample has no INP and the card says so rather than
+ * showing the lab's TBT under the INP heading.
+ */
+async function readWebVitals() {
+  const rows = await db().metricSnapshot.findMany({
+    where: { source: 'pagespeed', entityType: { in: ['web_vitals', 'web_vitals_origin'] } },
+    select: { entityType: true, entityId: true, metricKey: true, value: true, date: true },
+    orderBy: { date: 'desc' },
+  });
+  if (!rows.length) return null;
+
+  // Newest reading wins. Ordered by date descending above, so the first of any key is the
+  // current one and later rows are history.
+  const origin = new Map<string, number>();
+  const byPage = new Map<string, Map<string, number>>();
+  let measuredAt: Date | null = null;
+
+  for (const r of rows) {
+    if (!measuredAt) measuredAt = r.date;
+    if (r.entityType === 'web_vitals_origin') {
+      if (!origin.has(r.metricKey)) origin.set(r.metricKey, num(r.value));
+      continue;
+    }
+    const url = r.entityId;
+    if (!url) continue;
+    const page = byPage.get(url) ?? new Map<string, number>();
+    if (!page.has(r.metricKey)) page.set(r.metricKey, num(r.value));
+    byPage.set(url, page);
+  }
+
+  const field = (strategy: 'mobile' | 'desktop') => ({
+    lcp: origin.get(`${strategy}_field_lcp`) ?? null,
+    inp: origin.get(`${strategy}_field_inp`) ?? null,
+    cls: origin.get(`${strategy}_field_cls`) ?? null,
+    fcp: origin.get(`${strategy}_field_fcp`) ?? null,
+    ttfb: origin.get(`${strategy}_field_ttfb`) ?? null,
+  });
+
+  const pages = [...byPage].map(([url, m]) => ({
+    url,
+    mobileScore: m.get('mobile_score') ?? null,
+    desktopScore: m.get('desktop_score') ?? null,
+    lcp: m.get('mobile_lab_lcp') ?? null,
+    cls: m.get('mobile_lab_cls') ?? null,
+    tbt: m.get('mobile_lab_tbt') ?? null,
+    // True only where CrUX had a sample for this exact URL. Everywhere else the provider
+    // deliberately stored nothing rather than the origin's numbers.
+    hasFieldData: m.has('mobile_field_lcp'),
+  }));
+
+  // Worst first: this table exists to be acted on, and the slowest page is the work.
+  pages.sort((a, b) => (a.mobileScore ?? 101) - (b.mobileScore ?? 101));
+
+  return {
+    measuredAt,
+    pagesMeasured: pages.length,
+    origin: { mobile: field('mobile'), desktop: field('desktop') },
+    pages,
+  };
+}
+
 export const seoOverview = cached('seo:overview', [TAGS.seo], readSeoOverview);
 export const searchTrend = cached('seo:search-trend', [TAGS.seo], readSearchTrend);
+export const webVitals = cached('seo:web-vitals', [TAGS.seo], readWebVitals);

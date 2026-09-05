@@ -68,6 +68,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by Google Search Console and refreshed on each sync.',
   },
+  pagespeed: {
+    label: 'PageSpeed',
+    name: 'Google PageSpeed Insights',
+    tone: 'live',
+    hint: 'Measured by Google PageSpeed Insights. Lab figures are a single run on each page; field figures are real Chrome users over the last 28 days.',
+  },
   google_ads: {
     label: 'Google Ads',
     name: 'Google Ads',

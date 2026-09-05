@@ -112,6 +112,25 @@ export interface IntegrationProvider {
    * materialises no campaigns, and the marketing tables stay empty.
    */
   readonly channel?: { slug: string; name: string; kind: string };
+  /**
+   * True when this provider must not be swept up by the nightly `syncAll`.
+   *
+   * `syncAll` runs every connected provider one after another inside a single 300s
+   * function, and `runPaged` lets each one work until the 230s sync budget is gone. That
+   * is fine for an API answering in seconds and ruinous for one that does not: PageSpeed
+   * takes 17-51 seconds per call and measured 237s for 22 pages, so it would consume the
+   * entire nightly budget on its own and every provider queued behind it would silently
+   * stop syncing.
+   *
+   * A provider cannot solve this for itself. Returning early does not help — `runPaged`
+   * loops until its own deadline, so a slice that stops after 90s is simply called again.
+   * The only place the decision can be made is here, before the run starts.
+   *
+   * Such a provider still syncs on demand from the Integration Center, and is expected to
+   * have its own cron entry in vercel.json.
+   */
+  readonly ownSchedule?: boolean;
+
   /** Non-secret settings this provider needs before it can sync. */
   readonly configFields?: ConfigField[];
   /** Documentation the person connecting it will need. */
@@ -234,6 +253,15 @@ export class IntegrationError extends Error {
  */
 export const HTTP_TIMEOUT_MS = 60_000;
 
-/** `AbortSignal` for one vendor call. A helper rather than a bare literal so every
- *  provider times out the same way and a new fetch cannot quietly omit it. */
-export const httpTimeout = () => AbortSignal.timeout(HTTP_TIMEOUT_MS);
+/**
+ * `AbortSignal` for one vendor call. A helper rather than a bare literal so every provider
+ * times out the same way and a new fetch cannot quietly omit it.
+ *
+ * `ms` overrides the default for an API whose normal answer is genuinely slower than a
+ * hang would be anywhere else. PageSpeed Insights is the case that needed it: it runs a
+ * full Lighthouse pass in a real browser, and calls against this site measured 17-51
+ * seconds, so the 60s default would have abandoned healthy calls and reported the site
+ * unmeasurable. An override is a claim about one vendor, and belongs beside that
+ * provider's own constant explaining it — never a way to opt out of timing out at all.
+ */
+export const httpTimeout = (ms: number = HTTP_TIMEOUT_MS) => AbortSignal.timeout(ms);

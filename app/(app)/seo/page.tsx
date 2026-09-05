@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
-import { searchTrend, seoOverview } from '@/lib/seo';
+import { searchTrend, seoOverview, webVitals } from '@/lib/seo';
 import { currencySettings } from '@/lib/settings';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
@@ -86,11 +86,12 @@ async function SeoBody({
     return <Card><NoDatabaseState /></Card>;
   }
 
-  const [data, providers, search, fx] = await Promise.all([
+  const [data, providers, search, fx, vitals] = await Promise.all([
     seoOverview(),
     cards(),
     searchTrend(),
     currencySettings(),
+    webVitals(),
   ]);
   const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
@@ -303,6 +304,8 @@ async function SeoBody({
         <Pager page={page} perPage={KEYWORD_ROWS} total={keywords.length} />
       </Card>
 
+      <WebVitals vitals={vitals} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="overflow-hidden">
           <CardHeader>
@@ -370,5 +373,137 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
       {sub ? <p className="text-[11px] text-muted-foreground">{sub}</p> : null}
     </div>
+  );
+}
+
+
+/**
+ * Google's own thresholds, in the units stored: milliseconds for the timings, a unitless
+ * score for CLS. Not rounded or reinterpreted — a page is "good" here exactly when Google
+ * says it is, because these are the numbers ranking depends on.
+ */
+const VITAL_BANDS = {
+  lcp: { good: 2500, poor: 4000, unit: 'ms' as const, label: 'LCP', of: 'Largest Contentful Paint' },
+  inp: { good: 200, poor: 500, unit: 'ms' as const, label: 'INP', of: 'Interaction to Next Paint' },
+  cls: { good: 0.1, poor: 0.25, unit: 'n' as const, label: 'CLS', of: 'Cumulative Layout Shift' },
+};
+
+function band(key: keyof typeof VITAL_BANDS, value: number | null) {
+  if (value === null) return 'none' as const;
+  const { good, poor } = VITAL_BANDS[key];
+  if (value <= good) return 'good' as const;
+  return value <= poor ? ('needs' as const) : ('poor' as const);
+}
+
+function vitalText(key: keyof typeof VITAL_BANDS, value: number | null) {
+  if (value === null) return '—';
+  return VITAL_BANDS[key].unit === 'ms'
+    ? `${(value / 1000).toFixed(2)} s`
+    : value.toFixed(3);
+}
+
+function Vital({ k, value }: { k: keyof typeof VITAL_BANDS; value: number | null }) {
+  const b = band(k, value);
+  const tone =
+    b === 'good' ? 'text-success' : b === 'needs' ? 'text-warning' : b === 'poor' ? 'text-danger' : 'text-muted-foreground';
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground" title={VITAL_BANDS[k].of}>
+        {VITAL_BANDS[k].label}
+      </p>
+      <p className={`tnum text-lg font-medium ${tone}`}>{vitalText(k, value)}</p>
+    </div>
+  );
+}
+
+/**
+ * Core Web Vitals, kept deliberately separate from the per-page table beside it.
+ *
+ * The field figures are the origin's, not any one page's, and the card says so in as many
+ * words. CrUX only samples a URL with enough traffic to make a sample, and on this site
+ * that is the homepage alone — so a per-page field column would have printed the same
+ * three numbers down every row and invited someone to act on a page-level difference that
+ * does not exist.
+ */
+function WebVitals({ vitals }: { vitals: Awaited<ReturnType<typeof webVitals>> }) {
+  if (!vitals) {
+    return (
+      <Card className="mb-4">
+        <CardHeader><CardTitle>Core Web Vitals</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            Not measured yet. Connect PageSpeed Insights on the Integrations page — it runs
+            weekly and measures the most-visited pages.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const worst = vitals.pages.filter((p) => p.mobileScore !== null).slice(0, 5);
+
+  return (
+    <Card className="mb-4">
+      <CardHeader>
+        <CardTitle>Core Web Vitals</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Real Chrome users across {' '}
+          <span className="font-medium">the whole site</span>, 28-day rolling — not per page.
+          {' '}Measured {fmtDate(vitals.measuredAt)} across {fmtNumber(vitals.pagesMeasured)} pages.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(['mobile', 'desktop'] as const).map((strategy) => {
+            const f = vitals.origin[strategy];
+            return (
+              <div key={strategy} className="rounded-lg border border-border px-3 py-2">
+                <p className="mb-2 text-xs font-medium capitalize">
+                  {strategy}
+                  {strategy === 'mobile' ? (
+                    <span className="ml-1 font-normal text-muted-foreground">— what Google ranks on</span>
+                  ) : null}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Vital k="lcp" value={f.lcp} />
+                  <Vital k="inp" value={f.inp} />
+                  <Vital k="cls" value={f.cls} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {worst.length ? (
+          <div>
+            <p className="mb-1 text-xs font-medium">
+              Slowest pages <span className="font-normal text-muted-foreground">— lab score, mobile</span>
+            </p>
+            <div className="space-y-1">
+              {worst.map((p) => (
+                <div key={p.url} className="flex items-baseline justify-between gap-2">
+                  <span className="truncate font-mono text-[11px]">{p.url}</span>
+                  <span
+                    className={`tnum shrink-0 text-xs font-medium ${
+                      (p.mobileScore ?? 0) >= 90
+                        ? 'text-success'
+                        : (p.mobileScore ?? 0) >= 50
+                          ? 'text-warning'
+                          : 'text-danger'
+                    }`}
+                  >
+                    {p.mobileScore}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              A lab score is one run in a datacentre. It finds problems reliably and is not
+              what a person on a phone experiences — that is the field data above.
+            </p>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

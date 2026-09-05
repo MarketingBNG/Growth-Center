@@ -764,6 +764,50 @@ async function writeSeoRows(
   return written;
 }
 
+/**
+ * Attaches PageSpeed's Lighthouse findings to the pages Search Console already found.
+ *
+ * An UPDATE against existing rows, never an upsert, and this is the whole point of it
+ * being a separate materialiser rather than more `seo_page` points. `writeSeoRows` builds
+ * a full row per URL and defaults clicks, impressions, ctr and avgPosition to zero — so a
+ * PageSpeed pass routed through it would have wiped Search Console's traffic figures off
+ * every page it measured and taken the `source` column with them. PageSpeed discovers no
+ * pages of its own; a URL it measured that is not already in the table has nothing to say
+ * about traffic and is skipped rather than invented.
+ */
+async function writeWebVitals(points: MetricPoint[]): Promise<number> {
+  const issuePoints = points.filter((p) => p.entityType === 'web_vitals_issues' && p.entityId);
+  if (!issuePoints.length) return 0;
+
+  // Last write wins within a pass — a URL cannot legitimately appear twice, and if it does
+  // the later measurement is the current one.
+  const byUrl = new Map<string, unknown>();
+  for (const p of issuePoints) {
+    const issues = meta(p).issues;
+    if (Array.isArray(issues)) byUrl.set(p.entityId as string, issues);
+  }
+  if (!byUrl.size) return 0;
+
+  const existing = await db().seoPage.findMany({
+    where: { url: { in: [...byUrl.keys()] } },
+    select: { id: true, url: true },
+  });
+
+  let written = 0;
+  for (const row of existing) {
+    const issues = byUrl.get(row.url);
+    if (issues === undefined) continue;
+    await db().seoPage.update({
+      where: { id: row.id },
+      // `issues` only. Every other column on this row belongs to Search Console.
+      data: { issues: issues as Prisma.InputJsonValue },
+    });
+    written += 1;
+  }
+
+  return written;
+}
+
 const STAGE_SELECT = {
   id: true,
   name: true,
@@ -1677,13 +1721,14 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, linkedRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
+  const total = { rows: 0, vitalsRows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, linkedRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
     const counts = await persist(provider, integration.id, config, slice.points);
 
     total.rows += counts.rows;
+    total.vitalsRows += counts.vitalsRows;
     total.campaignDays += counts.campaignDays;
     total.socialRows += counts.socialRows;
     total.seoRows += counts.seoRows;
@@ -1717,6 +1762,7 @@ async function runPaged(
 
 type Counts = {
   rows: number;
+  vitalsRows: number;
   campaignDays: number;
   socialRows: number;
   seoRows: number;
@@ -2093,6 +2139,8 @@ async function persist(
     campaignDays: await writeCampaignSpend(provider, points),
     socialRows: await writeSocialActivity(integrationId, points),
     seoRows: await writeSeoRows(provider, config, points),
+    // After writeSeoRows, always: it updates the rows that step may have just created.
+    vitalsRows: await writeWebVitals(points),
     crmRows: await writeCrmRecords(provider.id, points),
     // After the records, and before revenue: revenue is attributed through these links.
     linkedRows: await linkConvertedLeads(provider.id, points),
@@ -2114,6 +2162,7 @@ function describe(c: Counts): string {
     c.campaignDays ? `${c.campaignDays} campaign-days` : null,
     c.socialRows ? `${c.socialRows} social rows` : null,
     c.seoRows ? `${c.seoRows} SEO rows` : null,
+    c.vitalsRows ? `${c.vitalsRows} pages with speed findings` : null,
     c.crmRows ? `${c.crmRows} CRM records` : null,
     c.linkedRows ? `${c.linkedRows} conversions linked` : null,
     c.activityRows ? `${c.activityRows} activities and tasks` : null,
@@ -2291,6 +2340,11 @@ export async function syncAll(days = 30): Promise<SyncAllResult[]> {
     }
     if (!provider.isConfigured() || !hasEncryptionKey()) {
       results.push({ provider: row.provider, status: 'skipped', reason: 'Missing environment variables.' });
+      continue;
+    }
+    // Runs on its own cron because it is too slow to share this one. See ownSchedule.
+    if (provider.ownSchedule) {
+      results.push({ provider: row.provider, status: 'skipped', reason: 'Runs on its own schedule.' });
       continue;
     }
 

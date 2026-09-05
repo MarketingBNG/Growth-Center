@@ -28,7 +28,11 @@ for (const file of providers) {
     const source = readFileSync(`${DIR}/${file}`).toString('utf8');
 
     const fetches = source.split('fetch(').length - 1;
-    const signalled = source.split('httpTimeout()').length - 1;
+    // `httpTimeout(` rather than `httpTimeout()`: the helper takes an optional longer
+    // bound for a vendor whose normal response outlasts the default, and a provider using
+    // it is still timing out. What this counts is that every call can give up, not that
+    // they all give up after the same number of seconds.
+    const signalled = source.split('httpTimeout(').length - 1;
 
     assert.equal(
       signalled,
