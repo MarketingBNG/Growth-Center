@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
+import { scanDuplicates } from '@/lib/duplicate-queue';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { hasDb } from '@/lib/prisma';
 import { TAGS, invalidate } from '@/lib/cache';
@@ -35,6 +36,21 @@ export async function GET(req: Request) {
   const currency = await refreshRatesIfStale();
 
   const results = await syncAll();
+
+  // After the syncs, deliberately. A scan run first would look at yesterday's records and
+  // miss every duplicate the night's import just created — which is the commonest kind
+  // there is, the same person filling the form twice in a week.
+  //
+  // Failure here is logged, never thrown: a scanner that could not run must not turn a
+  // successful night of syncing into a failed cron. G5.3 asks for candidates, and none
+  // tonight is a smaller problem than no data.
+  let duplicates: Awaited<ReturnType<typeof scanDuplicates>> | { error: string };
+  try {
+    duplicates = await scanDuplicates();
+  } catch (e) {
+    duplicates = { error: (e as Error).message };
+    console.error('[cron/sync] duplicate scan failed:', e);
+  }
   // A sync rewrites metrics, SEO rows and social rows, and can move an integration off
   // demo data. Without this the dashboard would show yesterday's numbers until the TTL.
   await invalidate(TAGS.integrations, TAGS.metrics, TAGS.seo, TAGS.social, TAGS.settings);
@@ -50,6 +66,7 @@ export async function GET(req: Request) {
     ok: failed.length === 0,
     ms: Date.now() - started,
     synced: results.filter((r) => r.status === 'synced').length,
+    duplicates,
     rates: { fetchedAt: currency.fetchedAt, source: currency.source },
     results,
   });

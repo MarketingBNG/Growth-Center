@@ -3,6 +3,10 @@ import { PageHeader } from '@/components/patterns/page-header';
 import { DateRangePicker } from '@/components/patterns/date-range-picker';
 import { RANGE_OPTIONS } from '@/lib/enums';
 import { MetricsBand } from '@/components/patterns/metrics-band';
+import { currentUser } from '@/lib/auth';
+import { can } from '@/lib/roles';
+import { DuplicateQueue } from './DuplicateQueue';
+import { duplicateCounts, duplicateQueue } from '@/lib/duplicate-queue';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -115,7 +119,8 @@ export default async function CrmPage({
   const owner = ownerEmail || undefined;
   const filtered = Boolean(q.q || ownerEmail || status);
 
-  const [people, owners, data, band, overview] = await Promise.all([
+  const [user, people, owners, data, band, overview, dupRows, dupCounts] = await Promise.all([
+    currentUser(),
     listAssignable(),
     peopleOn(tab === 'companies' ? 'company' : 'contact', 'ownerEmail'),
     tab === 'companies'
@@ -128,6 +133,10 @@ export default async function CrmPage({
     // the same period as the panel and the label above them.
     crmBand(picked ?? days, bucket),
     crmOverview(window),
+    // §8.1. Capped at twenty on the page: a queue nobody can finish is a queue nobody
+    // starts, and the strongest twenty are the ones worth a morning.
+    duplicateQueue(20),
+    duplicateCounts(window),
   ]);
 
   return (
@@ -155,6 +164,15 @@ export default async function CrmPage({
       <MetricsBand {...band} />
 
       <Overview data={overview} rangeLabel={rangeLabel} window={window} />
+
+      {/* §8.1 and G5.3, above the book rather than below it. The "Duplicates merged"
+          card in the band read 0 for months because nothing was scanning, and a queue
+          under a seventeen-row table would have been just as invisible. */}
+      <DuplicateQueue
+        rows={dupRows}
+        counts={dupCounts}
+        canManage={user ? can(user.role, 'crm:write') : false}
+      />
 
       <div className="flex flex-wrap items-center gap-1 pb-4">
         <Button asChild variant={tab === 'companies' ? 'secondary' : 'ghost'} size="sm">

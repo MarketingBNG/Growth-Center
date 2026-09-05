@@ -1425,6 +1425,61 @@ model AiInsight {
   @@map("ai_insight")
 }
 
+/// One proposed merge, waiting for a person. §8.1 and G5.3.
+///
+/// The CRM page has read "Duplicates merged: 0" since it was built, and that zero was
+/// never a fact about the data — nothing was scanning. Duplicates corrupt customer
+/// counts, CAC and every per-account average on that screen.
+///
+/// Deliberately a queue rather than an automatic merge. Merging is destructive and
+/// irreversible, two records that look identical are sometimes a parent company and its
+/// subsidiary, and there are 27,575 leads here. A queue somebody works through is slower
+/// and is the only version that cannot silently destroy an account.
+model DuplicateCandidate {
+  id String @id @default(cuid())
+
+  /// lead | company | contact. Text rather than an enum: the scanner covers three tables
+  /// today and adding a fourth should not be a migration on a table this size.
+  entityType String
+
+  /// The record proposed to survive, and the one proposed to be folded into it. Ordered
+  /// by lib/duplicates.ts `chooseSurvivor` — richest first, then oldest — because this
+  /// workspace re-imported its CRM and the *older* row is often the bare stub.
+  primaryId   String
+  duplicateId String
+
+  /// Which rule matched, and how much it is worth: email 95, phone 85, domain 70,
+  /// name 55. Stored rather than recomputed at review time, so the person deciding can
+  /// see why the pair was proposed — "same email" and "similar name" ask for quite
+  /// different amounts of care.
+  rule       String
+  confidence Int
+
+  /// The value the two share, so the pair is checkable without opening both records.
+  matchedOn String
+
+  /// pending | merged | dismissed.
+  ///
+  /// A dismissal is as important as a merge and is the reason this table keeps resolved
+  /// rows rather than deleting them: without it, every scan would re-propose the pair a
+  /// person has already looked at and rejected, and the queue would never empty.
+  status String @default("pending")
+
+  resolvedAt    DateTime?
+  resolvedBy    String?
+  /// Why it was dismissed. Required by the route, not by the column — the same shape
+  /// §20.2 uses for dismissing a finding.
+  dismissReason String?
+
+  detectedAt DateTime @default(now())
+
+  /// One row per unordered pair per entity type. The scanner writes `primaryId` and
+  /// `duplicateId` in a stable order, so the constraint holds against re-scans.
+  @@unique([entityType, primaryId, duplicateId])
+  @@index([status, confidence])
+  @@map("duplicate_candidate")
+}
+
 model Notification {
   id        String    @id @default(cuid())
   title     String

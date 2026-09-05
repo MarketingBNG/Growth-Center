@@ -77,3 +77,56 @@ export function normalizeCompanyName(input: string | null | undefined): string |
     .trim();
   return value || null;
 }
+
+/**
+ * Local parts that belong to a system rather than to a person.
+ *
+ * Read off this workspace's own contact table, not guessed. The Zoho Campaigns bounce
+ * handler alone accounts for 24 contacts named
+ * `campaign_913867674+zcreply.1164c300d20bf7a0d@zcsend.net` — VERP addresses, where the
+ * `+` tag *is* the identity rather than an alias.
+ */
+const MACHINE_LOCAL = /^(no-?reply|do-?not-?reply|donotreply|notifications?|notices?|mailer-daemon|postmaster|bounce|campaign_|automated|alerts?|system)/i;
+
+/**
+ * Domains that only ever send. A contact here is a mailing list's return path.
+ *
+ * `zohoprojects.in` (736 contacts) is Zoho Projects' notification sender, imported by the
+ * task sync. `zcsend.net` is Zoho Campaigns. The rest arrived as bulk senders in the mail
+ * this firm receives.
+ */
+const MACHINE_DOMAIN = new Set([
+  'zcsend.net',
+  'zohoprojects.in',
+  'zohodesk.com',
+  'zohosupport.com',
+  'mailer.zoho.com',
+  'bounce.zoho.com',
+]);
+
+/**
+ * Whether an address belongs to a machine.
+ *
+ * Used by the duplicate scanner and nowhere else. It deliberately does **not** filter the
+ * records themselves: a Zoho notification contact is a real row that a real activity
+ * hangs off, and deleting it would break the log. It is only excluded from *duplicate
+ * proposals*, where it is worse than useless — the first live scan filled 200 of the 200
+ * available queue slots with pairs of Zoho bounce addresses and pushed every genuine
+ * duplicate off the page.
+ *
+ * The subdomain rule catches `mail.anthropic.com` and `e.zoom.us` without listing every
+ * bulk sender the firm will ever hear from: `mail.`, `e.`, `email.` and `notifications.`
+ * in front of a domain is the convention ESPs use.
+ */
+export function isMachineAddress(input: string | null | undefined): boolean {
+  const email = (input ?? '').trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  if (at < 1) return false;
+
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+
+  if (MACHINE_DOMAIN.has(domain)) return true;
+  if (/^(mail|e|email|em|news|notifications?|reply|bounces?)\./.test(domain)) return true;
+  return MACHINE_LOCAL.test(local);
+}

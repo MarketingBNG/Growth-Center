@@ -1048,15 +1048,27 @@ export async function unassignedLeads(range: Range): Promise<number> {
   });
 }
 
-/** Repeat submissions folded into an existing lead. Counted from the activity the merge
- *  writes, so it reflects what actually happened rather than a guess at overlap. */
+/**
+ * Duplicates folded into an existing record, from both paths.
+ *
+ * Two sources, and both are real merges. The public lead form has always deduplicated on
+ * arrival and writes an activity when it does; §8.1's queue is where somebody merges two
+ * records the scanner proposed, and it resolves a DuplicateCandidate. Counting only the
+ * first was how this card read 0 for months while nothing was scanning at all.
+ */
 export async function duplicatesMerged(range: Range): Promise<number> {
-  return db().activity.count({
-    where: {
-      summary: DUPLICATE_MERGED_SUMMARY,
-      createdAt: { gte: range.from, lte: range.to },
-    },
-  });
+  const [onArrival, fromQueue] = await Promise.all([
+    db().activity.count({
+      where: {
+        summary: DUPLICATE_MERGED_SUMMARY,
+        createdAt: { gte: range.from, lte: range.to },
+      },
+    }),
+    db().duplicateCandidate.count({
+      where: { status: 'merged', resolvedAt: { gte: range.from, lte: range.to } },
+    }),
+  ]);
+  return onArrival + fromQueue;
 }
 
 /**
@@ -1380,7 +1392,10 @@ export async function crmKpis(spec: number | Range) {
     // The card said 100 next to Companies 88 and looked like an arithmetic fault.
     { key: 'customers', label: 'Customers won', value: now.customers, previous: before.customers, format: 'number', higherIsBetter: true, hint: 'Accounts won in this period, whenever the company was first added' },
     { key: 'avgAccount', label: 'Avg account value', value: now.avgAccountValue, previous: before.avgAccountValue, format: 'money', currency: now.currency, higherIsBetter: true, hint: 'Averaged over accounts that billed this period' },
-    { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded into an existing lead' },
+    // §8.1: "show candidates, never 0." A zero here used to mean "nothing is scanning",
+    // and the hint now says which of the two it is — merged on arrival by the public
+    // form, or merged by somebody working the queue.
+    { key: 'duplicates', label: 'Duplicates merged', value: dupNow, previous: dupBefore, format: 'number', higherIsBetter: true, hint: 'Repeat submissions folded in on arrival, plus pairs merged from the duplicate queue' },
   ];
 
   return { cards: await comparableDeltas(cards, current, previous), customerShare: share, weekday };

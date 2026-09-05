@@ -27,3 +27,26 @@ export async function phoneMatches(table: 'company' | 'contact' | 'lead', term: 
   );
   return rows.map((r) => r.id);
 }
+
+/**
+ * A phone number reduced to the digits that identify it, or null if there are too few.
+ *
+ * Numbers arrive from this CRM as somebody typed them — "98101 89048",
+ * "+91 9008858515", "9810189048" — so the same person's number is three different
+ * strings. Duplicate matching needs one.
+ *
+ * The last ten digits, not all of them. This organisation's numbers are overwhelmingly
+ * Indian and a leading +91 is written on some records and omitted on others, so comparing
+ * the full string would treat "+919810189048" and "9810189048" as different people. Ten
+ * digits is India's subscriber-number length and enough of a US number to identify it
+ * given the area code.
+ *
+ * Under ten digits returns null rather than matching on what is there: a five-digit
+ * extension is not an identity, and grouping on one would propose merging everybody who
+ * happened to share it.
+ */
+export function normalizePhone(input: string | null | undefined): string | null {
+  const digits = (input ?? '').replace(/[^0-9]/g, '');
+  if (digits.length < 10) return null;
+  return digits.slice(-10);
+}
