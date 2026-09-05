@@ -15,6 +15,18 @@ import { cn } from '@/lib/utils';
 
 export type MetricsBandProps = {
   kpis: Kpi[];
+  /**
+   * §6.1's demoted row. "Visitors is a vanity number for a firm whose constraint is
+   * senior delivery time."
+   *
+   * Below the primary row and smaller, not hidden behind a toggle. The manual says these
+   * move to secondary, not that they go away — visitor counts are still how anybody
+   * diagnoses a fall in leads, and a number you have to remember to unfold is a number
+   * nobody checks against the one above it.
+   */
+  secondary?: Kpi[];
+  /** The line explaining why the primary row is what it is. */
+  secondaryNote?: string;
   trend: {
     title: string;
     subtitle?: string;
@@ -39,6 +51,8 @@ export type MetricsBandProps = {
  */
 export function MetricsBand({
   kpis,
+  secondary,
+  secondaryNote,
   trend,
   weekday,
   gauge,
@@ -129,6 +143,27 @@ export function MetricsBand({
               />
             ))}
           </div>
+
+          {secondary && secondary.length > 0 ? (
+            <div>
+              {secondaryNote ? (
+                <p className="pb-2 text-[11px] text-muted-foreground">{secondaryNote}</p>
+              ) : null}
+              {/* Narrower columns than the primary row, so the two are legible as
+                  different tiers without a heading saying so. */}
+              <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+                {secondary.map((k, i) => (
+                  <KpiCard
+                    key={k.key}
+                    kpi={k}
+                    index={i}
+                    compact
+                    dimmed={focus !== null && !(k.sources ?? []).includes(focus)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid items-start gap-3.5 lg:[grid-template-columns:minmax(0,2fr)_minmax(0,1fr)]">
             <TrendChart

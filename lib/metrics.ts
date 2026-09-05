@@ -9,6 +9,7 @@ import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { cache } from 'react';
 import { OPEN_DEAL } from './pipeline.ts';
 import { ACQUISITION_CAMPAIGN, isAcquisition } from './campaign-objective.ts';
+import { attributionHealth } from './attribution.ts';
 import { decay } from './decay.ts';
 import { WEB_ARRIVING_LEAD } from './web-leads.ts';
 import { TAGS, cached } from './cache.ts';
@@ -517,7 +518,12 @@ export async function funnel(range: Range, channelId?: string) {
   // construction, so subtracting is both cheaper and guaranteed to reconcile with the
   // Revenue card — a separate `dealOrigin: 'unknown'` query would not, because revenue
   // with no opportunity at all belongs here too.
-  const unclassifiedRevenue = revenue - newRevenue - repeatRevenue;
+  // Snapped to zero inside a hundredth of the reporting currency. The three shares are
+  // summed from separate grouped queries and converted at a rate, so a book that is fully
+  // classified lands on -1.86e-9 rather than on 0 — which formats as "-₹0" and reads as a
+  // negative amount of money nobody can account for.
+  const unclassifiedRaw = revenue - newRevenue - repeatRevenue;
+  const unclassifiedRevenue = Math.abs(unclassifiedRaw) < 0.01 ? 0 : unclassifiedRaw;
   const spend = spendSum.total;
   const acquisitionSpend = acquisitionSpendSum.total;
   // The remainder, so the page can name what the ratios left out instead of the two
@@ -686,11 +692,99 @@ function newBusinessHint(f: Funnel): string {
   return parts.join('. ');
 }
 
+/**
+ * Consultations held in a period, and what each one cost. §6.1.
+ *
+ * **The proxy is the whole difficulty, and it is stated on the card rather than hidden.**
+ * The manual's headline KPI is CPQL, whose numerator is a consultation being booked. This
+ * CRM records no such event: `qualifiedAt` is stamped on conversion — 1,031 leads carry
+ * one and 1,028 of those are conversions — so the figure the manual wants cannot be
+ * computed from anything in the system.
+ *
+ * A deal being opened is the nearest real thing, because that is what a consultation
+ * produces when it goes well. It is the same substitution the capacity card makes, made
+ * deliberately in one place so the two screens cannot disagree about what a consultation
+ * is. It over-counts nothing and under-counts every consultation that led nowhere, which
+ * means **the cost per consultation reported here is an upper bound** — the true figure is
+ * lower, and the card says so.
+ *
+ * Divided by acquisition spend, not by all of it. G4 again: money spent hiring did not
+ * book a consultation.
+ */
+export async function consultations(range: Range) {
+  const window = { gte: range.from, lte: range.to };
+
+  const [total, byChannelRows, channels] = await Promise.all([
+    db().opportunity.count({ where: { createdAt: window } }),
+    db().opportunity.groupBy({
+      by: ['channelId'],
+      where: { createdAt: window, channelId: { not: null } },
+      _count: { _all: true },
+    }),
+    db().channel.findMany({ select: { id: true, name: true, kind: true } }),
+  ]);
+
+  return {
+    total,
+    byChannel: new Map(byChannelRows.map((r) => [r.channelId as string, r._count._all])),
+    channels,
+  };
+}
+
+/**
+ * Cost per consultation for each channel that carried acquisition spend. §6.1's "CPQL by
+ * paid channel".
+ *
+ * Only the paid channels. An organic channel's consultations cost something, and nothing
+ * measures what — `costPer` returns null rather than zero for exactly that reason, and a
+ * row of dashes under a heading about cost is noise.
+ */
+export async function costPerConsultation(range: Range) {
+  const [held, performance] = await Promise.all([consultations(range), channelPerformance(range)]);
+
+  return performance
+    .filter((c) => c.acquisitionSpend > 0)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      consultations: held.byChannel.get(c.id) ?? 0,
+      acquisitionSpend: c.acquisitionSpend,
+      costPer: costPer(c.acquisitionSpend, held.byChannel.get(c.id) ?? 0),
+    }))
+    .sort((a, b) => (a.costPer ?? Infinity) - (b.costPer ?? Infinity));
+}
+
 export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; current: Funnel; previous: Funnel }> {
   const { current, previous } = windowFor(spec);
-  const [now, before] = await Promise.all([funnel(current), funnel(previous)]);
+  const [now, before, heldNow, heldBefore, health] = await Promise.all([
+    funnel(current),
+    funnel(previous),
+    consultations(current),
+    consultations(previous),
+    attributionHealth(current.from, current.to),
+  ]);
 
   const cards: Kpi[] = [
+    // §6.1's scorecard line. "These are the five numbers the operating plan is managed
+    // by. Visitors is a vanity number for a firm whose constraint is senior delivery
+    // time." Visitors and Leads stay in the set and move to the secondary row — see
+    // dashboardBand, which does the picking.
+    {
+      key: 'consultations', label: 'Consultations', value: heldNow.total, previous: heldBefore.total,
+      format: 'number', higherIsBetter: true,
+      hint: 'Deals opened. This CRM records no consultation-booked event — qualifiedAt is stamped on conversion — so a deal being opened is the nearest real thing, and it under-counts every consultation that led nowhere.',
+    },
+    {
+      key: 'cpql', label: 'Cost per consultation', value: costPer(now.acquisitionSpend, heldNow.total),
+      previous: costPer(before.acquisitionSpend, heldBefore.total),
+      format: 'money', currency: now.currency, higherIsBetter: false,
+      hint: 'Acquisition spend over consultations held. An upper bound: the denominator counts only the consultations that produced a deal, so the true cost is lower. Hiring spend is excluded.',
+    },
+    {
+      key: 'attribution', label: 'Attribution health', value: health.revenue.percent,
+      previous: null, format: 'percent', higherIsBetter: true,
+      hint: `Share of revenue that reaches a channel. Below ${health.threshold}% the channel ranking is a hint rather than a basis for moving budget.`,
+    },
     { key: 'visitors', label: 'Visitors', value: now.visitors, previous: before.visitors, format: 'number', higherIsBetter: true },
     { key: 'leads', label: 'Leads', value: now.leads, previous: before.leads, format: 'number', higherIsBetter: true },
     { key: 'qualified', label: 'Qualified leads', value: now.qualified, previous: before.qualified, format: 'number', higherIsBetter: true },

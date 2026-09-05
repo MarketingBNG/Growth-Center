@@ -27,6 +27,9 @@ export type BandSeries = { key: string; label: string; kind: 'number' | 'money' 
 
 export type BandData = {
   kpis: Kpi[];
+  /** §6.1's demoted row — see MetricsBandProps. Only the dashboard sets it. */
+  secondary?: Kpi[];
+  secondaryNote?: string;
   /** The workspace's reporting currency, carried so the chart a band feeds can label its
    *  axis with the right symbol. The band's own headlines are already formatted. */
   currency: string;
@@ -280,8 +283,29 @@ export async function dashboardBand(
   // Unclassified sits with New and Repeat, not apart from them. The three are a partition
   // of Revenue, and showing two of the three invites the reader to take them as the whole
   // book — the same misreading the split was built to end.
-  const WANTED = ['visitors', 'leads', 'revenue', 'newRevenue', 'repeatRevenue', 'unclassifiedRevenue', 'cac', 'roas'];
+  //
+  // §6.1 replaces the card row with the operating plan's own scorecard line: consultations
+  // held, what one costs, new business, spend against plan, and attribution health. The
+  // order is the manual's, not this file's.
+  //
+  // Spend-vs-plan is the pacing gauge rather than a card — it is a percentage against an
+  // envelope somebody set, and it already renders beside the trend with the envelope's
+  // author on it. Duplicating it as a sixth card would put the same figure twice on one
+  // screen, which is the disagreement §4 exists to prevent.
+  const WANTED = ['consultations', 'cpql', 'newRevenue', 'attribution', 'cac', 'roas'];
   const picked = WANTED.map((key) => cards.find((c) => c.key === key)).filter(
+    (c): c is Kpi => c !== undefined,
+  );
+
+  // Demoted, not deleted. Revenue sits here beside Visitors and Leads because New,
+  // Repeat and Unclassified partition it exactly, so the total is a check on the three
+  // above rather than a sixth headline.
+  // Repeat and Unclassified follow Revenue down rather than staying beside New business.
+  // The three partition Revenue exactly, and Revenue is here — leaving two of them in the
+  // primary row would put a partition on one tier and the thing it partitions on another,
+  // which is how a reader comes to add New business to Revenue.
+  const SECONDARY = ['visitors', 'leads', 'revenue', 'repeatRevenue', 'unclassifiedRevenue', 'customers'];
+  const demoted = SECONDARY.map((key) => cards.find((c) => c.key === key)).filter(
     (c): c is Kpi => c !== undefined,
   );
 
@@ -296,6 +320,9 @@ export async function dashboardBand(
     visitorsFrom,
     band: {
       kpis: picked,
+      secondary: demoted,
+      secondaryNote:
+        'Volume and totals. §6.1 moved these below the scorecard: a firm whose constraint is senior delivery time is not managed by its visitor count.',
       // From the funnel rather than the picked cards: the dashboard shows a subset, and a
       // selection that happened to exclude every money card would lose the currency.
       currency: f.currency,

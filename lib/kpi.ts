@@ -57,6 +57,15 @@ export const KPI_SERIES: Record<string, KpiSeries[]> = {
   visitorToLead: ['sessions', 'leads'],
 
   spend: ['spend'],
+  // §6.1's scorecard. A consultation is a deal opened, so it rides the deals series;
+  // cost per consultation divides that by spend and is only as trustworthy as the thinner
+  // of the two.
+  consultations: ['deals'],
+  cpql: ['spend', 'deals'],
+  // Attribution health is a property of the revenue already recorded, not a series with a
+  // start date — a period comparison of it would be comparing two coverage measurements
+  // and reading the difference as performance.
+  attribution: ['revenue'],
   cpl: ['spend', 'leads'],
   cac: ['spend', 'customers'],
   roas: ['spend', 'revenue'],

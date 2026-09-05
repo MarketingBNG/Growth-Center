@@ -11,20 +11,20 @@ import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
 import { openPipeline, windowFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
-import { AI_KEY_ENV } from '@/lib/enums';
 import { campaignPerformance } from '@/lib/campaigns';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
 import { segmentMix } from '@/lib/leads';
 import { deliveryCapacity } from '@/lib/capacity';
+import { CostPerConsultation } from './CostPerConsultation';
+import { ActionQueue } from './ActionQueue';
 import { isPartnerView } from '@/lib/partner-view';
 import { PartnerViewToggle } from './PartnerView';
 
@@ -62,7 +62,7 @@ export default async function DashboardPage({
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const { current } = windowFor(spec);
 
-  const [dash, pipeline, series, channels, campaigns, segments, capacity, recentLeads, tasks, insights] =
+  const [dash, pipeline, series, channels, campaigns, segments, capacity, recentLeads, tasks] =
     await Promise.all([
       dashboardBand(spec, bucket),
       openPipeline(),
@@ -87,15 +87,6 @@ export default async function DashboardPage({
         orderBy: { dueDate: 'asc' },
         take: 5,
         select: { id: true, title: true, dueDate: true, priority: true, assigneeEmail: true, leadId: true },
-      }),
-      db().aiInsight.findMany({
-        // Resolved as well as dismissed: a finding the last run stopped reporting is kept
-        // for its history, not because it is still true, and the dashboard shows three
-        // things it is asserting right now.
-        where: { dismissedAt: null, resolvedAt: null },
-        orderBy: { createdAt: 'desc' },
-        take: 3,
-        select: { id: true, kind: true, title: true, body: true, provider: true },
       }),
     ]);
 
@@ -192,6 +183,11 @@ export default async function DashboardPage({
           toggle that lifts the cards it feeds and dims the rest. It reads the sources
           off the cards themselves, so it cannot fall out of step with them the way a
           hand-written list above the numbers could. */}
+      {/* §6.3: "Move AI insights to the top and render as an action queue." Above the
+          numbers, because the numbers are context for the decisions and not the other way
+          round — this is the first thing on the morning screen. */}
+      <ActionQueue />
+
       <MetricsBand {...band} />
 
       {/* 1.75fr / 1fr: the tables need the width, the summary cards do not.
@@ -388,41 +384,10 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>AI insights</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {insights.length === 0 ? (
-                // "No insights yet" reads as "we looked and found nothing" when in fact
-                // nothing has looked at all. The AI Assistant card at the foot of this
-                // same column already names the missing key; this one stayed quiet about
-                // it and the two disagreed about the same cause.
-                <p className="text-xs text-muted-foreground">
-                  {ai.configured
-                    ? 'No insights yet.'
-                    : `Set ${AI_KEY_ENV} to generate insights from your numbers.`}
-                </p>
-              ) : (
-                insights.map((i) => (
-                  <div key={i.id} className="rounded-md border border-border px-3 py-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-medium leading-snug">{i.title}</p>
-                      {/* 'seed' means nobody analysed anything — say so rather than
-                          letting an example read as a finding. */}
-                      <Badge tone={i.provider === 'seed' ? 'warning' : 'purple'}>
-                        {i.provider === 'seed' ? 'sample' : i.provider}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{i.body}</p>
-                  </div>
-                ))
-              )}
-              <Link href="/ai" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
-                All insights <ArrowRight className="size-3" />
-              </Link>
-            </CardContent>
-          </Card>
+
+          {/* §6.1's other half. "A blended number cannot be acted on. Nobody can buy
+              blended." */}
+          <CostPerConsultation range={current} currency={dash.funnel.currency} />
 
           {/* §6.2. Load is measured and the ceiling is entered, and the card says which
               half is which — a ceiling inferred from headcount would be an invented

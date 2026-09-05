@@ -3,6 +3,7 @@ import {
   ArrowUp,
   Banknote,
   Building2,
+  CalendarCheck,
   ChartLine,
   Clock,
   Eye,
@@ -11,6 +12,7 @@ import {
   Merge,
   Minus,
   Scale,
+  ShieldCheck,
   Sparkles,
   Target,
   Trophy,
@@ -69,6 +71,9 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   roas: Trophy,
   cpl: Scale,
   quality: Scale,
+  cpql: Scale,
+  consultations: CalendarCheck,
+  attribution: ShieldCheck,
   response: Clock,
   unassigned: UserX,
   companies: Building2,
@@ -104,10 +109,21 @@ export function KpiCard({
    *  of the source strip is to show which figures belong together, which needs the rest
    *  of them still on screen to be compared with. */
   dimmed = false,
+  /**
+   * §6.1's secondary row. Smaller type and a smaller tile, so the two tiers read as
+   * different weights of the same card rather than as two unrelated components.
+   *
+   * Everything else is identical on purpose — the tooltip, the source strip, the delta
+   * and the null handling. A demoted figure is still a figure somebody will act on, and a
+   * cut-down card would be the one place on the screen where a number arrives without its
+   * caveats.
+   */
+  compact = false,
 }: {
   kpi: Kpi;
   index?: number;
   dimmed?: boolean;
+  compact?: boolean;
 }) {
   const change = kpiDelta(kpi);
   const good = change === null || change === 0 ? null : change > 0 === kpi.higherIsBetter;
@@ -121,7 +137,8 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'group relative rounded-2xl border border-border bg-card px-[18px] pb-[15px] pt-4 shadow-card',
+        'group relative rounded-2xl border border-border bg-card shadow-card',
+        compact ? 'px-[15px] pb-3 pt-3' : 'px-[18px] pb-[15px] pt-4',
         'transition-opacity duration-150',
         dimmed && 'opacity-35',
       )}
@@ -134,16 +151,22 @@ export function KpiCard({
         <span
           aria-hidden
           className={cn(
-            'grid size-[26px] shrink-0 place-items-center rounded-lg opacity-[0.92]',
+            'grid shrink-0 place-items-center rounded-lg opacity-[0.92]',
+            compact ? 'size-[21px]' : 'size-[26px]',
             TILE[index % TILE.length],
           )}
         >
-          <Icon className="size-[14px] text-white" />
+          <Icon className={compact ? 'size-[11px] text-white' : 'size-[14px] text-white'} />
         </span>
       </div>
 
       <div className="flex flex-wrap items-baseline gap-2 pt-1.5">
-        <p className="text-[27px] font-extrabold leading-none tracking-[-0.035em] tnum">
+        <p
+          className={cn(
+            'font-extrabold leading-none tracking-[-0.035em] tnum',
+            compact ? 'text-[20px]' : 'text-[27px]',
+          )}
+        >
           {show(kpi)}
         </p>
         {change !== null ? (

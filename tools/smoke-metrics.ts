@@ -82,10 +82,18 @@ check(f.cac !== null, `CAC is computable (${f.cac ? money(f.cac) : 'null'})`);
 
 console.log('\nKPIs');
 const { cards: cardList } = await kpis(30);
-// Twelve, not ten. This assertion had been stale for some time — the card row grew when
-// the revenue split was added and nobody re-counted — so it was reporting a failure that
-// described nothing. A count is only worth asserting if it is right.
-check(cardList.length === 12, `12 KPI cards (${cardList.length})`);
+// Not a count. This assertion was `=== 10` while the row held twelve, and then `=== 12`
+// while it held fifteen — it has gone stale twice, and each time it reported a failure
+// that described nothing and taught the reader to ignore the check.
+//
+// What is actually worth asserting is that §6.1's scorecard is computable: those are the
+// numbers the operating plan is managed by, and a card row missing one of them is a real
+// fault where a card row with one extra is not.
+const keys = new Set(cardList.map((c) => c.key));
+for (const key of ['consultations', 'cpql', 'newRevenue', 'attribution', 'cac', 'roas']) {
+  check(keys.has(key), `the scorecard carries ${key}`);
+}
+check(cardList.length >= 6, `the card row is populated (${cardList.length})`);
 check(!!cardList.find((k) => k.key === 'newRevenue'), 'a New business card exists');
 check(
   cardList.every((k) => k.value === null || Number.isFinite(k.value)),

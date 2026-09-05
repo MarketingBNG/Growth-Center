@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
 import { scanDuplicates } from '@/lib/duplicate-queue';
+import { autofillContent } from '@/lib/content-autofill';
 import { refreshRatesIfStale } from '@/lib/settings';
 import { hasDb } from '@/lib/prisma';
 import { TAGS, invalidate } from '@/lib/cache';
@@ -51,6 +52,19 @@ export async function GET(req: Request) {
     duplicates = { error: (e as Error).message };
     console.error('[cron/sync] duplicate scan failed:', e);
   }
+
+  // §15.4. After the syncs for the same reason the duplicate scan is: Search Console
+  // pages and social posts imported tonight are exactly the ones the board is missing.
+  //
+  // Failure is logged and never thrown. A board that did not fill is a smaller problem
+  // than a night of syncing reported as failed.
+  let content: Awaited<ReturnType<typeof autofillContent>> | { error: string };
+  try {
+    content = await autofillContent();
+  } catch (e) {
+    content = { error: (e as Error).message };
+    console.error('[cron/sync] content autofill failed:', e);
+  }
   // A sync rewrites metrics, SEO rows and social rows, and can move an integration off
   // demo data. Without this the dashboard would show yesterday's numbers until the TTL.
   await invalidate(TAGS.integrations, TAGS.metrics, TAGS.seo, TAGS.social, TAGS.settings);
@@ -67,6 +81,7 @@ export async function GET(req: Request) {
     ms: Date.now() - started,
     synced: results.filter((r) => r.status === 'synced').length,
     duplicates,
+    content,
     rates: { fetchedAt: currency.fetchedAt, source: currency.source },
     results,
   });

@@ -9,6 +9,7 @@ import { can } from '@/lib/roles';
 import { contentBoard } from '@/lib/content';
 import { fmtCompact, fmtDate, fmtNumber } from '@/lib/format';
 import { NewContentButton } from './NewContentButton';
+import { AutofillButton } from './AutofillButton';
 import { ContentCard } from './ContentCard';
 
 export const metadata = { title: 'Content · Growth Center' };
@@ -52,7 +53,13 @@ export default async function ContentPage() {
       <PageHeader
         title="Content"
         subtitle={`${totals.total} pieces · ${totals.published} published`}
-        actions={<NewContentButton />}
+        actions={
+          <>
+            {/* §15.4. "Hand-filled boards decay in three weeks." */}
+            <AutofillButton />
+            <NewContentButton />
+          </>
+        }
       />
 
       {pieces.length === 0 ? (
