@@ -61,6 +61,44 @@ async function accessToken(refreshToken: string): Promise<string> {
   return json.access_token;
 }
 
+/**
+ * Zoho Projects v3 answers in two different shapes and this is the trap in the whole file.
+ *
+ * `/portals` returns a **bare array**. `/portal/{id}/tasks` returns `{page_info, tasks}`
+ * at the top level. Neither is wrapped in `data`, though the MCP connector that was used
+ * to design this mapping presents them as `{data: {result: […]}}` and `{data: {tasks:
+ * […]}}` — its own envelope, not the API's.
+ *
+ * Written against the connector's shape, every read returned undefined, the sync wrote
+ * nothing and reported success. Both shapes are accepted here so the provider is correct
+ * whichever it meets, and so this cannot regress quietly.
+ */
+function unwrap(payload: unknown, key: 'result' | 'tasks'): Json[] {
+  if (Array.isArray(payload)) return payload as Json[];
+  if (!payload || typeof payload !== 'object') return [];
+
+  const top = payload as Json;
+  if (Array.isArray(top[key])) return top[key] as Json[];
+
+  const data = top.data;
+  if (Array.isArray(data)) return data as Json[];
+  if (data && typeof data === 'object') {
+    const inner = (data as Json)[key];
+    if (Array.isArray(inner)) return inner as Json[];
+  }
+  return [];
+}
+
+/** `page_info`, wherever this endpoint decided to put it. */
+function pageInfo(payload: unknown): Json {
+  if (!payload || typeof payload !== 'object') return {};
+  const top = payload as Json;
+  if (top.page_info && typeof top.page_info === 'object') return top.page_info as Json;
+  const data = top.data as Json | undefined;
+  if (data?.page_info && typeof data.page_info === 'object') return data.page_info as Json;
+  return {};
+}
+
 async function get(path: string, token: string, params: Record<string, string> = {}): Promise<Json> {
   const q = new URLSearchParams(params);
   const url = `${API}${path}${q.toString() ? `?${q}` : ''}`;
@@ -266,17 +304,32 @@ export const zohoProjects: IntegrationProvider = {
 
     const points: MetricPoint[] = [];
 
+    /**
+     * The watermark, and the reason this provider is not a nightly full pull.
+     *
+     * This portal holds 16,600 tasks — 85 pages — and the first pass took four minutes.
+     * Re-fetching all of it every night would spend the whole shared 230s sync budget on
+     * one provider and starve everything queued behind it, which is the failure PageSpeed
+     * had to be given its own cron to avoid.
+     *
+     * It is avoided differently here, and more cheaply: results are sorted newest-modified
+     * first, so once a whole page predates the watermark there is nothing older worth
+     * reading and the pass is complete. That needs no filter syntax, cannot be silently
+     * rejected by the API the way a malformed `filter` parameter would be, and degrades to
+     * a full pull exactly when it should — on the first sync, when `since` is null.
+     */
+    const since = ctx.since ? ctx.since.getTime() : null;
+
     while (cursor.page <= MAX_PAGES) {
       const payload = await get(`/portal/${cursor.portalId}/tasks`, token, {
         page: String(cursor.page),
         per_page: String(PER_PAGE),
-        // Newest first, so a run that stops early has fetched the tasks most likely to
-        // matter rather than an arbitrary slice.
+        // Newest-modified first. Verified against the live portal rather than assumed —
+        // the endpoint's default order is neither, and the early stop below depends on it.
         sort_by: 'DESC(last_modified_time)',
       });
 
-      const data = (payload.data ?? {}) as Json;
-      const tasks = Array.isArray(data.tasks) ? (data.tasks as Json[]) : [];
+      const tasks = unwrap(payload, 'tasks');
 
       for (const t of tasks) {
         const id = str(t.id);
@@ -310,7 +363,11 @@ export const zohoProjects: IntegrationProvider = {
             assigneeEmail: people.assignee,
             otherOwners: people.all.slice(1),
             createdByEmail: str(createdBy.email),
-            dueDate: date(t.end_date)?.toISOString() ?? null,
+            // Always null, and deliberately kept rather than dropped. The portal-wide
+            // task list does not return `end_date` at all — the MCP connector this
+            // mapping was designed against synthesises one, the API does not. Recorded as
+            // absent so nobody reads a blank Due column as "nothing is due".
+            dueDate: null,
             // Only for a task Zoho actually considers finished. Projects leaves
             // completed_on set on a task that was reopened, so trusting it alone would
             // show a reopened task as done with a date on it.
@@ -323,8 +380,17 @@ export const zohoProjects: IntegrationProvider = {
         });
       }
 
-      const pageInfo = (data.page_info ?? {}) as Json;
-      const more = pageInfo.has_next_page === true && tasks.length > 0;
+      // Every task on this page already seen. Nothing older can have changed, so the pass
+      // is finished rather than merely out of time — a cursor here would make tomorrow
+      // start again from page 86 of a list that has since reordered.
+      if (since !== null && tasks.length > 0) {
+        const newest = Math.max(
+          ...tasks.map((t) => date(t.last_modified_time)?.getTime() ?? 0),
+        );
+        if (newest < since) return { points, cursor: null };
+      }
+
+      const more = pageInfo(payload).has_next_page === true && tasks.length > 0;
       if (!more) return { points, cursor: null };
 
       cursor = { ...cursor, page: cursor.page + 1 };
@@ -345,8 +411,7 @@ export const zohoProjects: IntegrationProvider = {
  */
 async function firstPortal(token: string): Promise<string> {
   const payload = await get('/portals', token);
-  const data = (payload.data ?? {}) as Json;
-  const list = Array.isArray(data.result) ? (data.result as Json[]) : [];
+  const list = unwrap(payload, 'result');
   const id = str(list[0]?.id);
   if (!id) throw new IntegrationError('Zoho Projects returned no portal for this account.');
   return id;
