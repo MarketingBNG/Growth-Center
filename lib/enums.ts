@@ -65,3 +65,39 @@ export type InsightKind = (typeof INSIGHT_KINDS)[number];
  * is worse than saying nothing: it tells the person to set a variable that has no effect.
  */
 export const AI_KEY_ENV = 'OPENAI_API_KEY';
+
+/**
+ * The two kinds of work this application shows, and how a Task row is sorted into one.
+ *
+ * §19.1 asks for the split, and it is not cosmetic. "Call this lead back" and "ship the
+ * Zoho integration" are different jobs, done by different people, judged on different
+ * clocks — and until now they shared one undifferentiated list, so opening Tasks showed
+ * 6,392 CRM follow-ups with delivery work buried somewhere inside it.
+ *
+ * Derived from `source` rather than stored as a column. The source is already written by
+ * whichever integration created the row, it cannot drift from it, and a stored copy would
+ * be a second fact about the same thing — this repository's documented failure mode.
+ *
+ * `zoho_projects` is delivery; everything else — the CRM, anything created here by hand —
+ * is relationship work. A source nobody recognises falls to `crm`, which is where an
+ * unrecognised task most likely belongs and, more importantly, keeps it visible: the
+ * alternative is a task that belongs to neither filter and can never be found.
+ */
+export const TASK_KINDS = ['crm', 'delivery'] as const;
+export type TaskKind = (typeof TASK_KINDS)[number];
+
+/** Sources that mean delivery work rather than CRM follow-up. */
+export const DELIVERY_TASK_SOURCES = ['zoho_projects'];
+
+export function taskKind(source: string | null | undefined): TaskKind {
+  return source && DELIVERY_TASK_SOURCES.includes(source) ? 'delivery' : 'crm';
+}
+
+/** The Prisma `where` fragment for one kind, or undefined for both. Kept beside taskKind
+ *  so the filter and the label can never disagree about what a kind means. */
+export function taskKindWhere(kind: string | null | undefined): Record<string, unknown> | undefined {
+  if (kind === 'delivery') return { source: { in: DELIVERY_TASK_SOURCES } };
+  // Null included deliberately: a hand-made task has no source and is CRM work.
+  if (kind === 'crm') return { OR: [{ source: null }, { source: { notIn: DELIVERY_TASK_SOURCES } }] };
+  return undefined;
+}

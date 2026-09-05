@@ -1,3 +1,4 @@
+import { Prisma } from './generated/prisma/client.ts';
 import { db } from './prisma.ts';
 import type { Thresholds } from './thresholds.ts';
 import { thresholds } from './settings.ts';
@@ -21,16 +22,23 @@ import type { InsightKind } from './enums.ts';
 //
 // ── Which of the manual's 25 are here, and why the rest are not ───────────────────────
 //
-// Ten. The other fifteen are not "not yet built": each is missing something this
+// Thirteen. The other twelve are not "not yet built": each is missing something this
 // workspace does not have, and writing them anyway would produce rules that either never
 // fire or fire on a figure that does not mean what the rule thinks.
+//
+// Two moved out of that list on 5 September, and neither because anything here changed —
+// which is the argument for re-reading the database rather than trusting these notes:
+//
+//   New technical issue         Said to need Semrush, whose subscription has no API
+//                               units. PageSpeed writes SeoPage.issues now; 50 pages
+//                               carry findings and the rule reads those.
+//   Lost-reason concentration   Said to be 42 rows of 175 lost deals. Re-read live it is
+//                               141 of 365 — the CRM has been filling the field since.
 //
 //   No field exists for it:
 //     CPQL over/under target      `qualifiedAt` means converted here; Zoho Bookings is
 //                                 not integrated, so the numerator has no signal at all.
 //     Lead quality drop           There is no quality score on Lead.
-//     Lost-reason concentration   Lead carries no lost reason. Opportunity does, on 42
-//                                 rows of 175 lost deals.
 //     Commercial keyword drop     Rankings are stored; nothing marks a term commercial.
 //     AI citation lost            No tracked-question table.
 //     Suppression breach          Is_Client / Is_Referral_Partner are not in the Zoho
@@ -43,15 +51,15 @@ import type { InsightKind } from './enums.ts';
 //     Profile below cadence       0 social posts in the last 14 days.
 //
 //   Blocked outside the code:
-//     New technical issue         Semrush subscription has no API units (commit caa98fe).
 //     Tax claim unverified        Needs the controlled corpus, which does not exist.
 //     Reconciliation variance     Nothing records what the vendor said the count was.
 //     Campaign with zero leads    campaignId is null on all 27,458 leads, so a
 //                                 per-campaign lead count is structurally uncomputable.
 //                                 Reported per channel instead, where the data is real.
 //
-// That leaves the ten below. Each was checked against the live database before it was
-// written, which is how the notes above are so specific.
+// That leaves the thirteen below. Each was checked against the live database before it
+// was written, which is how the notes above are so specific — and why two of them turned
+// out to be stale.
 
 export type RuleSection =
   | 'dashboard'
@@ -614,6 +622,147 @@ const placeholderRule: Rule = {
   },
 };
 
+/**
+ * §20.5's "new technical issue". Unblocked by the PageSpeed integration, not by a change
+ * here: the note above used to say this needed Semrush, whose subscription has no API
+ * units. PageSpeed now writes `SeoPage.issues` — 50 pages carry findings today — so the
+ * rule has real data to read and Semrush was never the only way to get it.
+ *
+ * Raised per fault code rather than per page. Fifty separate findings saying "this page
+ * has render-blocking CSS" is a list; one saying "fifty pages share it" is a decision,
+ * and it is one fix.
+ */
+const seoTechnicalIssueRule: Rule = {
+  id: 'seo_technical_issue_widespread',
+  scope: 'standing',
+  version: 1,
+  section: 'seo',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'A high-severity page-speed fault appearing on more pages than the threshold allows',
+  async run(ctx) {
+    const floor = ctx.thresholds['seo.highSeverityIssues'];
+
+    // `not: Prisma.DbNull`, not `not: null` — Prisma distinguishes a SQL NULL from a JSON
+    // null on a Json column, and the plain literal is a type error rather than a filter.
+    const pages = await db().seoPage.findMany({
+      where: { issues: { not: Prisma.DbNull } },
+      select: { url: true, issues: true },
+    });
+    if (!pages.length) return [];
+
+    // Pages per fault code, high severity only. Lighthouse's own scoring decides the
+    // severity — this rule does not form a second opinion about how bad a fault is.
+    const byCode = new Map<string, { pages: string[]; message: string }>();
+    for (const page of pages) {
+      const list = Array.isArray(page.issues)
+        ? (page.issues as { code?: string; severity?: string; message?: string }[])
+        : [];
+      for (const issue of list) {
+        if (issue.severity !== 'high' || !issue.code) continue;
+        const entry = byCode.get(issue.code) ?? { pages: [], message: issue.message ?? issue.code };
+        entry.pages.push(page.url);
+        byCode.set(issue.code, entry);
+      }
+    }
+
+    const widespread = [...byCode.entries()]
+      .filter(([, e]) => e.pages.length >= floor)
+      .sort((a, b) => b[1].pages.length - a[1].pages.length)
+      .slice(0, 3);
+
+    return widespread.map(([code, entry]) => ({
+      subject: `seo-issue-${slug(code)}`,
+      evidence: {
+        issue: code.replaceAll('-', ' '),
+        finding: entry.message,
+        affectedPages: entry.pages.length,
+        measuredPages: pages.length,
+        // Named, because "42 pages" invites the reader to assume it is out of the whole
+        // site. It is out of the pages PageSpeed measured, which is the busiest 25-50.
+        basis: 'affectedPages is out of measuredPages, the most-visited pages PageSpeed measures — not the whole site',
+        examples: entry.pages.slice(0, 3),
+        threshold: floor,
+      },
+      proposedAction: `Fix ${code.replaceAll('-', ' ')} once in the theme or template — it affects ${entry.pages.length} of the measured pages.`,
+    }));
+  },
+};
+
+/**
+ * §20.5's "lost-reason concentration".
+ *
+ * The note above said this was blocked because only 42 of 175 lost deals carried a
+ * reason. Re-read against the live database it is 141 of 365 — the CRM has been filling
+ * the field since, which is exactly why that note said to check rather than trust it.
+ *
+ * Coverage is the whole difficulty. 224 of 365 losses give no reason at all, so a bare
+ * "Price is 25% of losses" would be a claim about the 39% who answered dressed as a claim
+ * about everybody. The share is computed over reasons GIVEN, and both numbers travel with
+ * it — the same treatment attribution coverage already gets.
+ *
+ * "Other" is excluded from being raised. It is the commonest value here at 57, and a
+ * finding saying the top reason for losing is "Other" tells nobody anything they can act
+ * on; it is a CRM hygiene problem, and the coverage figure already reports it.
+ */
+const lostReasonRule: Rule = {
+  id: 'lost_reason_concentration',
+  scope: 'period',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'One reason accounting for more than the threshold share of losses that state a reason',
+  async run(ctx) {
+    const share = ctx.thresholds['crm.lostReasonShare'];
+
+    const lost = await db().opportunity.findMany({
+      where: { stage: { isLost: true }, closedAt: { gte: ctx.from, lte: ctx.to } },
+      select: { lostReason: true },
+    });
+    if (!lost.length) return [];
+
+    const withReason = lost.filter((o) => o.lostReason);
+    // Too few stated reasons and any percentage is noise wearing a decimal point.
+    if (withReason.length < 10) return [];
+
+    const counts = new Map<string, number>();
+    for (const o of withReason) {
+      const reason = o.lostReason as string;
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    }
+
+    const ranked = [...counts.entries()]
+      .filter(([reason]) => reason.toLowerCase() !== 'other')
+      .sort((a, b) => b[1] - a[1]);
+    const top = ranked[0];
+    if (!top) return [];
+
+    // rate() returns null when it cannot divide. Guarded rather than coerced: a null
+    // becoming 0 would silently mean "no concentration" on a division that never happened.
+    const percent = rate(top[1], withReason.length);
+    if (percent === null || percent < share) return [];
+
+    return [
+      {
+        subject: `lost-reason-${slug(top[0])}`,
+        evidence: {
+          reason: top[0],
+          deals: top[1],
+          reasonsGiven: withReason.length,
+          decidedLosses: lost.length,
+          sharePercent: round(percent),
+          // Both halves stated. Without this the share reads as a fact about every loss.
+          basis: `sharePercent is out of the ${withReason.length} losses that state a reason, not the ${lost.length} losses in the period`,
+          coveragePercent: round(rate(withReason.length, lost.length)),
+          threshold: share,
+        },
+        proposedAction: `Review how "${top[0]}" losses are being handled, and why ${lost.length - withReason.length} losses record no reason at all.`,
+      },
+    ];
+  },
+};
+
 export const RULES: Rule[] = [
   attributionRule,
   placeholderRule,
@@ -626,6 +775,8 @@ export const RULES: Rule[] = [
   taskDebtRule,
   dormantCustomerRule,
   seoCtrRule,
+  seoTechnicalIssueRule,
+  lostReasonRule,
 ];
 
 export const RULE_IDS = RULES.map((r) => r.id);

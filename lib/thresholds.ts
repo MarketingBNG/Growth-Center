@@ -52,6 +52,18 @@ export const THRESHOLDS = {
     default: 24,
     hint: '§20.5 names 24 hours. The nightly job runs once, so anything past this means a run was missed or failed.',
   },
+  'seo.highSeverityIssues': {
+    label: 'Pages with a serious speed fault before it is raised',
+    unit: 'pages',
+    default: 10,
+    hint: 'A Lighthouse finding scored below 0.5 is high severity. One slow page is a page; ten sharing a fault is a site-wide problem worth somebody’s morning.',
+  },
+  'crm.lostReasonShare': {
+    label: 'Concentration in one lost reason',
+    unit: '%',
+    default: 30,
+    hint: 'When this share of decided losses give the same reason, the reason is a pattern rather than a list. Measured over losses that carry a reason at all, and the rule states that coverage.',
+  },
   'seo.impressionFloor': {
     label: 'Page impressions floor',
     unit: 'impressions',

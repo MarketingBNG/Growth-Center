@@ -12,9 +12,10 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { db, hasDb } from '@/lib/prisma';
 import { pageQuery } from '@/lib/query';
 import { listAssignable, peopleOn, personOptions } from '@/lib/users';
-import { TASK_STATUSES } from '@/lib/enums';
+import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/enums';
 import { ProgressLink } from '@/components/NavProgress';
 import { fmtDate } from '@/lib/format';
+import { sourceMeta } from '@/lib/sources';
 import { CompleteButton } from './CompleteButton';
 
 export const metadata = { title: 'Tasks · Growth Center' };
@@ -49,14 +50,21 @@ async function TasksBody({
   const q = pageQuery(params);
   const status = typeof params.status === 'string' ? params.status : '';
   const assignee = typeof params.assigneeEmail === 'string' ? params.assigneeEmail : '';
+  const kind = typeof params.kind === 'string' ? params.kind : '';
 
-  const where: Record<string, unknown> = {};
-  if (status) where.status = status;
-  else where.status = { in: ['open', 'in_progress'] };
-  if (assignee) where.assigneeEmail = assignee === 'unassigned' ? null : assignee;
-  if (q.q) where.title = { contains: q.q, mode: 'insensitive' };
+  // Everything except the kind. Kept separate so the per-kind counts below can reuse the
+  // exact scope the table is showing — if they were computed against a different `where`,
+  // the tab could say 42 over a list of 11 and neither number would be wrong.
+  const scope: Record<string, unknown> = {};
+  if (status) scope.status = status;
+  else scope.status = { in: ['open', 'in_progress'] };
+  if (assignee) scope.assigneeEmail = assignee === 'unassigned' ? null : assignee;
+  if (q.q) scope.title = { contains: q.q, mode: 'insensitive' };
 
-  const filtered = Boolean(status || assignee || q.q);
+  // §19.1's split. Derived from `source`, never a stored column — see taskKind.
+  const where = { ...scope, ...(taskKindWhere(kind) ?? {}) };
+
+  const filtered = Boolean(status || assignee || q.q || kind);
 
   const [rows, total, everything] = await Promise.all([
     db().task.findMany({
@@ -79,6 +87,15 @@ async function TasksBody({
     filtered ? db().task.count() : Promise.resolve(0),
   ]);
 
+  // How much unfinished work sits on each side of the split. Counted on the same status
+  // window the page is showing, not over the whole table — a "Delivery 42" beside a list
+  // of open tasks must mean 42 open ones, or the number is a different question wearing
+  // the same label.
+  const [crmCount, deliveryCount] = await Promise.all([
+    db().task.count({ where: { ...scope, ...taskKindWhere('crm') } }),
+    db().task.count({ where: { ...scope, ...taskKindWhere('delivery') } }),
+  ]);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -94,6 +111,17 @@ async function TasksBody({
             // not read "all" over a table with 1,518 completed tasks hidden from it.
             allLabel: 'Status: open & in progress',
             options: TASK_STATUSES.map((s) => ({ value: s, label: s.replaceAll('_', ' ') })),
+          },
+          {
+            name: 'kind',
+            label: 'Kind',
+            // Not "all": the two are genuinely different work and the default showing
+            // both is a choice, not an absence of one.
+            allLabel: `Both (${crmCount + deliveryCount})`,
+            options: TASK_KINDS.map((k) => ({
+              value: k,
+              label: k === 'crm' ? `CRM follow-up (${crmCount})` : `Delivery (${deliveryCount})`,
+            })),
           },
           {
             name: 'assigneeEmail',
@@ -114,7 +142,7 @@ async function TasksBody({
               filtered
                 ? everything > 0
                   ? 'No task matches these filters. Clear them to see the rest.'
-                  : 'Tasks arrive with the CRM sync, or when someone adds one to a record.'
+                  : 'Tasks arrive from the CRM and from Zoho Projects, or when someone adds one to a record.'
                 : 'Nothing open. Finished tasks are behind the status filter.'
             }
           />
@@ -138,7 +166,15 @@ async function TasksBody({
                     return (
                       <TR key={t.id}>
                         <TD>
-                          <p className="font-medium">{t.title}</p>
+                          <div className="flex items-baseline gap-2">
+                            <p className="font-medium">{t.title}</p>
+                            {/* Only on delivery work. Badging all 6,392 CRM rows with the
+                                same word is noise; the badge exists to mark the minority
+                                that is not what this list has always been. */}
+                            {taskKind(t.source) === 'delivery' ? (
+                              <Badge tone="neutral">{sourceMeta(t.source).label}</Badge>
+                            ) : null}
+                          </div>
                           {t.detail ? <p className="text-[11px] text-muted-foreground">{t.detail}</p> : null}
                         </TD>
                         <TD className="text-muted-foreground">
