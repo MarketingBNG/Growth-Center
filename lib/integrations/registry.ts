@@ -1,6 +1,8 @@
 import type { IntegrationProvider } from './types.ts';
+import { googleAds } from './providers/google-ads.ts';
 import { googleAnalytics } from './providers/google-analytics.ts';
 import { googleBusiness } from './providers/google-business.ts';
+import { linkedinAds } from './providers/linkedin-ads.ts';
 import { metaAds } from './providers/meta-ads.ts';
 import { metaSocial } from './providers/meta-social.ts';
 import { pagespeed } from './providers/pagespeed.ts';
@@ -13,8 +15,10 @@ import { zohoProjects } from './providers/zoho-projects.ts';
 // A plain map. The Integration Center renders from this, so a provider added here
 // appears in the UI with no further change.
 export const PROVIDERS: Record<string, IntegrationProvider> = {
+  [googleAds.id]: googleAds,
   [googleAnalytics.id]: googleAnalytics,
   [googleBusiness.id]: googleBusiness,
+  [linkedinAds.id]: linkedinAds,
   [metaAds.id]: metaAds,
   [metaSocial.id]: metaSocial,
   [pagespeed.id]: pagespeed,

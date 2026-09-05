@@ -104,6 +104,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by LinkedIn and refreshed on each sync.',
   },
+  linkedin_ads: {
+    label: 'LinkedIn Ads',
+    name: 'LinkedIn Ads',
+    tone: 'live',
+    hint: 'Reported by LinkedIn Campaign Manager and refreshed on each sync.',
+  },
   [DEMO_SOURCE]: {
     label: 'seeded',
     name: 'Seeded demo data',
