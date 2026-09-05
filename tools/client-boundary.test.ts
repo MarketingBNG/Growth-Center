@@ -15,25 +15,76 @@ import { join } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..');
 
-/** Modules that pull in the database driver, directly or transitively. */
-const SERVER_ONLY = [
-  'lib/prisma',
-  'lib/metrics',
-  'lib/band',
-  'lib/campaigns',
-  'lib/leads',
-  'lib/crm',
-  'lib/pipeline',
-  'lib/apikeys',
-  'lib/automation',
-  'lib/crypto',
-  'lib/auth',
-  'lib/users',
-  'lib/api',
-  'lib/integrations/service',
-  'lib/integrations/registry',
-  'lib/oauth-state',
-];
+/**
+ * Every lib module that can reach the database, worked out by following imports.
+ *
+ * This used to be a hand-written list of sixteen names, and the list is what let the next
+ * one through: `lib/referrals.ts` was added, a client component imported a constant from
+ * it, and the production build died on "Can't resolve fs" — after the type checker, the
+ * linter and all 725 tests had passed clean. A list that has to be remembered is a list
+ * that will be wrong the day it matters.
+ *
+ * Computed from the import graph instead. A module is tainted if it imports `pg` or
+ * `./prisma`, or imports anything that is.
+ */
+function serverOnly(): Set<string> {
+  const modules = new Map<string, string[]>();
+
+  const scan = (dir: string, prefix: string) => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === 'generated' || entry === 'node_modules') continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        scan(full, `${prefix}${entry}/`);
+        continue;
+      }
+      if (!entry.endsWith('.ts')) continue;
+      const name = `${prefix}${entry.replace(/\.ts$/, '')}`;
+      const source = readFileSync(full, 'utf8');
+      const imports: string[] = [];
+      for (const line of source.match(/^\s*import\s[^;]+;/gm) ?? []) {
+        // A type-only import is erased before the bundle exists, so it cannot taint.
+        if (/^\s*import\s+type\s/.test(line)) continue;
+        const from = line.match(/from\s+'([^']+)'/)?.[1];
+        if (from) imports.push(from);
+      }
+      modules.set(name, imports);
+    }
+  };
+  scan(join(ROOT, 'lib'), '');
+
+  const tainted = new Set<string>();
+  const resolve = (from: string, spec: string): string | null => {
+    if (!spec.startsWith('.')) return null;
+    const base = from.includes('/') ? from.slice(0, from.lastIndexOf('/') + 1) : '';
+    const path = spec.startsWith('./') ? base + spec.slice(2) : spec.replace(/^\.\.\//, '');
+    return path.replace(/\.ts$/, '');
+  };
+
+  // Fixed point. Cheap at this size and immune to import order, which a single pass is
+  // not — lib/a importing lib/b importing lib/prisma would otherwise depend on which of
+  // the two the directory listing reached first.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [name, imports] of modules) {
+      if (tainted.has(name)) continue;
+      const dirty = imports.some((spec) => {
+        if (spec === 'pg' || spec.startsWith('@prisma/')) return true;
+        const target = resolve(name, spec);
+        return target !== null && (target === 'prisma' || tainted.has(target));
+      });
+      if (dirty) {
+        tainted.add(name);
+        changed = true;
+      }
+    }
+  }
+
+  return new Set([...tainted].map((m) => `lib/${m}`));
+}
+
+const SERVER_ONLY = [...serverOnly()].sort();
 
 /** Modules with no imports at all, safe for either side. */
 const CLIENT_SAFE = [
@@ -94,7 +145,7 @@ test("no 'use client' file imports a server-only module", () => {
   assert.deepEqual(
     offenders,
     [],
-    `client components must take shared values from ${CLIENT_SAFE.join(', ')} instead`,
+    `client components must take shared values from a module that imports nothing — ${CLIENT_SAFE.join(', ')} — rather than from one that can reach the database`,
   );
 });
 
@@ -183,4 +234,19 @@ test('no client component reaches a server-only module through another component
     [],
     `a client component reaches the database through a component it renders; move the shared value into ${CLIENT_SAFE.join(', ')}`,
   );
+});
+
+// A scanner that silently returned nothing would make the test above vacuous: no
+// server-only modules means no offenders, every time.
+test('the import scan actually finds the modules that reach the database', () => {
+  assert.ok(SERVER_ONLY.includes('lib/metrics'), 'lib/metrics reaches lib/prisma');
+  assert.ok(SERVER_ONLY.includes('lib/leads'));
+  // The one that got through when this list was hand-written.
+  assert.ok(SERVER_ONLY.includes('lib/referrals'));
+  assert.ok(SERVER_ONLY.length > 20, `expected many, found ${SERVER_ONLY.length}`);
+
+  // …and that it is not simply flagging everything.
+  for (const safe of CLIENT_SAFE) {
+    assert.equal(SERVER_ONLY.includes(safe), false, `${safe} is client-safe and must not be flagged`);
+  }
 });

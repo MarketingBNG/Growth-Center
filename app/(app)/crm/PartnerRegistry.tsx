@@ -9,7 +9,9 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { EmptyState } from '@/components/patterns/state';
 import { api } from '@/lib/fetcher';
 import { fmtNumber, fmtRelative } from '@/lib/format';
-import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/referrals';
+// From referral-types, not referrals: the latter imports lib/prisma, and a value read
+// from there pulls the `pg` driver into the browser bundle.
+import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/referral-types';
 
 // §8.5's registry. "What is not recorded is not followed up."
 //

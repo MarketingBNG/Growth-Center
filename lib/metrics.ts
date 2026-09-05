@@ -724,8 +724,8 @@ export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; curren
       hint: 'Won business that is neither confirmed new nor confirmed repeat — mostly the 887 deals loaded on the first day, where an account with no earlier deal proves nothing. New and Repeat add up to Revenue once this is included',
     },
     { key: 'spend', label: 'Marketing spend', value: now.spend, previous: before.spend, format: 'money', currency: now.currency, higherIsBetter: false },
-    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'All paid spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend' },
-    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business booked against a paid channel, over all paid spend. Revenue that reached no channel is not a return on ad spend' },
+    { key: 'cac', label: 'CAC', value: now.cac, previous: before.cac, format: 'money', currency: now.currency, higherIsBetter: false, hint: 'Acquisition spend over the customers won through a paid channel. Customers who arrived another way are not counted against ad spend, and recruitment advertising is not counted as a cost of winning one' },
+    { key: 'roas', label: 'ROAS', value: now.roas, previous: before.roas, format: 'ratio', higherIsBetter: true, hint: 'New business booked against a paid channel, over acquisition spend. Revenue that reached no channel is not a return on ad spend, and hiring spend was never trying to earn one' },
   ];
 
   return { cards: await comparableDeltas(cards, current, previous), current: now, previous: before };

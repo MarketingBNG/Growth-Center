@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { db } from './prisma.ts';
+import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow, type PartnerType } from './referral-types.ts';
 
 // §8.5: "Referral is our highest-trust channel and it has no home in any system today.
 // What is not recorded is not followed up."
@@ -8,34 +9,16 @@ import { db } from './prisma.ts';
 // recorded at all, as free text inside the CRM's source string — "Ref by NG", 137 leads.
 // That string cannot be counted, cannot be thanked, and cannot be asked again.
 
-/** The five §8.5 names, plus an escape. */
-export const PARTNER_TYPES = [
-  'ca_firm',
-  'law_firm',
-  'incubator',
-  'bank',
-  'immigration_adviser',
-  'other',
-] as const;
-export type PartnerType = (typeof PARTNER_TYPES)[number];
-
-export const PARTNER_TYPE_LABELS: Record<PartnerType, string> = {
-  ca_firm: 'CA firm',
-  law_firm: 'Law firm',
-  incubator: 'Incubator',
-  bank: 'Bank',
-  immigration_adviser: 'Immigration adviser',
-  other: 'Other',
-};
-
-/**
- * How long a partner may go unspoken-to. §8's monthly rule names 60 days.
- *
- * Measured from `lastTouchAt`, and from `createdAt` where there has never been one — a
- * partner entered six months ago and never rung is exactly the case the registry exists
- * to surface, and measuring from a null would have excluded them.
- */
-export const SILENT_DAYS = 60;
+// The vocabulary lives in lib/referral-types.ts, which imports nothing, so the registry
+// table can read it without dragging the `pg` driver into the browser bundle. Re-exported
+// here so a server caller has one place to import from.
+export {
+  PARTNER_TYPES,
+  PARTNER_TYPE_LABELS,
+  SILENT_DAYS,
+  type PartnerType,
+  type PartnerRow,
+} from './referral-types.ts';
 
 export const partnerInput = z.object({
   name: z.string().trim().min(1, 'A partner needs a name.'),
@@ -57,26 +40,6 @@ export const partnerEvent = z.object({
 
 const DAY = 86_400_000;
 
-export type PartnerRow = {
-  id: string;
-  name: string;
-  partnerType: PartnerType;
-  typeLabel: string;
-  company: string | null;
-  email: string | null;
-  ownerEmail: string | null;
-  active: boolean;
-  leadsReferred: number;
-  customersWon: number;
-  lastTouchAt: Date | null;
-  daysSinceTouch: number;
-  acknowledgementSentAt: Date | null;
-  /** Referrals that arrived after the last thank-you. An unacknowledged referral is a
-   *  debt, and a partner who sent three clients and was never thanked is the specific
-   *  failure this table exists to make visible. */
-  unacknowledged: number;
-  silent: boolean;
-};
 
 /**
  * The registry, with what each partner has actually produced.

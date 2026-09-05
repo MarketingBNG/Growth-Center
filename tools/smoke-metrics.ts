@@ -63,15 +63,29 @@ check(
 // ROAS divides the new business booked against a PAID channel by spend. Two earlier
 // definitions were both wrong here: all revenue over spend (18x), then all new business
 // over spend (225x) - on an account that books 94% of its money against no channel.
+// G4 added a third wrong answer to guard against: all paid spend, including the
+// recruitment campaigns that were never trying to win a client. The denominator is
+// acquisition spend.
 check(
-  Math.abs((f.roas ?? 0) - f.paidRevenue / f.spend) < 0.01,
-  'ROAS is paid-channel new business over spend, not the whole business over spend',
+  Math.abs((f.roas ?? 0) - f.paidRevenue / f.acquisitionSpend) < 0.01,
+  'ROAS divides paid-channel new business by acquisition spend, not by all spend',
+);
+check(
+  f.acquisitionSpend <= f.spend,
+  `acquisition spend (${money(f.acquisitionSpend)}) is part of total spend (${money(f.spend)})`,
+);
+check(
+  Math.abs(f.spend - f.acquisitionSpend - f.nonAcquisitionSpend) < 0.01,
+  'the two halves of spend add back up to it, so nothing goes missing between the cards',
 );
 check(f.cac !== null, `CAC is computable (${f.cac ? money(f.cac) : 'null'})`);
 
 console.log('\nKPIs');
 const { cards: cardList } = await kpis(30);
-check(cardList.length === 10, `10 KPI cards (${cardList.length})`);
+// Twelve, not ten. This assertion had been stale for some time — the card row grew when
+// the revenue split was added and nobody re-counted — so it was reporting a failure that
+// described nothing. A count is only worth asserting if it is right.
+check(cardList.length === 12, `12 KPI cards (${cardList.length})`);
 check(!!cardList.find((k) => k.key === 'newRevenue'), 'a New business card exists');
 check(
   cardList.every((k) => k.value === null || Number.isFinite(k.value)),
