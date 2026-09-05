@@ -276,6 +276,16 @@ export default async function MarketingPage({
                       {/* A campaign with no source came from the seeder, whatever its
                           channel says — that distinction is the whole point here. */}
                       <SourceBadge source={c.source} className="ml-1.5" />
+                      {/* G4. The row keeps its own cost per lead, because a recruitment
+                          campaign genuinely did cost that much per applicant. The label
+                          is what stops somebody reading it as a client acquisition cost
+                          — and what explains why the footer's CPL is lower than the
+                          column above it appears to average to. */}
+                      {c.acquisition ? null : (
+                        <span className="ml-1.5 rounded border border-border px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
+                          {c.objective}
+                        </span>
+                      )}
                     </TD>
                     <TD className="text-muted-foreground">{c.channelName}</TD>
                     <TD className="text-right tnum">{money(c.spend)}</TD>
@@ -336,6 +346,15 @@ export default async function MarketingPage({
             </Table>
           </TableWrap>
         )}
+        {totals.excludedSpend > 0.005 ? (
+          <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            Spend totals every campaign. CPL, CAC and ROAS divide by{' '}
+            <span className="tnum">{money(totals.acquisitionSpend)}</span> of it — the{' '}
+            <span className="tnum">{money(totals.excludedSpend)}</span> spent on hiring and awareness
+            was never asked to win a client, so charging client acquisition with it would overstate
+            what a client costs.
+          </p>
+        ) : null}
       </Card>
     </>
   );

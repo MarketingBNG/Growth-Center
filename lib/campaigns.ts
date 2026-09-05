@@ -1,5 +1,6 @@
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
+import { isAcquisition } from './campaign-objective.ts';
 import { convert } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import type { Range } from './metrics.ts';
@@ -23,6 +24,7 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
       name: true,
       status: true,
       source: true,
+      objective: true,
       channel: { select: { id: true, name: true, kind: true } },
     },
     orderBy: { name: 'asc' },
@@ -130,6 +132,11 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
         name: c.name,
         status: c.status,
         source: c.source,
+        /** G4: what the money was trying to buy. The row keeps its own cost per lead —
+         *  a recruitment campaign really did cost that much per applicant — but the
+         *  footer will not divide client acquisition by it. */
+        objective: c.objective,
+        acquisition: isAcquisition(c.objective),
         channelId: c.channel.id,
         channelName: c.channel.name,
         channelKind: c.channel.kind,
@@ -177,13 +184,24 @@ export function campaignTotals(rows: CampaignRow[]) {
     revenue: sum((r) => r.revenue),
   };
 
+  // G4. The Spend cell still totals every rupee — hiding ₹395,505 of real money would be
+  // a worse error than the one this fixes — but the three ratios beside it divide by the
+  // part of that spend which was trying to win a client. Recruitment advertising did not.
+  const acquisitionSpend = rows.reduce((acc, r) => acc + (r.acquisition ? r.spend : 0), 0);
+  const acquisitionLeads = sum((r) => (r.acquisition ? r.leads : 0));
+  const acquisitionCustomers = sum((r) => (r.acquisition ? r.customers : 0));
+
   return {
     ...t,
+    /** Hiring and awareness spend, so the page can name what the ratios left out rather
+     *  than leaving the reader to find the discrepancy. */
+    excludedSpend: t.spend - acquisitionSpend,
+    acquisitionSpend,
     ctr: rate(t.clicks, t.impressions),
     clickToLead: t.leads === null ? null : rate(t.leads, t.clicks),
-    costPerLead: t.leads === null ? null : costPer(t.spend, t.leads),
-    cac: t.customers === null ? null : cac(t.spend, t.customers),
-    roas: t.revenue === null ? null : roas(t.revenue, t.spend),
+    costPerLead: acquisitionLeads === null ? null : costPer(acquisitionSpend, acquisitionLeads),
+    cac: acquisitionCustomers === null ? null : cac(acquisitionSpend, acquisitionCustomers),
+    roas: t.revenue === null ? null : roas(t.revenue, acquisitionSpend),
   };
 }
 

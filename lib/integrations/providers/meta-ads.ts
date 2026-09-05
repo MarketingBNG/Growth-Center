@@ -1,3 +1,4 @@
+import { resolveObjective } from '../../campaign-objective.ts';
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 
 // Meta Ads insights, written per campaign so the marketing table's spend, impressions
@@ -213,6 +214,10 @@ type CampaignDetail = {
   endDate: string | null;
   budget: number | null;
   budgetPeriod: 'daily' | 'lifetime' | null;
+  /** The normalised G4 classification — acquisition, hiring, awareness or other. */
+  objective: string;
+  /** Meta's own objective, kept verbatim so a re-classification needs no re-sync. */
+  platformObjective: string | null;
 };
 
 /**
@@ -237,12 +242,19 @@ async function campaignDetails(
   const out = new Map<string, CampaignDetail>();
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: 'id,status,start_time,stop_time,daily_budget,lifetime_budget',
+    // `special_ad_categories` is the authoritative hiring signal: Meta requires an
+    // advertiser to declare an employment ad, so it is structured data rather than a
+    // naming habit. Requested here because the insights edge does not carry it and G4's
+    // whole exclusion rests on it.
+    fields: 'id,name,status,start_time,stop_time,daily_budget,lifetime_budget,objective,special_ad_categories',
     limit: '500',
   });
 
   type Row = {
     id: string;
+    name?: string;
+    objective?: string;
+    special_ad_categories?: string[];
     status?: string;
     start_time?: string;
     stop_time?: string;
@@ -268,6 +280,12 @@ async function campaignDetails(
           endDate: row.stop_time ?? null,
           budget,
           budgetPeriod: budget === null ? null : hasDaily ? 'daily' : 'lifetime',
+          objective: resolveObjective({
+            platformObjective: row.objective,
+            specialCategories: row.special_ad_categories,
+            name: row.name,
+          }),
+          platformObjective: row.objective ?? null,
         });
       }
       url = json.paging?.next ?? null;

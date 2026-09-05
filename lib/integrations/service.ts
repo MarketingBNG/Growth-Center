@@ -375,7 +375,7 @@ async function writeCampaignSpend(
   const details = new Map<string, Record<string, unknown>>();
   for (const p of relevant) {
     const m = meta(p);
-    if (m.status || m.startDate || m.endDate || m.budget != null) {
+    if (m.status || m.startDate || m.endDate || m.budget != null || m.objective) {
       details.set(p.entityId as string, m);
     }
   }
@@ -401,6 +401,11 @@ async function writeCampaignSpend(
           // Stored beside the amount because the amount alone is not comparable to a
           // period's spend — see Campaign.budgetPeriod.
           budgetPeriod: str(d.budgetPeriod) ?? undefined,
+          // G4. Written on every sync rather than only on create, so a campaign
+          // re-categorised as employment at the platform stops counting against
+          // acquisition on the next run instead of at the next backfill.
+          objective: str(d.objective) ?? undefined,
+          platformObjective: str(d.platformObjective) ?? undefined,
         }
       : {};
 

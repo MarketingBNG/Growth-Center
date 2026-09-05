@@ -8,6 +8,7 @@ import { currencySettings } from './settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { cache } from 'react';
 import { OPEN_DEAL } from './pipeline.ts';
+import { ACQUISITION_CAMPAIGN, isAcquisition } from './campaign-objective.ts';
 import { TAGS, cached } from './cache.ts';
 
 // The Kpi shape and its delta live in lib/kpi.ts so client components can use them
@@ -376,11 +377,14 @@ export async function funnel(range: Range, channelId?: string) {
 
   // The channels that actually carried spend in this window. ROAS and CAC are measured
   // against these and nothing else — see below.
+  // G4: a channel that carried only recruitment spend is not a paid acquisition channel,
+  // and counting it as one puts its customers in CAC's numerator against money that never
+  // tried to win them.
   const paidChannelIds = [
     ...new Set(
       (
         await db().campaign.findMany({
-          where: { spend: { some: { date: window } }, ...byChannel },
+          where: { spend: { some: { date: window } }, ...ACQUISITION_CAMPAIGN, ...byChannel },
           select: { channelId: true },
         })
       ).map((c) => c.channelId),
@@ -388,7 +392,7 @@ export async function funnel(range: Range, channelId?: string) {
   ];
   const paidChannel = { channelId: { in: paidChannelIds } };
 
-  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, inferredNewRevenueAgg, repeatRevenueAgg, spendAgg, paidRevenueAgg, paidCustomers] =
+  const [visitors, leads, semiQualified, qualified, opportunities, customers, revenueAgg, newRevenueAgg, inferredNewRevenueAgg, repeatRevenueAgg, spendAgg, acquisitionSpendAgg, paidRevenueAgg, paidCustomers] =
     await Promise.all([
       channelId ? Promise.resolve(0) : sessions(range),
       db().lead.count({ where: { createdAt: window, ...byChannel } }),
@@ -447,6 +451,21 @@ export async function funnel(range: Range, channelId?: string) {
         where: { date: window, ...(channelId ? { campaign: { is: { channelId } } } : {}) },
         _sum: { amount: true },
       }),
+      // The same money, less the campaigns that were never asked to produce a client.
+      //
+      // G4. Kept as a second aggregate rather than replacing the first, because the two
+      // answer different questions and the manual only asks one of them to change: the
+      // Spend card still reports every rupee the firm spent, and CPL, CAC and ROAS divide
+      // by the part of it that was buying customers. Reporting only the second would hide
+      // ₹349,401 of real spend; dividing by the first is the bug.
+      db().marketingSpend.groupBy({
+        by: ['currency'],
+        where: {
+          date: window,
+          campaign: { is: { ...ACQUISITION_CAMPAIGN, ...(channelId ? { channelId } : {}) } },
+        },
+        _sum: { amount: true },
+      }),
       // New business from the paid channels only, which is what "return on ad spend"
       // means. See the ROAS note below. Filtered the same way as newRevenue above and for
       // the same reason — leaving this one on `kind` would have made the ROAS numerator
@@ -480,6 +499,7 @@ export async function funnel(range: Range, channelId?: string) {
   const inferredNewRevenueSum = inReporting(inferredNewRevenueAgg);
   const repeatRevenueSum = inReporting(repeatRevenueAgg);
   const spendSum = inReporting(spendAgg);
+  const acquisitionSpendSum = inReporting(acquisitionSpendAgg);
   const paidRevenueSum = inReporting(paidRevenueAgg);
 
   const revenue = revenueSum.total;
@@ -492,6 +512,10 @@ export async function funnel(range: Range, channelId?: string) {
   // with no opportunity at all belongs here too.
   const unclassifiedRevenue = revenue - newRevenue - repeatRevenue;
   const spend = spendSum.total;
+  const acquisitionSpend = acquisitionSpendSum.total;
+  // The remainder, so the page can name what the ratios left out instead of the two
+  // figures silently differing.
+  const nonAcquisitionSpend = spend - acquisitionSpend;
   const paidRevenue = paidRevenueSum.total;
 
   return {
@@ -519,6 +543,13 @@ export async function funnel(range: Range, channelId?: string) {
      *  overstatement G1.4 removes. */
     unclassifiedRevenue,
     spend,
+    /** The part of `spend` that was buying customers — every campaign except the
+     *  recruitment and pure-awareness ones. G4: this, not `spend`, is what CPL, CPQL,
+     *  CAC and ROAS divide by. */
+    acquisitionSpend,
+    /** Hiring and awareness spend. Real money, excluded from the acquisition ratios and
+     *  reported so the exclusion is visible rather than a discrepancy. */
+    nonAcquisitionSpend,
     /** New business booked against a channel that carried spend — the numerator ROAS is
      *  actually entitled to. */
     paidRevenue,
@@ -543,8 +574,8 @@ export async function funnel(range: Range, channelId?: string) {
     // leads with no tracked spend have an unknown cost rather than a zero one. When paid
     // revenue is zero the ratio is an honest 0x; when nothing was won `cac` returns null
     // rather than dividing by it.
-    cac: cac(spend, paidCustomers),
-    roas: roas(paidRevenue, spend),
+    cac: cac(acquisitionSpend, paidCustomers),
+    roas: roas(paidRevenue, acquisitionSpend),
   };
 }
 
@@ -796,7 +827,7 @@ async function readChannelPerformance(range: Range) {
         where: { date: window },
         _sum: { amount: true, clicks: true, impressions: true },
       }),
-      db().campaign.findMany({ select: { id: true, channelId: true } }),
+      db().campaign.findMany({ select: { id: true, channelId: true, objective: true } }),
       // The deal's own channel as well as the lead's, in the same order revenue resolves
       // them. Customers counted by the lead alone while the revenue beside them counted
       // either put a channel's customers and its money on different rows: Direct read as
@@ -811,11 +842,19 @@ async function readChannelPerformance(range: Range) {
 
   const money = await currencySettings();
   const campaignChannel = new Map(campaigns.map((c) => [c.id, c.channelId]));
-  const spendByChannel = new Map<string, { spend: number; clicks: number; impressions: number }>();
+  // G4: which campaigns were buying customers. Resolved here rather than in the query so
+  // the row can carry both totals — the whole spend and the acquisition part of it — and
+  // the page can say what the cost-per-lead column left out.
+  const campaignAcquires = new Map(campaigns.map((c) => [c.id, isAcquisition(c.objective)]));
+  const spendByChannel = new Map<
+    string,
+    { spend: number; acquisitionSpend: number; clicks: number; impressions: number }
+  >();
   for (const row of spendByCampaign) {
     const channelId = campaignChannel.get(row.campaignId);
     if (!channelId) continue;
-    const acc = spendByChannel.get(channelId) ?? { spend: 0, clicks: 0, impressions: 0 };
+    const acc =
+      spendByChannel.get(channelId) ?? { spend: 0, acquisitionSpend: 0, clicks: 0, impressions: 0 };
     // A currency with no rate is left out of the total rather than added as though it
     // were already in the reporting one — but said out loud, because a total that quietly
     // omits part of the spend understates CAC and overstates ROAS, and looks right doing
@@ -828,6 +867,7 @@ async function readChannelPerformance(range: Range) {
       );
     }
     acc.spend += converted ?? 0;
+    if (campaignAcquires.get(row.campaignId) !== false) acc.acquisitionSpend += converted ?? 0;
     acc.clicks += row._sum.clicks ?? 0;
     acc.impressions += row._sum.impressions ?? 0;
     spendByChannel.set(channelId, acc);
@@ -853,7 +893,8 @@ async function readChannelPerformance(range: Range) {
 
   const rows = channels
     .map((ch) => {
-      const spend = spendByChannel.get(ch.id) ?? { spend: 0, clicks: 0, impressions: 0 };
+      const spend =
+        spendByChannel.get(ch.id) ?? { spend: 0, acquisitionSpend: 0, clicks: 0, impressions: 0 };
       const leads = leadCount.get(ch.id) ?? 0;
       const revenue = revenueSum.get(ch.id) ?? 0;
       const customers = customerCount.get(ch.id) ?? 0;
@@ -862,6 +903,9 @@ async function readChannelPerformance(range: Range) {
         name: ch.name,
         kind: ch.kind,
         spend: spend.spend,
+        /** The part of it that was buying customers. Equal to `spend` on every channel
+         *  that runs no recruitment or awareness campaigns, which is most of them. */
+        acquisitionSpend: spend.acquisitionSpend,
         clicks: spend.clicks,
         impressions: spend.impressions,
         leads,
@@ -872,9 +916,14 @@ async function readChannelPerformance(range: Range) {
         // directly, every organic channel reported a cost per lead of exactly ₹0 — a
         // claim that acquiring 3,968 Facebook leads was free, where the truth is that
         // nothing measured what it cost.
-        costPerLead: costPer(spend.spend, leads),
-        cac: cac(spend.spend, customers),
-        roas: roas(revenue, spend.spend),
+        //
+        // G4: divided by acquisition spend, not by all of it. Meta Ads carried ₹349,401
+        // of recruitment spend through the same channel as its lead generation, and
+        // charging that to cost-per-lead overstated the cost of every lead the channel
+        // did produce.
+        costPerLead: costPer(spend.acquisitionSpend, leads),
+        cac: cac(spend.acquisitionSpend, customers),
+        roas: roas(revenue, spend.acquisitionSpend),
       };
     })
     .sort((a, b) => b.revenue - a.revenue || b.leads - a.leads);
@@ -896,6 +945,7 @@ async function readChannelPerformance(range: Range) {
     name: 'Unattributed',
     kind: 'unknown',
     spend: 0,
+    acquisitionSpend: 0,
     clicks: 0,
     impressions: 0,
     leads: leadCount.get('') ?? 0,

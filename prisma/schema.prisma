@@ -186,6 +186,29 @@ model Campaign {
   externalId String?
   source     String? // integration id: meta_ads, google_analytics, …
 
+  /// What the money was trying to buy: acquisition | hiring | awareness | other.
+  ///
+  /// G4. Recruitment advertising runs out of the same ad account as lead generation here,
+  /// and every rupee of it was in the denominator of CPL, CPQL, CAC and ROAS — ₹67,108,
+  /// 15.6% of spend over the default window. Spend that was never asked to produce a
+  /// client is not a cost of acquiring one.
+  ///
+  /// Resolved in lib/campaign-objective.ts from Meta's employment declaration, then the
+  /// name, then the platform objective. Null means never classified, which
+  /// `isAcquisition` counts as acquisition — an unknown must overstate cost, never
+  /// understate it.
+  objective String?
+
+  /// The platform's own objective string, verbatim: OUTCOME_LEADS, BRAND_AWARENESS, …
+  ///
+  /// Kept beside the normalised value rather than discarded, so re-classifying later is a
+  /// re-read of stored data instead of a re-sync of the ad platform.
+  platformObjective String?
+
+  /// Where the ads sent people. §10 asks for it as a column on the campaign table; a
+  /// campaign whose landing page 404s spends its whole budget before anybody notices.
+  landingPage String?
+
   notes String?
 
   channel       Channel         @relation(fields: [channelId], references: [id])

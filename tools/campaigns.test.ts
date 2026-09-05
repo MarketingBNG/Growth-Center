@@ -7,6 +7,7 @@ const row = (over: Partial<CampaignRow>): CampaignRow =>
   ({
     id: 'c1', name: 'Campaign', status: 'active', source: 'meta_ads',
     channelId: 'ch1', channelName: 'Meta Ads', channelKind: 'paid',
+    objective: 'acquisition', acquisition: true,
     spend: 0, impressions: 0, clicks: 0,
     leads: 0, opportunities: 0, customers: 0, revenue: 0,
     ctr: null, clickToLead: null, costPerLead: null, cac: null, roas: null,
@@ -56,4 +57,36 @@ test('one unknown row makes the column unknown, not a partial sum', () => {
     row({ spend: 1000, leads: null }),
   ]);
   assert.equal(t.leads, null);
+});
+
+// G4. ₹395,505 of this account's spend is recruitment advertising, run out of the same ad
+// account as its lead generation. Divided into client acquisition it made a client look
+// 15.6% more expensive than it is.
+test('hiring spend stays in the Spend total and leaves the acquisition ratios', () => {
+  const t = campaignTotals([
+    row({ spend: 1000, leads: 5, opportunities: 2, customers: 1, revenue: 4000 }),
+    row({ objective: 'hiring', acquisition: false, spend: 1000, leads: 5, opportunities: 0, customers: 0, revenue: 0 }),
+  ]);
+
+  // Every rupee is still reported. Hiding real money would be a worse error than the one
+  // this fixes, and it is the reason the exclusion is named on the page.
+  assert.equal(t.spend, 2000);
+  assert.equal(t.excludedSpend, 1000);
+  assert.equal(t.acquisitionSpend, 1000);
+
+  // …and the ratios divide by half of it. Blended they read 400, 2000 and 2.
+  assert.equal(t.costPerLead, 200);
+  assert.equal(t.cac, 1000);
+  assert.equal(t.roas, 4);
+});
+
+// An awareness campaign was never asked to produce a lead either, so charging cost per
+// lead with it is the same category error under a different name.
+test('awareness spend is excluded on the same grounds', () => {
+  const t = campaignTotals([
+    row({ spend: 500, leads: 5 }),
+    row({ objective: 'awareness', acquisition: false, spend: 1500, leads: 0 }),
+  ]);
+  assert.equal(t.spend, 2000);
+  assert.equal(t.costPerLead, 100);
 });
