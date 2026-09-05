@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { ApprovalError, setContentStatus } from '@/lib/content';
+import { ApprovalError, WorkflowError, setContentStatus } from '@/lib/content';
 import { CONTENT_STATUSES } from '@/lib/enums';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -17,7 +17,9 @@ export const PATCH = route<unknown, Ctx>('content:write', async (user, req, ctx)
     // 422: publishing an unapproved piece is a refusal, not a fault. The message names
     // which of the two reasons it was, because "edited since approval" and "never
     // approved" call for different next steps.
-    if (e instanceof ApprovalError) throw new HttpError(422, e.message);
+    // Both are answers to the request rather than server faults: "this needs approving
+    // first" and "this cannot skip a step" are things the caller can act on.
+    if (e instanceof ApprovalError || e instanceof WorkflowError) throw new HttpError(422, e.message);
     throw e;
   }
 });

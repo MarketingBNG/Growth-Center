@@ -13,12 +13,19 @@ import { ContentCard } from './ContentCard';
 
 export const metadata = { title: 'Content · Growth Center' };
 
+// §15.3's nine, plus the archive. The three review stages share a tone deliberately:
+// they are one waiting-on-somebody phase from the board's point of view, and colouring
+// them differently would imply a difference in urgency the workflow does not have.
 const STATUS_TONE = {
   idea: 'neutral',
-  planned: 'info',
+  brief: 'neutral',
   draft: 'info',
-  review: 'warning',
+  technical_check: 'warning',
+  proofread: 'warning',
+  partner_approval: 'warning',
+  scheduled: 'info',
   published: 'success',
+  repurposed: 'success',
   archived: 'neutral',
 } as const;
 

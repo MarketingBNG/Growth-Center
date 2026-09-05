@@ -92,12 +92,27 @@ enum Priority {
   urgent
 }
 
+/// §15.3: "Statuses, enforced in order: Idea -> Brief -> Draft -> Technical check ->
+/// Proofread and brand -> Partner approval -> Scheduled -> Published -> Repurposed."
+///
+/// Nine, where there were six. The three that were missing are the three the manual
+/// cares about most: the technical check and the proofread are two separate recorded
+/// steps rather than one habit called "review", and `repurposed` is what marks an item
+/// as having produced children.
+///
+/// `archived` is kept and is not part of the order. It is where an item goes when it is
+/// abandoned, which is not a stage of production — a workflow with no exit forces people
+/// to publish things to get them off the board.
 enum ContentStatus {
   idea
-  planned
+  brief
   draft
-  review
+  technical_check
+  proofread
+  partner_approval
+  scheduled
   published
+  repurposed
   archived
 }
 
@@ -1146,6 +1161,14 @@ model SocialAccount {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// §13: who is answerable for this profile.
+  ///
+  /// Profiles were the one owned thing in the app with no owner, so "the AA page has not
+  /// posted in three weeks" was a finding addressed to nobody. Free text rather than a
+  /// relation to AppUser for the reason Lead.ownerEmail is: most of the people who run
+  /// these profiles hold no account here.
+  ownerEmail String?
+
   @@unique([network, handle])
   @@map("social_account")
 }
@@ -1314,6 +1337,45 @@ model ContentPiece {
   url         String?
   publishDate DateTime?
 
+  /// §15.2's record. Everything the agent reviews and everything the reports count hangs
+  /// off this, and none of it existed: the board had a title, a format and a brief.
+  ///
+  /// Free text against documented vocabularies rather than enums, for the same reason the
+  /// company facts are — these are filled in by hand and a new service line should not be
+  /// a migration. lib/content-fields.ts holds the lists the form reads.
+  topicCluster String?
+  segment      String?
+  serviceLine  String?
+  /// The term from §11.6 this piece is written to rank for. Joined to SeoKeyword by the
+  /// word itself rather than by id: a keyword can be dropped from tracking, and the
+  /// intention behind a published article survives that.
+  targetKeyword String?
+
+  designerEmail String?
+  /// Whose voice it goes out in. Distinct from the author: a partner-voiced post written
+  /// by the studio needs that partner's approval, and §21 makes that a different
+  /// signature from the marketing sign-off.
+  partnerVoice  String?
+
+  /// Where the asset lives before it is published. `url` is the published address; this
+  /// is the doc, the design file or the cut.
+  assetUrl String?
+
+  /// §15.4's provenance. Which system created this row — search_console, zoho_social,
+  /// backstage — or null where a person did. An auto-created item is a claim about the
+  /// outside world and a hand-made one is a plan, and the board reads differently if you
+  /// cannot tell them apart.
+  createdBy String?
+
+  /// One idea into ten assets. §15.4's webinar creates "the parent item plus the clip,
+  /// blog and remarketing-audience children the plan expects".
+  ///
+  /// SetNull rather than Cascade: deleting a webinar must not delete the three articles
+  /// cut from it. They outlive their parent and go on earning.
+  parentId String?
+  parent   ContentPiece?  @relation("Repurposed", fields: [parentId], references: [id], onDelete: SetNull)
+  children ContentPiece[] @relation("Repurposed")
+
   views       Int @default(0)
   leadsGenerated Int @default(0)
 
@@ -1351,6 +1413,7 @@ model ContentPiece {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+  @@index([parentId])
   @@map("content_piece")
 }
 

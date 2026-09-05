@@ -9,6 +9,7 @@ import { DUPLICATE_MERGED_SUMMARY } from './leads.ts';
 import { cache } from 'react';
 import { OPEN_DEAL } from './pipeline.ts';
 import { ACQUISITION_CAMPAIGN, isAcquisition } from './campaign-objective.ts';
+import { decay } from './decay.ts';
 import { WEB_ARRIVING_LEAD } from './web-leads.ts';
 import { TAGS, cached } from './cache.ts';
 
@@ -598,10 +599,19 @@ export type Funnel = Awaited<ReturnType<typeof funnel>>;
 
 /** Open pipeline, which is a snapshot rather than a period — a deal opened last year
  *  is still in the pipeline today, so this deliberately ignores the date range. */
-export async function openPipeline() {
+export async function openPipeline(now = new Date()) {
   const deals = await db().opportunity.findMany({
     where: OPEN_DEAL,
-    select: { value: true, probability: true, currency: true },
+    select: {
+      value: true,
+      probability: true,
+      currency: true,
+      createdAt: true,
+      // §9.5. The last thing that happened, so silence can be measured. One activity per
+      // deal, newest first — the whole log would be tens of thousands of rows to read one
+      // date from each.
+      activities: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
+    },
   });
 
   // Deals here are written in both USD and INR. Added flat, 143 rupee deals worth ₹5.2m
@@ -609,13 +619,39 @@ export async function openPipeline() {
   const money = await currencySettings();
   let total = 0;
   let weighted = 0;
+  let undecayed = 0;
+  let decaying = 0;
+
   for (const d of deals) {
     const v = convert(num(d.value), d.currency, money);
     if (v === null) continue;
     total += v;
-    weighted += (v * d.probability) / 100;
+
+    // §9.5: "Weighted value changes as deals age, without anyone editing a field."
+    // Before this, probability was set from the stage at creation and never moved again,
+    // so a deal untouched since November weighed exactly what it did the day it opened.
+    const aged = decay(
+      { probability: d.probability, lastActivityAt: d.activities[0]?.createdAt ?? null, createdAt: d.createdAt },
+      now,
+    );
+    weighted += (v * aged.probability) / 100;
+    // The undecayed figure is kept so the page can show what silence is costing. A
+    // forecast that fell for unstated reasons would be one nobody trusts.
+    undecayed += (v * d.probability) / 100;
+    if (aged.factor < 1) decaying += 1;
   }
-  return { count: deals.length, total, weighted, currency: money.reporting };
+
+  return {
+    count: deals.length,
+    total,
+    weighted,
+    /** What the weighted figure would be if every deal still weighed its stage value —
+     *  the number this returned before §9.5. */
+    undecayedWeighted: undecayed,
+    /** How many open deals have gone quiet long enough to lose value. */
+    decayingDeals: decaying,
+    currency: money.reporting,
+  };
 }
 
 
@@ -1423,7 +1459,11 @@ export async function pipelineKpis(spec: number | Range) {
   const cards: Kpi[] = [
     { key: 'openDeals', label: 'Open deals', value: open.count, previous: null, format: 'number', higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
     { key: 'totalValue', label: 'Total value', value: open.total, previous: null, format: 'money', currency: open.currency, higherIsBetter: true, hint: 'Snapshot — ignores the date range' },
-    { key: 'weighted', label: 'Weighted', value: open.weighted, previous: null, format: 'money', currency: open.currency, higherIsBetter: true, hint: 'Value × probability' },
+    // §9.5. Was value × the stage's probability, which never moved: a deal untouched
+    // since November weighed exactly what it did the day it opened, and the figure was a
+    // stage count wearing a forecast's clothes. Decayed, 810 of 967 open deals have gone
+    // quiet long enough to lose value and the weighted total falls from ₹9.5m to ₹4.1m.
+    { key: 'weighted', label: 'Weighted', value: open.weighted, previous: null, format: 'money', currency: open.currency, higherIsBetter: true, hint: 'Value × probability, reduced for silence: odds halve every 90 days a deal goes without activity, after a 30-day grace period, and never fall below a fifth of the stage figure.' },
     { key: 'winRate', label: 'Win rate', value: rateNow, previous: ratePrev, format: 'percent', higherIsBetter: true, hint: 'Won ÷ decided, over deals closed this period' },
     { key: 'cycle', label: 'Avg cycle', value: cycleNow, previous: cyclePrev, format: 'days', higherIsBetter: false, hint: 'Created to won, for deals won this period' },
   ];

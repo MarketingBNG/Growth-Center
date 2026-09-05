@@ -14,7 +14,7 @@ import { pageQuery } from '@/lib/query';
 import { listAssignable, peopleOn, personOptions } from '@/lib/users';
 import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/enums';
 import { ProgressLink } from '@/components/NavProgress';
-import { fmtDate } from '@/lib/format';
+import { fmtDate, fmtNumber, fmtRelative } from '@/lib/format';
 import { sourceMeta } from '@/lib/sources';
 import { CompleteButton } from './CompleteButton';
 
@@ -66,6 +66,12 @@ async function TasksBody({
 
   const filtered = Boolean(status || assignee || q.q || kind);
 
+  // §19.2's "older than 90 days". Built from a Date rather than Date.now() because a
+  // component has to be pure and the linter is right that a bare clock read inside one
+  // can give two answers in one render.
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setUTCDate(ninetyDaysAgo.getUTCDate() - 90);
+
   const [rows, total, everything] = await Promise.all([
     db().task.findMany({
       where,
@@ -91,9 +97,21 @@ async function TasksBody({
   // window the page is showing, not over the whole table — a "Delivery 42" beside a list
   // of open tasks must mean 42 open ones, or the number is a different question wearing
   // the same label.
-  const [crmCount, deliveryCount] = await Promise.all([
+  const [crmCount, deliveryCount, ageing, oldest] = await Promise.all([
     db().task.count({ where: { ...scope, ...taskKindWhere('crm') } }),
     db().task.count({ where: { ...scope, ...taskKindWhere('delivery') } }),
+    // §19.2's hygiene metric: "tasks older than 90 days", shown until it reaches zero.
+    //
+    // Age from creation, not from the due date. A task re-dated forward is not younger —
+    // re-dating is the commonest way a board stops carrying signal, and measuring the due
+    // date would make the metric fall every time somebody pushed a date rather than every
+    // time somebody finished something.
+    db().task.count({ where: { ...where, createdAt: { lt: ninetyDaysAgo } } }),
+    db().task.findFirst({
+      where,
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    }),
   ]);
 
   const today = new Date();
@@ -132,6 +150,20 @@ async function TasksBody({
           },
         ]}
       />
+
+      {/* §19.2's hygiene metric. "4,802 open tasks means the task system carries no
+          signal. Nothing built on top of it will either." Shown until it reaches zero and
+          then gone, which is the whole design of the clause — a metric that stays on
+          screen after it is solved becomes furniture. */}
+      {ageing > 0 ? (
+        <div className="mb-4 rounded-lg border border-warning/40 bg-warning-soft px-3 py-2.5 text-xs text-warning-strong">
+          <span className="font-semibold tnum">{fmtNumber(ageing)}</span> of {fmtNumber(total)} open
+          tasks are more than 90 days old
+          {oldest ? <>, the oldest raised {fmtRelative(oldest.createdAt)}</> : null}. Age is measured
+          from when the task was raised, not from its due date — re-dating a task forward does not
+          make it younger, and it is the commonest way a board stops carrying signal.
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden">
         {rows.length === 0 ? (

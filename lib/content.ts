@@ -8,7 +8,9 @@ import {
   reviewAgeHours,
   type ApprovalState,
 } from './content-approval.ts';
-import { CONTENT_STATUSES } from './enums.ts';
+import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from './enums.ts';
+import { COMPANY_SEGMENTS } from './company-facts.ts';
+import { SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from './calc.ts';
 
 export const contentInput = z.object({
@@ -22,6 +24,19 @@ export const contentInput = z.object({
   url: z.string().trim().max(500).optional(),
   publishDate: z.string().date().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+
+  // §15.2. Everything the agent reviews and everything the reports count hangs off these,
+  // and the board had none of them.
+  topicCluster: z.enum(TOPIC_CLUSTERS).nullable().optional(),
+  segment: z.enum(COMPANY_SEGMENTS).nullable().optional(),
+  serviceLine: z.enum(SERVICE_LINES).nullable().optional(),
+  targetKeyword: z.string().trim().max(200).nullable().optional(),
+  designerEmail: z.string().trim().email().nullable().optional(),
+  partnerVoice: z.string().trim().max(120).nullable().optional(),
+  assetUrl: z.string().trim().max(500).nullable().optional(),
+  // The parent this piece was cut from. §15.4's webinar produces the clip, the blog and
+  // the remarketing audience, and each of them points back here.
+  parentId: z.string().min(1).nullable().optional(),
 });
 
 export type ContentInput = z.infer<typeof contentInput>;
@@ -123,6 +138,36 @@ export async function createContent(input: ContentInput, actorEmail: string) {
  * ordering the stages is §15.3 and a separate piece of work — but from here on, whoever
  * published something is on the record.
  */
+/**
+ * Whether a piece may move from one status to another. §15.3: "No item can skip a status."
+ *
+ * Forward one step, or backward any number. That asymmetry is the whole rule and it is
+ * deliberate: skipping forward is how a proofread gets missed, and going back is what
+ * happens every time a draft turns out to need more work. A workflow that only moves
+ * forward is one people route around by editing the database.
+ *
+ * `archived` is reachable from anywhere and leads nowhere except back to where the piece
+ * was — abandoning an item is not a stage, and an item resurrected from the archive
+ * should re-enter the pipeline where it left it rather than at the beginning.
+ */
+export function canMoveTo(
+  from: (typeof CONTENT_STATUSES)[number],
+  to: (typeof CONTENT_STATUSES)[number],
+): boolean {
+  if (from === to) return true;
+  if (to === 'archived') return true;
+  // Out of the archive, anywhere: the board does not know where the piece was, so
+  // refusing would strand it.
+  if (from === 'archived') return true;
+
+  const a = CONTENT_PIPELINE.indexOf(from as (typeof CONTENT_PIPELINE)[number]);
+  const b = CONTENT_PIPELINE.indexOf(to as (typeof CONTENT_PIPELINE)[number]);
+  if (a === -1 || b === -1) return false;
+  return b <= a + 1;
+}
+
+export class WorkflowError extends Error {}
+
 export async function setContentStatus(
   id: string,
   status: (typeof CONTENT_STATUSES)[number],
@@ -147,6 +192,15 @@ export async function setContentStatus(
   });
   if (!existing) return null;
   if (existing.status === status) return { from: existing.status, to: status, unchanged: true };
+
+  // §15.3's ordering, enforced here rather than in the board. The board drags cards and
+  // nothing else sees the transition, which is the same argument the publish gate below
+  // makes for living in this function.
+  if (!canMoveTo(existing.status, status)) {
+    throw new WorkflowError(
+      `A piece cannot go straight from ${existing.status} to ${status}. Each step has to be recorded — that is what makes the technical check and the proofread two steps rather than one habit.`,
+    );
+  }
 
   // §21.2's gate. A piece may not be published without a live approval, and an approval
   // whose hash no longer matches the content is not live — somebody has edited the piece
@@ -174,7 +228,7 @@ export async function setContentStatus(
       // — see reviewAgeHours. A piece returned and resubmitted keeps its original age,
       // which is the point: bouncing it back must not make it look new.
       reviewStartedAt:
-        status === 'review' && !existing.reviewStartedAt ? new Date() : undefined,
+        status === CONTENT_REVIEW_STATUS && !existing.reviewStartedAt ? new Date() : undefined,
     },
   });
   await db().auditEvent.create({
@@ -221,7 +275,7 @@ export async function approveContent(id: string, actorEmail: string) {
     select: { ...APPROVABLE, id: true, status: true, authorEmail: true },
   });
   if (!piece) return null;
-  if (piece.status !== 'review') {
+  if (piece.status !== CONTENT_REVIEW_STATUS) {
     throw new ApprovalError(`Only a piece in review can be approved; this one is ${piece.status}.`);
   }
 
@@ -276,7 +330,7 @@ export async function returnContent(id: string, note: string, actorEmail: string
     select: { id: true, title: true, status: true, authorEmail: true },
   });
   if (!piece) return null;
-  if (piece.status !== 'review') {
+  if (piece.status !== CONTENT_REVIEW_STATUS) {
     throw new ApprovalError(`Only a piece in review can be returned; this one is ${piece.status}.`);
   }
 

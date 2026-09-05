@@ -16,9 +16,54 @@ export const SOURCE_TYPES = [
 
 export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;
 export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
-export const CONTENT_STATUSES = [
-  'idea', 'planned', 'draft', 'review', 'published', 'archived',
+/**
+ * §15.3, in order: "Idea -> Brief -> Draft -> Technical check -> Proofread and brand ->
+ * Partner approval -> Scheduled -> Published -> Repurposed."
+ *
+ * The order is the point. It is what `canMoveTo` in lib/content.ts enforces, and the
+ * three states that were missing are the three the manual cares about most: the technical
+ * check and the proofread are two separately recorded steps rather than one habit called
+ * "review", and `repurposed` marks an item that has produced children.
+ *
+ * `archived` is deliberately outside the order and last. It is where an abandoned item
+ * goes, which is not a stage of production — a workflow with no exit forces people to
+ * publish things to get them off the board.
+ */
+export const CONTENT_PIPELINE = [
+  'idea',
+  'brief',
+  'draft',
+  'technical_check',
+  'proofread',
+  'partner_approval',
+  'scheduled',
+  'published',
+  'repurposed',
 ] as const;
+
+export const CONTENT_STATUSES = [...CONTENT_PIPELINE, 'archived'] as const;
+
+export const CONTENT_STATUS_LABELS: Record<(typeof CONTENT_STATUSES)[number], string> = {
+  idea: 'Idea',
+  brief: 'Brief',
+  draft: 'Draft',
+  technical_check: 'Technical check',
+  proofread: 'Proofread and brand',
+  partner_approval: 'Partner approval',
+  scheduled: 'Scheduled',
+  published: 'Published',
+  repurposed: 'Repurposed',
+  archived: 'Archived',
+};
+
+/**
+ * The stage at which a piece is waiting for a signature.
+ *
+ * Named rather than spelled out at each call site: the approval gate, the SLA clock and
+ * the return path all key on it, and three literals would be three things to forget when
+ * the workflow changes.
+ */
+export const CONTENT_REVIEW_STATUS = 'partner_approval' as const;
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];
 export type SourceType = (typeof SOURCE_TYPES)[number];

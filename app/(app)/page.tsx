@@ -348,7 +348,21 @@ export default async function DashboardPage({
             <CardContent className="space-y-1.5">
               <Row label="Deals" value={fmtNumber(pipeline.count)} />
               <Row label="Total value" value={money(pipeline.total)} />
-              <Row label="Weighted" value={money(pipeline.weighted)} hint="By each deal's probability" />
+              {/* §9.5. Both figures, because a forecast that fell for unstated reasons
+                  is one nobody trusts — and the gap between them is the cost of the
+                  silence, which is the number worth acting on. */}
+              <Row
+                label="Weighted"
+                value={money(pipeline.weighted)}
+                hint="By each deal's probability, reduced for silence"
+              />
+              {pipeline.decayingDeals > 0 ? (
+                <Row
+                  label="Lost to silence"
+                  value={money(pipeline.undecayedWeighted - pipeline.weighted)}
+                  hint={`${fmtNumber(pipeline.decayingDeals)} of ${fmtNumber(pipeline.count)} deals have gone quiet`}
+                />
+              ) : null}
               <Link
                 href="/pipeline"
                 className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
