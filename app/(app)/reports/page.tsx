@@ -45,11 +45,20 @@ export default async function ReportsPage({
         actions={
           <span className="flex items-center gap-2">
             <RangePicker current={value} />
+            {/* Two buttons rather than a format dropdown: both are one click, and a
+                dropdown would hide the PDF behind a menu on the export §17 actually asks
+                for. PDF first, because it is the one that gets sent to somebody. */}
+            <a
+              href={`/api/reports/export?report=${id}&days=${days}&format=pdf`}
+              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-secondary"
+            >
+              <Download className="size-4" /> PDF
+            </a>
             <a
               href={`/api/reports/export?report=${id}&days=${days}`}
               className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-secondary"
             >
-              <Download className="size-4" /> Export CSV
+              <Download className="size-4" /> CSV
             </a>
           </span>
         }

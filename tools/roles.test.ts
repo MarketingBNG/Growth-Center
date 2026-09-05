@@ -67,12 +67,30 @@ test('isAllowedEmail agrees with canonicalEmail', () => {
 
 // ── Permissions ───────────────────────────────────────────────────────────────
 
-test('tiers are off: every role holds every permission', () => {
-  assert.equal(ROLES_ENFORCED, false, 'update this file when tiers are switched back on');
-  for (const role of ROLE_VALUES) {
-    for (const permission of PERMISSIONS) {
-      assert.equal(can(role, permission), true, `${role} was refused ${permission}`);
-    }
+test('tiers are on, and can() now answers from POLICY', () => {
+  assert.equal(ROLES_ENFORCED, true, 'update this file if tiers are switched off again');
+
+  // The check that made flipping the flag safe, kept as a test rather than a memory: an
+  // owner must still hold everything, because every account in this workspace is one and
+  // switching enforcement on was required to change nothing on the day it happened.
+  for (const permission of PERMISSIONS) {
+    assert.equal(can('owner', permission), true, `owner was refused ${permission}`);
+  }
+
+  // And the tiers now actually bite, which is the whole point of the change.
+  assert.equal(can('admin', 'settings:manage'), false);
+  assert.equal(can('user', 'integrations:manage'), false);
+  assert.equal(can('user', 'growth:read'), true);
+});
+
+// A permission POLICY does not define does not deny access — it reaches
+// `POLICY[permission].includes` on undefined and throws, taking the route with it. Every
+// string the application passes was checked against PERMISSIONS before enforcement was
+// switched on; this keeps that true for the next one somebody adds.
+test('every permission the app checks is defined in POLICY', () => {
+  for (const permission of ['growth:read', 'integrations:manage', 'apikeys:manage', 'settings:manage', 'approve'] as const) {
+    assert.ok(PERMISSIONS.includes(permission), `${permission} is used by the app and missing from POLICY`);
+    assert.doesNotThrow(() => can('user', permission));
   }
 });
 
@@ -82,7 +100,7 @@ test('can() still refuses someone with no role at all', () => {
   assert.equal(can(undefined, 'settings:manage'), false);
 });
 
-test('POLICY is intact underneath, ready to re-enable', () => {
+test('POLICY draws the lines the Team page promises', () => {
   assert.equal(wouldAllow('user', 'growth:read'), true);
   assert.equal(wouldAllow('user', 'crm:write'), true);
   assert.equal(wouldAllow('user', 'content:write'), true);
@@ -105,8 +123,10 @@ test('only the owner can approve', () => {
   assert.deepEqual(ROLE_VALUES.filter((r) => wouldAllow(r, 'approve')), ['owner']);
 });
 
-test('isFullAccess is true for anyone signed in while tiers are off', () => {
-  assert.equal(isFullAccess('user'), true);
+test('isFullAccess now means owner, not merely signed in', () => {
+  assert.equal(isFullAccess('owner'), true);
+  assert.equal(isFullAccess('admin'), false);
+  assert.equal(isFullAccess('user'), false);
   assert.equal(isFullAccess(null), false);
 });
 

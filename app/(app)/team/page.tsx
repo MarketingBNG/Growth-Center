@@ -55,6 +55,11 @@ async function TeamBody() {
   await ensureAdmins();
   const [people, me] = await Promise.all([listUsers(), currentUser()]);
 
+  // Said out loud on the page rather than left for somebody to infer from the column: with
+  // tiers enforced and every account an Owner, the enforcement is real and invisible, and
+  // those two facts together are the thing a reader needs.
+  const everyoneIsOwner = people.length > 0 && people.every((p) => p.role === 'owner');
+
   return (
     <>
       {!ROLES_ENFORCED ? (
@@ -67,6 +72,19 @@ async function TeamBody() {
               and audited now so they are already correct on the day tiers are switched on in{' '}
               <code className="font-mono">lib/roles.ts</code> — until then, treat the Role column
               as a plan, and revoking access as the only control that bites.
+            </p>
+          </CardHeader>
+        </Card>
+      ) : everyoneIsOwner ? (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle>Role tiers are on, and everyone is an Owner</CardTitle>
+            <p className="text-[11px] text-muted-foreground">
+              Permissions are enforced from the Role column now, not merely recorded. That
+              currently changes nothing, because every account here holds Owner and an Owner
+              holds every permission — the tiers begin to bite the moment somebody is made
+              Admin or User. An Admin can build and run a campaign and cannot sign it off,
+              mint an API key, or change a setting.
             </p>
           </CardHeader>
         </Card>

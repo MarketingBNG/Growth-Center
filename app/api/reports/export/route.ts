@@ -3,11 +3,21 @@ import { fail } from '@/lib/api';
 import { buildReport, isReportId } from '@/lib/reports';
 import { hasDb } from '@/lib/prisma';
 import { csvCell as cell, csvDocument } from '@/lib/csv';
+import { reportPdf } from '@/lib/pdf';
 
-// Returns CSV rather than JSON, so it cannot use route() — that wraps every result in
+// Returns a file rather than JSON, so it cannot use route() — that wraps every result in
 // NextResponse.json. There was no export anywhere in the product; a report could be read
 // on screen and nowhere else.
+//
+// Two formats, one report. §17 asks for PDF; CSV is what an analyst wants and what was
+// here first. Both are rendered from the same `Report` object the screen is built from,
+// so an export cannot disagree with the page it came from.
+//
+// Node runtime, declared: the PDF renderer uses Buffer and Node streams, which the edge
+// runtime does not provide. Without this the route builds and fails at request time.
 
+
+export const runtime = 'nodejs';
 
 export async function GET(req: Request) {
   try {
@@ -23,7 +33,22 @@ export async function GET(req: Request) {
   if (!isReportId(raw)) return fail(422, `Unknown report: ${raw}`);
 
   const days = Math.min(365, Math.max(7, Number(url.searchParams.get('days') ?? 30) || 30));
+  const format = url.searchParams.get('format') === 'pdf' ? 'pdf' : 'csv';
   const report = await buildReport(raw, days);
+
+  const stem = `${report.id}-${report.range.to.toISOString().slice(0, 10)}`;
+
+  if (format === 'pdf') {
+    const pdf = await reportPdf(report);
+    return new Response(new Uint8Array(pdf), {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': `attachment; filename="${stem}.pdf"`,
+        'content-length': String(pdf.byteLength),
+        'cache-control': 'no-store',
+      },
+    });
+  }
 
   const lines: string[] = [];
   lines.push([report.name].map(cell).join(','));
@@ -51,14 +76,12 @@ export async function GET(req: Request) {
     lines.push('');
   }
 
-  const filename = `${report.id}-${report.range.to.toISOString().slice(0, 10)}.csv`;
-
   return new Response(
     csvDocument(lines),
     {
       headers: {
         'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${filename}"`,
+        'content-disposition': `attachment; filename="${stem}.csv"`,
         'cache-control': 'no-store',
       },
     },

@@ -16,9 +16,10 @@ export const ALLOWED_DOMAINS = ['usaindiacfo.com', 'bngadvisors.com'];
 export const PRIMARY_DOMAIN = ALLOWED_DOMAINS[0];
 
 /**
- * The admin accounts. Not a permission tier — while ROLES_ENFORCED is false everybody
- * already has every permission. What this marks is the accounts that must always exist
- * and can never be revoked, so there is always an identity able to get back in.
+ * The admin accounts. Not a permission tier — this marks the accounts that must always
+ * exist and can never be revoked, so there is always an identity able to get back in.
+ * With tiers now enforced, that guarantee is what stops a role change locking everyone
+ * out of the page where roles are changed.
  *
  * `name` pins the display name against whatever Google returns. Set it only for a shared
  * mailbox; a real person keeps the name they signed in with and can be renamed on the
@@ -80,13 +81,26 @@ export type Permission =
   | 'approve';
 
 /**
- * Tiered access is currently OFF: every signed-in user has every permission.
+ * Tiered access is ON.
  *
- * POLICY is kept, and kept accurate, because turning tiers back on should be a one-line
- * change to can() rather than a rewrite. Do not delete it, and do not let it drift —
- * the Team page renders it as "what each role would be able to do".
+ * Switched on 5 September 2026, having been false since roles were introduced. Turning it
+ * on changed nothing that day and that was the point: all three accounts hold `owner`,
+ * and owner is in every list below, so no request that used to succeed began to fail.
+ * What changed is that the mechanism is now load-bearing — the first account made Admin
+ * or User is restricted by it, rather than being told it is restricted while holding
+ * every permission.
+ *
+ * Checked before flipping rather than hoped for. Every permission string the application
+ * actually passes — `growth:read`, `integrations:manage`, `apikeys:manage`,
+ * `settings:manage`, `approve` — is defined in POLICY, so no call site can reach
+ * `POLICY[permission].includes` on an undefined entry and throw. That failure mode is why
+ * this is a verified change rather than a one-character one: a missing key here does not
+ * deny access, it crashes the route.
+ *
+ * POLICY is kept accurate because the Team page renders it as "what each role would be
+ * able to do", and that promise is now enforced rather than described.
  */
-export const ROLES_ENFORCED = false;
+export const ROLES_ENFORCED = true;
 
 const POLICY: Record<Permission, Role[]> = {
   'growth:read': ['owner', 'admin', 'user'],
@@ -125,8 +139,8 @@ export function canAdminister(role: Role): boolean {
 /**
  * The live check, called by requirePermission() on every guarded route.
  *
- * While ROLES_ENFORCED is false this is a signed-in check and nothing more. The `role`
- * argument is still required so the call sites do not have to change when tiers return.
+ * Now that ROLES_ENFORCED is true this consults POLICY. It stays a signed-in check first:
+ * no role means no permission, whatever the tier rules say.
  */
 export function can(role: Role | null | undefined, permission: Permission): boolean {
   if (!role) return false;
