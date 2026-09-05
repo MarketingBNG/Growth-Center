@@ -9,6 +9,7 @@ import { campaignPerformance } from './campaigns.ts';
 import { num } from './calc.ts';
 import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
+import { createHash } from 'node:crypto';
 import { fingerprint, normaliseSubject, toResolve } from './insight-identity.ts';
 import { runRules, type RaisedFinding } from './insight-rules.ts';
 import { notifyNewFindings } from './insight-notify.ts';
@@ -499,6 +500,20 @@ const findingsShape = z.object({
     .max(40),
 });
 
+/**
+ * The version of the narration prompt, stored on every insight it produces.
+ *
+ * Appendix B asks for it and the reason is not bookkeeping. The rule's version is already
+ * recorded, and that is the half nobody argues about; what changes silently is the
+ * wording. Two insights narrated by different prompts are not comparable however
+ * identical their evidence, and without this there is no way to tell which pair you are
+ * looking at.
+ *
+ * Bump it whenever INSIGHTS_SYSTEM below changes in a way that could alter what a reader
+ * takes from the same findings.
+ */
+export const INSIGHTS_PROMPT_VERSION = 'insights-v1';
+
 const INSIGHTS_SYSTEM = `You are a growth analyst for BNG Advisors, a CFO-services firm.
 
 You will be given a numbered list of findings. Each was produced by a deterministic rule
@@ -634,6 +649,24 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
 
   const narrated = narrations.size > 0;
 
+  /**
+   * A stable hash of one finding's evidence.
+   *
+   * Keys sorted, because JSON.stringify preserves insertion order and a rule that builds
+   * its evidence object in a different order on two runs would produce two hashes for
+   * identical figures — which would report every insight as edited, every night.
+   */
+  const evidenceHash = (evidence: Record<string, unknown>) =>
+    createHash('sha256')
+      .update(
+        JSON.stringify(
+          Object.keys(evidence)
+            .sort()
+            .map((k) => [k, evidence[k]]),
+        ),
+      )
+      .digest('hex');
+
   const row = (f: Narrated) => ({
     kind: f.kind,
     title: f.title,
@@ -653,6 +686,15 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     periodStart: current.from,
     periodEnd: current.to,
     context: { periodDays: context.periodDays },
+    // Appendix B. Null where the sentences are the rule's own — a prompt version on an
+    // insight no prompt touched would be a false provenance, which is the failure these
+    // two columns exist to prevent rather than to commit.
+    promptVersion: narrated ? INSIGHTS_PROMPT_VERSION : null,
+    // A hash of the figures the model was shown, so a body and the numbers it describes
+    // can be shown to belong together — or shown not to. Re-runs are nightly and compute
+    // fresh figures under the same fingerprint, so "the model wrote this about these
+    // numbers" stops being true without something to check it against.
+    contextHash: evidenceHash(f.evidence),
   });
 
   const seen = new Set(byFingerprint.keys());

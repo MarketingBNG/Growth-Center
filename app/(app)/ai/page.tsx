@@ -13,6 +13,7 @@ import { assignableOwners } from '@/lib/insight-actions';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { InsightAction } from './InsightAction';
 import { AskBox } from './AskBox';
+import { ReviewGates } from './ReviewGates';
 
 export const metadata = { title: 'AI Insights · Growth Center' };
 
@@ -84,6 +85,11 @@ export default async function AiPage() {
           arithmetic, not analysis — nothing on this page is invented.
         </div>
       )}
+
+      {/* Above the assistant deliberately. A standing refusal is not a finding to be
+          worked through — it is the answer to "can I act on this?", and it belongs
+          before the box that invites someone to ask. */}
+      <ReviewGates />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">

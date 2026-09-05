@@ -1525,6 +1525,31 @@ model AiInsight {
 
   dismissedAt DateTime?
 
+  /// Appendix B's last three fields.
+  ///
+  /// `promptVersion` — which build of the narration prompt produced `title` and `body`.
+  /// The rule's own version is already stored beside it, and that is the half nobody
+  /// argues about: what changed silently was the wording, and two insights narrated by
+  /// different prompts are not comparable however identical their evidence.
+  promptVersion String?
+
+  /// A hash of the evidence the model was actually shown.
+  ///
+  /// The same device content approval uses, for the same reason. Without it an insight
+  /// says "the model wrote this about these figures", which stops being true the moment
+  /// a re-run computes different figures under the same fingerprint — and re-runs are
+  /// nightly. With it, a body and the numbers it describes can be shown to belong
+  /// together, or shown not to.
+  contextHash String?
+
+  /// §19.3: "Action items from the insight engine write to Zoho Projects as tasks,
+  /// idempotently — one task per insight, ever."
+  ///
+  /// The idempotency key is this column rather than a lookup by title: a task renamed in
+  /// Projects would otherwise be invisible to the next run and be created again, which is
+  /// exactly the duplicate the clause forbids.
+  taskId String? @unique
+
   createdAt DateTime @default(now())
 
   @@index([createdAt])
