@@ -19,6 +19,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   crm: 'CRM',
   seo: 'SEO',
   email: 'Email',
+  work: 'Work tracking',
 };
 
 export function IntegrationGrid({

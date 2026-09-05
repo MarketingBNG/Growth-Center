@@ -9,7 +9,7 @@ export type ConnectionState =
   | 'error'
   | 'demo_data';
 
-export type Category = 'analytics' | 'ads' | 'social' | 'crm' | 'seo' | 'email';
+export type Category = 'analytics' | 'ads' | 'social' | 'crm' | 'seo' | 'email' | 'work';
 
 export type AuthKind = 'oauth2' | 'apiKey';
 

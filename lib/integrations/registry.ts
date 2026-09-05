@@ -6,6 +6,7 @@ import { pagespeed } from './providers/pagespeed.ts';
 import { searchConsole } from './providers/search-console.ts';
 import { smartlead } from './providers/smartlead.ts';
 import { zohoCrm } from './providers/zoho-crm.ts';
+import { zohoProjects } from './providers/zoho-projects.ts';
 
 // A plain map. The Integration Center renders from this, so a provider added here
 // appears in the UI with no further change.
@@ -17,6 +18,7 @@ export const PROVIDERS: Record<string, IntegrationProvider> = {
   [searchConsole.id]: searchConsole,
   [smartlead.id]: smartlead,
   [zohoCrm.id]: zohoCrm,
+  [zohoProjects.id]: zohoProjects,
 };
 
 export const providerList = () => Object.values(PROVIDERS);

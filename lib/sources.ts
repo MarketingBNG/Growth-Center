@@ -74,6 +74,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Measured by Google PageSpeed Insights. Lab figures are a single run on each page; field figures are real Chrome users over the last 28 days.',
   },
+  zoho_projects: {
+    label: 'Projects',
+    name: 'Zoho Projects',
+    tone: 'live',
+    hint: 'Reported by Zoho Projects, where delivery and marketing work is tracked. Separate from the CRM tasks that sit beside them.',
+  },
   google_ads: {
     label: 'Google Ads',
     name: 'Google Ads',
