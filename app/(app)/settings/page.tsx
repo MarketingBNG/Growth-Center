@@ -3,6 +3,8 @@ import { Check, X, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Capacity } from './Capacity';
+import { capacitySetting } from '@/lib/capacity';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { currentUser } from '@/lib/auth';
@@ -49,7 +51,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit, health, limits] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health, limits, capacity] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -70,6 +72,7 @@ export default async function SettingsPage() {
     // page's default range is judged against.
     attributionHealth(yearAgo(), new Date()),
     thresholds(),
+    capacitySetting(),
   ]);
 
   const ai = aiStatus();
@@ -152,6 +155,31 @@ export default async function SettingsPage() {
                 {health.revenue.percent === null ? '—' : `${health.revenue.percent.toFixed(1)}%`}
               </span>
               . Only an owner can change these.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* §6.2. Beside the thresholds because it is the same kind of number: a figure the
+          firm decides, recorded with an author, that the rest of the app then treats as
+          fact. */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Delivery capacity</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            How many new consultations the firm can serve in a month. Zoho Projects measures
+            what delivery is already carrying; it cannot say what more it can take on, so this
+            is entered by a person and their name goes with it.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {manageSettings ? (
+            <Capacity initial={capacity} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {capacity.monthlyConsultations === null
+                ? 'No ceiling has been set. Only an owner can set one.'
+                : `${capacity.monthlyConsultations} consultations a month. Only an owner can change it.`}
             </p>
           )}
         </CardContent>

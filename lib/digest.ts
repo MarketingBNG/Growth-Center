@@ -215,6 +215,65 @@ export type DigestResult = {
 };
 
 /**
+ * Records one delivery attempt. Never throws.
+ *
+ * A delivery log is a record of the send, not part of it. Losing a row must not turn a
+ * digest that went out into one that failed, nor bury the real SMTP error behind a write
+ * error about the log — the same argument the sync run rows make.
+ */
+async function logDelivery(entry: {
+  report: string;
+  channel: string;
+  recipient: string;
+  subject: string | null;
+  status: 'sent' | 'failed';
+  error?: string | null;
+  messageId?: string | null;
+  itemCount?: number | null;
+}) {
+  try {
+    await db().reportDelivery.create({
+      data: {
+        report: entry.report,
+        channel: entry.channel,
+        recipient: entry.recipient,
+        subject: entry.subject,
+        status: entry.status,
+        error: entry.error ?? null,
+        messageId: entry.messageId ?? null,
+        itemCount: entry.itemCount ?? null,
+      },
+    });
+  } catch (e) {
+    console.warn('[digest] could not record the delivery:', e);
+  }
+}
+
+/**
+ * The recent delivery history. §17.
+ *
+ * **Not proof of reading.** SMTP reports that a server accepted the message and a webhook
+ * reports that Cliq accepted it. Open tracking needs an ESP that reports opens, which
+ * neither of these is — so there is no `openedAt` here to be permanently null.
+ */
+export async function deliveryHistory(take = 30) {
+  return db().reportDelivery.findMany({
+    orderBy: { sentAt: 'desc' },
+    take,
+    select: {
+      id: true,
+      report: true,
+      channel: true,
+      recipient: true,
+      status: true,
+      error: true,
+      itemCount: true,
+      sentAt: true,
+    },
+  });
+}
+
+/**
  * Builds and sends. One message per recipient rather than one with everybody on it, so a
  * bounce for one address does not take the others with it.
  */
@@ -235,6 +294,18 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
     const result = await p.send({ to, subject, body });
     if (result.ok) sent += 1;
     else errors.push(`${to}: ${result.error}`);
+    // §17. One row per recipient, not per send: a digest that reached two of three admins
+    // is the case worth being able to see, and a single row carrying `sent: 2` hides
+    // which one was missed.
+    await logDelivery({
+      report: 'digest',
+      channel: 'email',
+      recipient: to,
+      subject,
+      status: result.ok ? 'sent' : 'failed',
+      error: result.ok ? null : result.error,
+      itemCount: waiting,
+    });
   }
 
   // Chat as well as mail, and independent of it. Posted after the email loop rather than
@@ -246,6 +317,17 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
     const posted = await sendToCliq(renderCliqDigest(digest.items, digest.others, baseUrl));
     cliq = posted.ok ? 'sent' : 'failed';
     if (!posted.ok) errors.push(`cliq: ${posted.error}`);
+    await logDelivery({
+      report: 'digest',
+      channel: 'cliq',
+      // The webhook URL carries a token, so it is never stored. The channel name is what
+      // a reader needs and the secret is what a log must not keep.
+      recipient: 'zoho-cliq',
+      subject,
+      status: posted.ok ? 'sent' : 'failed',
+      error: posted.ok ? null : posted.error,
+      itemCount: waiting,
+    });
   }
 
   return { sent, skipped: null, providerId: p.id, waiting, errors, cliq };

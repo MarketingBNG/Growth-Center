@@ -93,7 +93,15 @@ export default async function MarketingPage({
     name: sourceMeta(id).name,
   }));
 
-  const filtered = source ? rows.filter((r) => (r.source ?? DEMO_SOURCE) === source) : rows;
+  const bySource = source ? rows.filter((r) => (r.source ?? DEMO_SOURCE) === source) : rows;
+
+  // §6.4: "hide hiring by default." Not dropped — the recruitment campaigns are real
+  // money and hiding them permanently would be the same class of error as leaving them in
+  // the CPL denominator. They are off the table unless somebody asks, and the count of
+  // what is hidden sits under it with the link to show them.
+  const showHiring = params.hiring === 'show';
+  const hiddenCount = bySource.filter((r) => !r.acquisition && hasActivity(r)).length;
+  const filtered = showHiring ? bySource : bySource.filter((r) => r.acquisition);
 
   // Unattributed is a real row and belongs in a table, but it is not a channel, and as a
   // bar it was nine times the largest real one — every channel the chart exists to compare
@@ -111,7 +119,12 @@ export default async function MarketingPage({
   const unattributed = withRevenue.find((c) => c.id === 'unattributed')?.revenue ?? 0;
   const named = withRevenue.filter((c) => c.id !== 'unattributed');
 
-  const totals = campaignTotals(filtered);
+  // Totalled over every campaign the source filter admits, including the hiring ones that
+  // §6.4 hides from the rows. That is deliberate and it is what the two notes under the
+  // table say: Spend is every rupee, and the ratios divide by the part of it that was
+  // buying clients. Totalling the visible rows instead would have made the footer disagree
+  // with the dashboard, and would have silently switched off the G4 note explaining why.
+  const totals = campaignTotals(bySource);
   const active = filtered.filter(hasActivity);
 
   // Whether anything downstream of a click is attributed to a campaign. Zoho stamps a
@@ -251,6 +264,10 @@ export default async function MarketingPage({
                 <TR>
                   <TH>Campaign</TH>
                   <TH>Channel</TH>
+                  {/* §6.4's Objective column. Visible only when the hiring campaigns are
+                      showing: with them hidden every row reads "acquisition", which is a
+                      column of the same word. */}
+                  {showHiring ? <TH>Objective</TH> : null}
                   <TH className="text-right">Spend</TH>
                   <TH className="text-right">Impr.</TH>
                   <TH className="text-right">Clicks</TH>
@@ -288,6 +305,9 @@ export default async function MarketingPage({
                       )}
                     </TD>
                     <TD className="text-muted-foreground">{c.channelName}</TD>
+                    {showHiring ? (
+                      <TD className="text-muted-foreground">{c.objective ?? 'unclassified'}</TD>
+                    ) : null}
                     <TD className="text-right tnum">{money(c.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.impressions)}</TD>
                     <TD className="text-right tnum text-muted-foreground">{fmtNumber(c.clicks)}</TD>
@@ -323,7 +343,7 @@ export default async function MarketingPage({
                     rows above — averaging ratios makes a footer disagree with its own
                     columns. */}
                 <TR className="border-t-2 border-border font-semibold hover:bg-transparent">
-                  <TD colSpan={2}>Total</TD>
+                  <TD colSpan={showHiring ? 3 : 2}>Total</TD>
                   <TD className="text-right tnum">{money(totals.spend)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.impressions)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.clicks)}</TD>
@@ -346,6 +366,26 @@ export default async function MarketingPage({
             </Table>
           </TableWrap>
         )}
+        {hiddenCount > 0 && !showHiring ? (
+          <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            {hiddenCount} recruitment or awareness campaign{hiddenCount === 1 ? ' is' : 's are'}{' '}
+            hidden. They are real spend and are counted in the Spend total above; they are off
+            this table because they were never asked to produce a client.{' '}
+            <a href="?hiring=show" className="text-primary hover:underline">
+              Show them
+            </a>
+            .
+          </p>
+        ) : null}
+        {showHiring ? (
+          <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+            Showing every campaign, including the ones that were not buying clients.{' '}
+            <a href="?" className="text-primary hover:underline">
+              Hide them again
+            </a>
+            .
+          </p>
+        ) : null}
         {totals.excludedSpend > 0.005 ? (
           <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
             Spend totals every campaign. CPL, CAC and ROAS divide by{' '}

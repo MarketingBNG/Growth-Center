@@ -24,6 +24,9 @@ import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
 import { segmentMix } from '@/lib/leads';
+import { deliveryCapacity } from '@/lib/capacity';
+import { isPartnerView } from '@/lib/partner-view';
+import { PartnerViewToggle } from './PartnerView';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
 
@@ -47,6 +50,9 @@ export default async function DashboardPage({
   }
 
   const params = await searchParams;
+  // §6.6's preset, read from the URL so the screen a partner sees is a link somebody can
+  // send rather than a setting somebody has to remember to switch back.
+  const partnerView = isPartnerView(params);
   const { value, days, bucket: presetBucket } = rangeParam(params);
   // A hand-picked window from the calendar wins over the preset. The two are the same
   // setting — RangePicker clears one when the other is chosen — so this only has to say
@@ -56,7 +62,7 @@ export default async function DashboardPage({
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const { current } = windowFor(spec);
 
-  const [dash, pipeline, series, channels, campaigns, segments, recentLeads, tasks, insights] =
+  const [dash, pipeline, series, channels, campaigns, segments, capacity, recentLeads, tasks, insights] =
     await Promise.all([
       dashboardBand(spec, bucket),
       openPipeline(),
@@ -65,6 +71,9 @@ export default async function DashboardPage({
       campaignPerformance(current),
       // §7.4: "Lead mix by segment renders on the dashboard."
       segmentMix(current),
+      // §6.2: "Marketing must not create consultations the firm cannot serve. The ceiling
+      // belongs on the same screen as the accelerator."
+      deliveryCapacity(),
       db().lead.findMany({
         orderBy: { createdAt: 'desc' },
         take: 6,
@@ -163,10 +172,17 @@ export default async function DashboardPage({
     <>
       <PageHeader
         title={`Good to see you, ${first}`}
-        subtitle="What is happening with growth, why, and what to do next."
+        subtitle={
+          partnerView
+            ? 'Performance only — owner names and per-person figures are hidden.'
+            : 'What is happening with growth, why, and what to do next.'
+        }
         actions={
           <>
             <RangePicker current={value} />
+            {/* §6.6. Partners open this screen; they should see performance, not
+                individual staff scorecards. */}
+            <PartnerViewToggle active={partnerView} />
             <AddWidgetDrawer />
           </>
         }
@@ -408,6 +424,52 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
 
+          {/* §6.2. Load is measured and the ceiling is entered, and the card says which
+              half is which — a ceiling inferred from headcount would be an invented
+              number on the one screen whose whole purpose is to stop marketing
+              outrunning delivery. */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Delivery capacity</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1.5">
+              <Row
+                label="Consultations this month"
+                value={fmtNumber(capacity.booked)}
+                hint="Deals opened. This CRM records no consultation event — the same gap that leaves CPQL without a numerator."
+              />
+              {capacity.ceiling === null ? (
+                <p className="pt-1 text-[11px] text-muted-foreground">
+                  No monthly ceiling has been set, so there is nothing to measure this against.
+                  A default would be a number nobody chose being used to authorise spending.
+                  Set one in Settings.
+                </p>
+              ) : (
+                <>
+                  <Row
+                    label="Ceiling"
+                    value={fmtNumber(capacity.ceiling)}
+                    hint={
+                      capacity.ceilingSetBy
+                        ? `Set by ${capacity.ceilingSetBy.split('@')[0]}`
+                        : 'Entered by hand'
+                    }
+                  />
+                  <Row
+                    label="Used"
+                    value={fmtPercent(capacity.utilisation ?? 0, 0)}
+                    hint={capacity.over ? 'Over the ceiling — stop adding demand' : undefined}
+                  />
+                </>
+              )}
+              <Row
+                label="Open delivery work"
+                value={fmtNumber(capacity.openDeliveryTasks)}
+                hint={`Across ${fmtNumber(capacity.deliveryPeople)} people, from Zoho Projects`}
+              />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Lead mix by segment</CardTitle>
@@ -463,6 +525,7 @@ export default async function DashboardPage({
                       </p>
                       <p className="truncate text-[11px] text-muted-foreground">
                         {l.companyName ?? l.channel?.name ?? 'No company'} · {fmtRelative(l.createdAt)}
+                        {!partnerView && l.ownerEmail ? ` · ${l.ownerEmail.split('@')[0]}` : ''}
                       </p>
                     </div>
                     <LeadStatusBadge status={l.status} />
@@ -489,7 +552,10 @@ export default async function DashboardPage({
                       <p className="truncate text-xs">{t.title}</p>
                       <p className="text-[11px] text-muted-foreground">
                         {t.dueDate ? fmtRelative(t.dueDate) : 'No due date'}
-                        {t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
+                        {/* §6.6. Hidden in partner view: the panel still says what is
+                            outstanding, which is performance, and stops naming who is
+                            carrying it, which is a staff scorecard. */}
+                        {!partnerView && t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
                       </p>
                     </div>
                     <PriorityBadge priority={t.priority} />

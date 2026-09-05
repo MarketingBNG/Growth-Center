@@ -1661,6 +1661,56 @@ model ReferralPartner {
   @@map("referral_partner")
 }
 
+/// One attempt to deliver one report to one recipient. §17.
+///
+/// The digest and the weekly pack were fire-and-forget: the route returned a count, the
+/// count went to the scheduler, and nothing in the application could answer "did Shweta
+/// get Monday's pack?" a day later. SMTP was refusing every message for six weeks and the
+/// only evidence was a log line nobody reads.
+///
+/// One row per recipient, not per send. A digest that reached two of three admins is the
+/// case worth being able to see, and a single row carrying `sent: 2` hides which one was
+/// missed.
+///
+/// **What this is not**: proof of reading. SMTP reports that a server accepted the
+/// message, and a webhook reports that Cliq accepted it. §17's open tracking needs an ESP
+/// that reports opens, which neither of these is — so `openedAt` is deliberately absent
+/// rather than present and permanently null.
+model ReportDelivery {
+  id String @id @default(cuid())
+
+  /// digest | weekly_pack | export. Text rather than an enum: a new report should not be
+  /// a migration on a log table.
+  report String
+
+  /// email | cliq. Which pipe carried it, because the two fail independently and have
+  /// been failing differently — mail refused for weeks while chat would have gone through.
+  channel String
+
+  /// The address or the webhook. Stored so a failure names who missed it.
+  recipient String
+
+  subject String?
+
+  /// sent | failed. No 'pending': the send is synchronous and a row is written after it
+  /// resolves, so a third state would only ever mean the process died mid-loop — which is
+  /// exactly what a missing row already says.
+  status String
+
+  /// The provider's message id where it gave one, and its refusal where it did not.
+  messageId String?
+  error     String?
+
+  /// How much was in it, so an empty digest is distinguishable from a failed one.
+  itemCount Int?
+
+  sentAt DateTime @default(now())
+
+  @@index([report, sentAt])
+  @@index([status, sentAt])
+  @@map("report_delivery")
+}
+
 model Notification {
   id        String    @id @default(cuid())
   title     String
