@@ -3,6 +3,12 @@
 // screen and half the library already ask this module for them, and moving a file should
 // not move a hundred import lines.
 export { rangeFor, type Range } from './range.ts';
+import {
+  consultationHeld,
+  newCustomer,
+  qualifiedLead,
+  semiQualifiedLead,
+} from './definitions.ts';
 import { rangeFor, type Range } from './range.ts';
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
@@ -353,17 +359,7 @@ export async function funnel(range: Range, channelId?: string) {
   // and visitorToLead falls to null rather than dividing a channel's leads by the whole
   // site's traffic.
   const byChannel = channelId ? { channelId } : {};
-  const customerWhere = channelId
-    ? {
-        wonAt: window,
-        // Lead first, deal second — the same precedence channelPerformance and the revenue
-        // insert use, so a customer lands on the channel their money did.
-        OR: [
-          { opportunity: { is: { lead: { is: { channelId } } } } },
-          { opportunity: { is: { lead: { is: null }, channelId } } },
-        ],
-      }
-    : { wonAt: window };
+  const customerWhere = newCustomer(range, channelId);
 
   // The channels that actually carried spend in this window. ROAS and CAC are measured
   // against these and nothing else — see below.
@@ -391,15 +387,11 @@ export async function funnel(range: Range, channelId?: string) {
       // every lead the firm got, and only the visitor→lead ratio above it is about the
       // website.
       channelId ? Promise.resolve(0) : db().lead.count({ where: { createdAt: window, ...WEB_ARRIVING_LEAD } }),
-      db().lead.count({
-        where: {
-          createdAt: window,
-          ...byChannel,
-          OR: [{ status: 'semi_qualified' }, { qualifiedAt: { not: null } }],
-        },
-      }),
-      db().lead.count({ where: { createdAt: window, qualifiedAt: { not: null }, ...byChannel } }),
-      db().opportunity.count({ where: { createdAt: window, ...byChannel } }),
+      db().lead.count({ where: semiQualifiedLead(range, channelId) }),
+      db().lead.count({ where: qualifiedLead(range, channelId) }),
+      // The same predicate `consultations` counts, so the funnel's step and the cost per
+      // consultation cannot come to disagree about what a consultation is.
+      db().opportunity.count({ where: consultationHeld(range, channelId) }),
       db().customer.count({ where: customerWhere }),
       // Grouped by currency rather than summed flat. This account's deals are written in
       // both USD and INR and its ad spend is billed in INR, and adding those together
@@ -702,7 +694,7 @@ export async function consultations(range: Range) {
   const window = { gte: range.from, lte: range.to };
 
   const [total, byChannelRows, channels] = await Promise.all([
-    db().opportunity.count({ where: { createdAt: window } }),
+    db().opportunity.count({ where: consultationHeld(range) }),
     db().opportunity.groupBy({
       by: ['channelId'],
       where: { createdAt: window, channelId: { not: null } },

@@ -24,6 +24,8 @@ import { ApiKeys } from './ApiKeys';
 import { Thresholds } from './Thresholds';
 import { MarketingRoster } from './MarketingRoster';
 import { marketingRoster } from '@/lib/roster';
+import { attributionCeiling } from '@/lib/attribution-ceiling';
+import { fmtMoneyCompact } from '@/lib/format';
 import { CurrencySettings } from './CurrencySettings';
 import { VerifyEmail } from './VerifyEmail';
 import { RevokeKey } from './RevokeKey';
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit, health, limits, capacity, roster] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health, ceiling, limits, capacity, roster] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -73,6 +75,8 @@ export default async function SettingsPage() {
     // The last year, so the figure shown beside the threshold is the one the Marketing
     // page's default range is judged against.
     attributionHealth(yearAgo(), new Date()),
+    // Over the same year, so the ceiling and the coverage beside it describe one window.
+    attributionCeiling(yearAgo(), new Date()),
     thresholds(),
     capacitySetting(),
     marketingRoster(),
@@ -170,6 +174,22 @@ export default async function SettingsPage() {
             in the source; each change here is recorded in the activity log below, because
             lowering a threshold is how a finding stops being raised.
           </p>
+          {/* The attribution threshold is the one number here that can be set out of
+              reach, and §21.4's refusal rests on it. Shown with its ceiling because
+              "attribution is 10.1%" invites a data-entry project, while "45.0% is all
+              this history can ever reach" is the fact that decides what the bar should
+              be. Whoever sets it should not have to go and compute this first. */}
+          {ceiling.ceilingPercent !== null && ceiling.ceilingPercent < health.threshold ? (
+            <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+              Revenue attribution cannot reach its {health.threshold}% threshold on this
+              history. Attributing everything the CRM has evidence for would reach{' '}
+              <span className="font-medium">{ceiling.ceilingPercent.toFixed(1)}%</span> —{' '}
+              {fmtMoneyCompact(ceiling.unreachable, ceiling.currency)} of the last year’s
+              revenue has no channel recorded anywhere, because the deal was opened
+              directly rather than converted from a lead. Until that changes for new work,
+              every scale decision stays refused.
+            </p>
+          ) : null}
         </CardHeader>
         <CardContent>
           {manageSettings ? (
