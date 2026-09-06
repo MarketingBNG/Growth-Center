@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { attributionSufficiency } from './attribution.ts';
 import { fmtMoneyCompact } from './format.ts';
+import { suppressionCheck } from './suppression.ts';
 
 // §21.2 "How to read a review card" and §21.3 "Decision rules — what to approve, return
 // or escalate".
@@ -322,6 +323,30 @@ export async function canScale(now = new Date()): Promise<{ allowed: boolean; re
  * Campaign, segment on Lead and Company — so this can finally be checked rather than
  * described.
  */
+/**
+ * Appendix C's third refusal: "no cold send to a client or referral partner."
+ *
+ * Exported beside `canScale` for the same reason — the outreach screens need to check it
+ * before offering the button, not only after it is pressed. lib/outreach.ts enforces it
+ * at sign-off; this is the reading of it.
+ */
+export async function sequencesBreachingSuppression() {
+  const sequences = await db().sequence.findMany({
+    where: { status: { in: ['draft', 'active', 'paused'] }, prospects: { some: {} } },
+    select: { id: true, name: true, status: true },
+    orderBy: { name: 'asc' },
+  });
+
+  const breaching: { id: string; name: string; status: string; suppressed: number }[] = [];
+  for (const sequence of sequences) {
+    const hits = await suppressionCheck(sequence.id);
+    if (hits.length > 0) {
+      breaching.push({ ...sequence, suppressed: hits.length });
+    }
+  }
+  return breaching;
+}
+
 export async function campaignsMissingRegistry() {
   const rows = await db().campaign.findMany({
     where: {

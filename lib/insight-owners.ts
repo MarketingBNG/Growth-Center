@@ -60,6 +60,7 @@ export const RULE_DOMAIN: Record<string, OwnerDomain> = {
   spend_over_envelope: 'paid',
   lead_quality_below_floor: 'paid',
   template_placeholder: 'outbound',
+  suppression_breach: 'outbound',
   high_impression_low_ctr_page: 'seo',
   seo_technical_issue_widespread: 'seo',
   lost_reason_concentration: 'crm',

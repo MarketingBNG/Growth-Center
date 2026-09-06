@@ -6,6 +6,7 @@ import { attributionSufficiency } from './attribution.ts';
 import { dealActivity } from './deal-activity.ts';
 import { marketingRoster, splitByRoster } from './roster.ts';
 import { ownerFor, unboundDomains } from './insight-owners.ts';
+import { suppressionCheck } from './suppression.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
 import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
@@ -1045,9 +1046,51 @@ const leadQualityFloorRule: Rule = {
   },
 };
 
+const suppressionBreachRule: Rule = {
+  id: 'suppression_breach',
+  scope: 'standing',
+  version: 1,
+  section: 'outreach',
+  severity: 'critical',
+  kind: 'risk',
+  test: 'Clients or referral partners sitting on a list that is not marked as theirs',
+  async run() {
+    // Critical, and it is one of the three the manual reserves that severity for. §7.7:
+    // "a client receiving a cold sequence is a relationship event, not a metric" — the
+    // person who notices is the client, and nothing on a dashboard undoes it.
+    const sequences = await db().sequence.findMany({
+      where: { status: { in: ['draft', 'active', 'paused'] }, prospects: { some: {} } },
+      select: { id: true, name: true, status: true, purpose: true },
+    });
+
+    const findings: Finding[] = [];
+    for (const sequence of sequences) {
+      const hits = await suppressionCheck(sequence.id);
+      if (hits.length === 0) continue;
+      findings.push({
+        subject: `suppression-${slug(sequence.id)}`,
+        evidence: {
+          sequence: sequence.name,
+          status: sequence.status,
+          purpose: sequence.purpose,
+          suppressedRecipients: hits.length,
+          // Named, not counted. "Three suppressed" is not something anyone can act on;
+          // an address is. Capped because the finding is a prompt to open the list.
+          examples: hits.slice(0, 5).map((h) => `${h.email} (${h.reason})`),
+          basis: 'matched against client flags, the referral registry and contacts at customer accounts',
+        },
+        proposedAction:
+          'Remove these recipients before the list is sent again, or mark the sequence as a client reminder if it is meant for them.',
+      });
+    }
+    return findings;
+  },
+};
+
 export const RULES: Rule[] = [
   attributionRule,
   placeholderRule,
+  suppressionBreachRule,
   envelopeRule,
   syncStaleRule,
   leadSlaRule,

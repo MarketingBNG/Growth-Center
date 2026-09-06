@@ -3,6 +3,7 @@ import { db } from './prisma.ts';
 import { rate } from './calc.ts';
 import { slice, type ListQuery } from './list-query.ts';
 import { preview } from './html-text.ts';
+import { suppressionCheck } from './suppression.ts';
 import { blocksSending, lintSequence, summarise } from './outreach-lint.ts';
 import {
   SEQUENCE_PURPOSES,
@@ -200,6 +201,23 @@ export async function signOffSequence(
     if (blocksSending(findings)) {
       throw new IneligibleError(
         'This template has unresolved placeholders. Fix those before signing it off.',
+      );
+    }
+
+    // Appendix C's refusal: "no cold send to a client or referral partner". Checked here
+    // rather than only reported on the page, because a sign-off is the moment somebody
+    // takes responsibility for the list — and §7.7's point is that the cost of getting
+    // this wrong is a relationship, noticed by the client, not a number on a dashboard.
+    //
+    // Recomputed at sign-off rather than read from a stored list. The case that matters
+    // is the prospect who became a client since the list was built, and a list would be
+    // stale in exactly that case.
+    const hits = await suppressionCheck(id);
+    if (hits.length > 0) {
+      const named = hits.slice(0, 3).map((h) => `${h.email} (${h.reason})`).join(', ');
+      const rest = hits.length > 3 ? `, and ${hits.length - 3} more` : '';
+      throw new IneligibleError(
+        `This cold list includes people the firm already has a relationship with: ${named}${rest}. Remove them before signing it off.`,
       );
     }
   }
