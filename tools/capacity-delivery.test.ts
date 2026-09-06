@@ -76,10 +76,21 @@ test('the footer totals every campaign even when hiring is hidden', () => {
 // missed it.
 test('a delivery row is written for every recipient, on both outcomes', () => {
   const source = readFileSync('lib/digest.ts', 'utf8');
-  const loop = source.indexOf('for (const to of ADMIN_EMAILS)');
+  // The loop is over `deliveries` now, not a constant list: K5 splits the queue into the
+  // message each person is waiting on. The invariant is unchanged — one row per
+  // recipient, inside the loop, whichever way the send went.
+  const loop = source.indexOf('for (const [to, theirs] of deliveries)');
   const log = source.indexOf('logDelivery', loop);
   assert.ok(loop > -1 && log > loop, 'the log call must be inside the recipient loop');
   assert.match(source, /status: result\.ok \? 'sent' : 'failed'/);
+});
+
+// The row has to describe the message that was sent, not the queue it came out of.
+// Logging the whole backlog against a mail listing two items is the log disagreeing with
+// the mail, and the log is what gets believed afterwards.
+test('a delivery row counts what that person was sent', () => {
+  const source = readFileSync('lib/digest.ts', 'utf8');
+  assert.match(source, /itemCount: theirs\.items\.length \+ theirs\.others/);
 });
 
 // A delivery log is a record of the send, not part of it. Losing a row must not turn a

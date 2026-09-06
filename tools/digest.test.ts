@@ -7,6 +7,7 @@ import {
   renderDigest,
   worthSending,
   type Digest,
+  digestsByRecipient,
   type PendingFinding,
 } from '../lib/digest.ts';
 
@@ -22,6 +23,8 @@ function finding(over: Partial<PendingFinding> & { id: string }): PendingFinding
     severity: 'medium',
     section: 'dashboard',
     proposedAction: null,
+    ownerEmail: null,
+    status: 'proposed',
     firstSeenAt: hoursBefore(1),
     createdAt: hoursBefore(1),
     ...over,
@@ -106,6 +109,7 @@ const EMPTY_HEALTH = { metrics: [], open: 0 };
 function digest(over: Partial<Digest> = {}): Digest {
   return {
     items: rankItems([finding({ id: 'a', severity: 'high' })], 24, NOW),
+    all: rankItems([finding({ id: 'a', severity: 'high' })], 24, NOW),
     others: 0,
     overdue: 0,
     health: EMPTY_HEALTH as Digest['health'],
@@ -192,4 +196,56 @@ test('the message says why silence is not a failure', () => {
 
 test('five is the listed maximum', () => {
   assert.equal(TOP_N, 5);
+});
+
+// ── K5: the queue, cut into what each person is waiting on ───────────────────────────
+//
+// One digest to a shared list is the version that gets filtered into a folder: everybody
+// reads the same twenty-four items and nobody's own two are distinguishable.
+
+const APPROVERS = ['shweta@usaindiacfo.com'];
+const REVIEWERS = ['abhuday@usaindiacfo.com', 'shweta@usaindiacfo.com'];
+
+function split(items: PendingFinding[]) {
+  const ranked = rankItems(items, 24, NOW);
+  return digestsByRecipient(
+    { ...digest(), items: ranked.slice(0, 5), all: ranked, others: Math.max(0, ranked.length - 5) },
+    APPROVERS,
+    REVIEWERS,
+  );
+}
+
+// D8 made review and approval two acts. A digest listing only `proposed` would never tell
+// the approver anything was waiting on her.
+test('a reviewed finding goes to the approver', () => {
+  const out = split([finding({ id: 'a', status: 'reviewed' })]);
+  assert.deepEqual([...out.keys()], APPROVERS);
+});
+
+test('an owned finding goes to its owner and to nobody else', () => {
+  const out = split([finding({ id: 'a', ownerEmail: 'gaurav@usaindiacfo.com' })]);
+  assert.deepEqual([...out.keys()], ['gaurav@usaindiacfo.com']);
+});
+
+// An unowned finding is precisely the one nobody picks up on their own.
+test('an unowned finding goes to the reviewers to be triaged', () => {
+  const out = split([finding({ id: 'a' })]);
+  assert.deepEqual([...out.keys()].sort(), [...REVIEWERS].sort());
+});
+
+test('each person’s message counts only their own items', () => {
+  const out = split([
+    finding({ id: 'a', ownerEmail: 'gaurav@usaindiacfo.com' }),
+    finding({ id: 'b', ownerEmail: 'gaurav@usaindiacfo.com' }),
+    finding({ id: 'c', status: 'reviewed' }),
+  ]);
+  assert.equal(out.get('gaurav@usaindiacfo.com')?.all.length, 2);
+  assert.equal(out.get('shweta@usaindiacfo.com')?.all.length, 1);
+});
+
+// This workspace today: no desk is bound and nothing has been reviewed, so the split has
+// nobody to address. Sending nothing would be worse than the shared list it replaces.
+test('with nothing owned and nothing reviewed, the split addresses nobody', () => {
+  const out = digestsByRecipient({ ...digest(), all: [] }, APPROVERS, REVIEWERS);
+  assert.equal(out.size, 0);
 });

@@ -37,6 +37,10 @@ export type DigestItem = {
   ageHours: number;
   /** Set when the finding has been waiting longer than the decision SLA. */
   overdue: boolean;
+  /** Who is meant to act, once §5.2's desks are bound. Null while nobody is. */
+  ownerEmail: string | null;
+  /** `proposed` waits on the reviewer; `reviewed` waits on the approver. */
+  status: string;
 };
 
 export type Digest = {
@@ -47,6 +51,9 @@ export type Digest = {
   /** §21.6's numbers, so the message says how the queue is being worked, not only what is in it. */
   health: Awaited<ReturnType<typeof insightHealth>>;
   slaHours: number;
+  /** Everything waiting, ranked. `items` is the first five of this; the split by
+   *  recipient needs the rest. */
+  all: DigestItem[];
 };
 
 export const TOP_N = 5;
@@ -59,6 +66,8 @@ export type PendingFinding = {
   proposedAction: string | null;
   firstSeenAt: Date | null;
   createdAt: Date;
+  ownerEmail: string | null;
+  status: string;
 };
 
 /**
@@ -84,6 +93,8 @@ export function rankItems(pending: PendingFinding[], slaHours: number, now: Date
         proposedAction: f.proposedAction,
         ageHours: Math.round(ageHours),
         overdue: ageHours > slaHours,
+        ownerEmail: f.ownerEmail,
+        status: f.status,
       };
     })
     .sort(
@@ -106,7 +117,10 @@ export async function buildDigest(now = new Date()): Promise<Digest> {
 
   const [pending, health] = await Promise.all([
     db().aiInsight.findMany({
-      where: { status: 'proposed', ruleId: { not: null } },
+      // Both waiting states now. `proposed` waits on the first-line reviewer and
+      // `reviewed` waits on the approver — D8 split those apart, and a digest that
+      // listed only the first would never tell the approver anything was pending.
+      where: { status: { in: ['proposed', 'reviewed'] }, ruleId: { not: null } },
       select: {
         id: true,
         title: true,
@@ -115,6 +129,8 @@ export async function buildDigest(now = new Date()): Promise<Digest> {
         proposedAction: true,
         firstSeenAt: true,
         createdAt: true,
+        ownerEmail: true,
+        status: true,
       },
     }),
     // The trailing month, matching what the executive pack reports. A digest quoting a
@@ -131,7 +147,62 @@ export async function buildDigest(now = new Date()): Promise<Digest> {
     overdue: ranked.filter((f) => f.overdue).length,
     health,
     slaHours,
+    all: ranked,
   };
+}
+
+/**
+ * The same queue, cut into the messages each person is actually waiting on. §12.1 and K5.
+ *
+ * One digest to a shared list is the version that gets filtered into a folder: everybody
+ * reads the same twenty-four items, nobody's own two are distinguishable, and the message
+ * stops being about anyone. Now that a finding carries a state and an owner, it can be
+ * addressed.
+ *
+ *   reviewed  → the approver. It has passed first-line review and is waiting on a
+ *               signature, which is the queue §12.1 puts in front of Shweta each morning.
+ *   proposed, owned → the owner, who is the person the desk map named.
+ *   proposed, unowned → the reviewers, because somebody has to triage it and an unowned
+ *               finding is precisely what nobody picks up on their own.
+ *
+ * Falls back to one message to everyone when nothing is owned and nothing is reviewed,
+ * which is the state this workspace is in until §5.2's desks are bound. A split that
+ * silently sent nobody anything would be worse than the shared list it replaced.
+ */
+export function digestsByRecipient(
+  digest: Digest,
+  approvers: string[],
+  reviewers: string[],
+): Map<string, Digest> {
+  const out = new Map<string, DigestItem[]>();
+  const add = (email: string, item: DigestItem) => {
+    const list = out.get(email) ?? [];
+    list.push(item);
+    out.set(email, list);
+  };
+
+  for (const item of digest.all) {
+    if (item.status === 'reviewed') {
+      for (const email of approvers) add(email, item);
+    } else if (item.ownerEmail) {
+      add(item.ownerEmail, item);
+    } else {
+      for (const email of reviewers) add(email, item);
+    }
+  }
+
+  return new Map(
+    [...out].map(([email, items]) => [
+      email,
+      {
+        ...digest,
+        items: items.slice(0, TOP_N),
+        others: Math.max(0, items.length - TOP_N),
+        overdue: items.filter((f) => f.overdue).length,
+        all: items,
+      },
+    ]),
+  );
 }
 
 /** Whether there is anything worth an email. */
@@ -286,11 +357,31 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
     return { sent: 0, skipped: 'nothing-waiting', providerId: p.id, waiting, errors: [], cliq: null };
   }
 
-  const { subject, body } = renderDigest(digest, baseUrl);
+  // Who signs and who triages. Read from the accounts rather than from a constant: the
+  // policy in lib/roles.ts already says approval is the owner's alone, and a second list
+  // here would be a second answer to the same question.
+  const accounts = await db().appUser.findMany({
+    where: { active: true },
+    select: { email: true, role: true },
+  });
+  const approvers = accounts.filter((a) => a.role === 'owner').map((a) => a.email);
+  const reviewers = accounts.filter((a) => a.role === 'admin' || a.role === 'owner').map((a) => a.email);
+
+  const perPerson = digestsByRecipient(digest, approvers, reviewers);
+
+  // Nothing is owned and nothing has been reviewed, so the split has nobody to address.
+  // That is this workspace today, until §5.2's desks are bound — and a split that
+  // quietly sent no one anything would be worse than the shared list it replaces.
+  const deliveries =
+    perPerson.size > 0
+      ? [...perPerson]
+      : ADMIN_EMAILS.map((email) => [email, digest] as [string, Digest]);
+
   const errors: string[] = [];
   let sent = 0;
 
-  for (const to of ADMIN_EMAILS) {
+  for (const [to, theirs] of deliveries) {
+    const { subject, body } = renderDigest(theirs, baseUrl);
     const result = await p.send({ to, subject, body });
     if (result.ok) sent += 1;
     else errors.push(`${to}: ${result.error}`);
@@ -304,7 +395,9 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
       subject,
       status: result.ok ? 'sent' : 'failed',
       error: result.ok ? null : result.error,
-      itemCount: waiting,
+      // What this person was sent, not what the queue holds. A row saying twenty-four
+      // against a message listing two is the log disagreeing with the mail.
+      itemCount: theirs.items.length + theirs.others,
     });
   }
 
@@ -323,7 +416,9 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
       // The webhook URL carries a token, so it is never stored. The channel name is what
       // a reader needs and the secret is what a log must not keep.
       recipient: 'zoho-cliq',
-      subject,
+      // The whole queue's subject, because Cliq is one post for the team rather than one
+      // message per person — the only place the undivided digest is still the right thing.
+      subject: renderDigest(digest, baseUrl).subject,
       status: posted.ok ? 'sent' : 'failed',
       error: posted.ok ? null : posted.error,
       itemCount: waiting,
