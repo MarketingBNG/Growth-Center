@@ -3,6 +3,7 @@ import { db } from './prisma.ts';
 import type { Thresholds } from './thresholds.ts';
 import { thresholds } from './settings.ts';
 import { attributionSufficiency } from './attribution.ts';
+import { dealActivity } from './deal-activity.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
 import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
@@ -197,53 +198,50 @@ const attributionRule: Rule = {
 const staleDealsRule: Rule = {
   id: 'stale_deals',
   scope: 'standing',
-  version: 1,
+  // Bumped with D5. The rule counted only activity linked to the deal record, which is
+  // not where this firm logs its calls, and it spoke at all while the CRM sync was down.
+  version: 2,
   section: 'pipeline',
   severity: 'medium',
   kind: 'risk',
   test: 'Open deals with no activity logged for longer than the stale threshold',
   async run(ctx) {
     const cutoff = daysAgo(ctx.now, ctx.thresholds['pipeline.staleDays']);
+    const activity = await dealActivity();
+    if (activity.openDeals === 0) return [];
 
-    const open = await db().opportunity.findMany({
-      where: { stage: { is: { isWon: false, isLost: false } } },
-      select: {
-        id: true,
-        ownerEmail: true,
-        activities: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 },
-      },
-    });
-    if (open.length === 0) return [];
+    // Silence has to mean something before it can be reported. With the CRM sync erroring
+    // this rule would be describing a broken authorisation as 966 neglected deals, and
+    // sync_stale_or_failed is already saying the true thing about it.
+    if (!activity.trustworthy) return [];
 
-    const stale = open.filter((d) => {
-      const last = d.activities[0]?.createdAt;
-      return !last || last < cutoff;
-    });
-    if (stale.length === 0) return [];
+    const stale = [...activity.lastTouch.entries()].filter(([, at]) => at < cutoff).length
+      + (activity.openDeals - activity.lastTouch.size);
+    if (stale === 0) return [];
 
-    // Reported as one finding about the pipeline, not one per deal.
-    //
-    // 965 of the 966 open deals here have no activity ever logged against them, because
-    // only 1,724 of 29,400 activity rows carry an opportunityId at all. Raised per deal
-    // this would be 965 identical items nobody could work through, and every one of them
-    // would blame the deal for a gap in how activity is recorded. The share is the
-    // finding.
-    const share = rate(stale.length, open.length);
+    // Reported as one finding about the pipeline, not one per deal. Raised per deal this
+    // would be hundreds of identical items nobody could work through.
+    const share = rate(stale, activity.openDeals);
 
     return [
       {
         subject: 'stale-open-deals',
         evidence: {
-          openDeals: open.length,
-          staleDeals: stale.length,
+          openDeals: activity.openDeals,
+          staleDeals: stale,
           stalePercent: round(share),
           basis: 'stalePercent is a share of open deals, not of all deals',
           staleAfterDays: ctx.thresholds['pipeline.staleDays'],
-          dealsWithAnyActivityLogged: open.filter((d) => d.activities.length > 0).length,
+          dealsWithActivityOnTheDeal: activity.direct,
+          // Carried because it is the figure that stops this being read as a sync fault:
+          // counting the contact's activity as well as the deal's changes the answer by
+          // seven deals, so the staleness is the pipeline's and not the data's.
+          dealsWithActivityOnlyOnTheContact: activity.viaContactOnly,
+          dealsWithNoActivityAnywhere: activity.none,
         },
         severity: share !== null && share > 90 ? 'high' : 'medium',
         proposedAction:
-          'Check whether deal activity is syncing from Zoho at all before chasing owners — almost no open deal has any logged.',
+          'Work the open pipeline or close it — activity is counted on the deal and on its contact, and almost none has either.',
       },
     ];
   },
