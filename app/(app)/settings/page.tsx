@@ -22,6 +22,8 @@ import { attributionHealth } from '@/lib/attribution';
 import { thresholds } from '@/lib/settings';
 import { ApiKeys } from './ApiKeys';
 import { Thresholds } from './Thresholds';
+import { MarketingRoster } from './MarketingRoster';
+import { marketingRoster } from '@/lib/roster';
 import { CurrencySettings } from './CurrencySettings';
 import { VerifyEmail } from './VerifyEmail';
 import { RevokeKey } from './RevokeKey';
@@ -51,7 +53,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit, health, limits, capacity] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health, limits, capacity, roster] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -73,6 +75,7 @@ export default async function SettingsPage() {
     attributionHealth(yearAgo(), new Date()),
     thresholds(),
     capacitySetting(),
+    marketingRoster(),
   ]);
 
   const ai = aiStatus();
@@ -129,6 +132,31 @@ export default async function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               Reporting in <span className="font-medium text-foreground">{currency.reporting}</span>.
               Only an owner can change this.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* D2. Above the thresholds because it decides *whose* work the rules are about,
+          and no threshold makes a queue of the wrong eighteen people workable. */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Marketing roster</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Who this team is accountable for. The task queue raises a finding per person on
+            this list and summarises everybody else as one Firm hygiene item. With nobody on
+            it the queue counts the whole firm — eighteen people today, of whom one is on
+            this team — and says so rather than going quiet.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {manageSettings ? (
+            <MarketingRoster initial={roster} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {roster.length === 0
+                ? 'Nobody has been added yet. Only an owner can change this.'
+                : `${roster.length} on the roster. Only an owner can change this.`}
             </p>
           )}
         </CardContent>

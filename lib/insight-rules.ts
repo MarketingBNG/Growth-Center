@@ -4,6 +4,7 @@ import type { Thresholds } from './thresholds.ts';
 import { thresholds } from './settings.ts';
 import { attributionSufficiency } from './attribution.ts';
 import { dealActivity } from './deal-activity.ts';
+import { marketingRoster, splitByRoster } from './roster.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
 import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
@@ -307,7 +308,9 @@ const leadSlaRule: Rule = {
 const taskDebtRule: Rule = {
   id: 'task_debt',
   scope: 'standing',
-  version: 1,
+  // Bumped with D2. The rule raised one finding per person across the whole firm, which
+  // put eighteen people's task debt in front of a marketing team that could act on one.
+  version: 2,
   section: 'tasks',
   severity: 'medium',
   kind: 'risk',
@@ -321,22 +324,68 @@ const taskDebtRule: Rule = {
       _count: { _all: true },
     });
 
-    // One finding per person, because the action is per person and each needs its own
-    // owner. The floor is what keeps this from raising a finding for everybody with a
-    // couple of late items.
-    return overdue
+    const above = overdue
       .filter((r) => r._count._all >= floor && r.assigneeEmail)
-      .sort((a, b) => b._count._all - a._count._all)
-      .map((r) => ({
-        subject: `task-debt-${slug(r.assigneeEmail!)}`,
-        evidence: {
-          assignee: r.assigneeEmail,
-          overdueTasks: r._count._all,
-          floor,
+      .sort((a, b) => b._count._all - a._count._all);
+    if (above.length === 0) return [];
+
+    const roster = await marketingRoster();
+    const { mine, rest } = splitByRoster(above, (r) => r.assigneeEmail, roster);
+
+    // Nobody has set a roster yet. Silently scoping to an empty list would delete a true
+    // finding, so the rule behaves as it did and says why, once, to whoever can fix it.
+    // §5.2's rule: a scoping gap is a configuration error shown to a person.
+    if (roster.length === 0) {
+      return [
+        {
+          subject: 'marketing-roster-unset',
+          evidence: {
+            peopleAboveTheFloor: above.length,
+            overdueTasksAboveTheFloor: above.reduce((n, r) => n + r._count._all, 0),
+            floor,
+            basis: 'no marketing roster is configured, so this counts the whole firm',
+          },
+          severity: 'high',
+          proposedAction:
+            'Add the marketing team in Settings, so this queue shows the debt this team can act on and the rest goes to Firm hygiene.',
         },
-        ownerEmail: r.assigneeEmail,
-        proposedAction: 'Close, reschedule or reassign the overdue tasks on this person.',
-      }));
+      ];
+    }
+
+    // One finding per person on the team, because the action is per person and each needs
+    // its own owner.
+    const findings: Finding[] = mine.map((r) => ({
+      subject: `task-debt-${slug(r.assigneeEmail!)}`,
+      evidence: {
+        assignee: r.assigneeEmail,
+        overdueTasks: r._count._all,
+        floor,
+      },
+      ownerEmail: r.assigneeEmail,
+      proposedAction: 'Close, reschedule or reassign the overdue tasks on this person.',
+    }));
+
+    // Everyone else, as one item rather than seventeen. The debt is real and somebody
+    // should see it; it is simply not this team's queue, and the manual asks for a
+    // summary raised once rather than a person-by-person list nobody here can work.
+    if (rest.length > 0) {
+      findings.push({
+        subject: 'firm-task-debt-outside-marketing',
+        evidence: {
+          people: rest.length,
+          overdueTasks: rest.reduce((n, r) => n + r._count._all, 0),
+          largestHolder: rest[0]?.assigneeEmail ?? null,
+          largestHolderOverdueTasks: rest[0]?._count._all ?? null,
+          floor,
+          basis: 'people outside the marketing roster, summarised as one finding',
+        },
+        ownerEmail: null,
+        proposedAction:
+          'Raise the firm-wide task backlog with the sales and delivery leads — it is outside this team’s queue.',
+      });
+    }
+
+    return findings;
   },
 };
 
