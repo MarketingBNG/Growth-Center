@@ -12,6 +12,8 @@ import { ageLabel } from '@/lib/insight-identity';
 import { STATUS_LABELS, isInsightStatus } from '@/lib/insight-lifecycle';
 import { assignableOwners } from '@/lib/insight-actions';
 import { rangeParam } from '@/lib/range';
+import { currentUser } from '@/lib/auth';
+import { can } from '@/lib/roles';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { InsightAction } from './InsightAction';
 import { AskBox } from './AskBox';
@@ -63,6 +65,11 @@ export default async function AiPage({
   }
 
   const { value: rangeValue, days } = rangeParam(await searchParams);
+  const user = await currentUser();
+  // §5.1 gives approval to one identity. Hiding the button is a courtesy — the route
+  // refuses the transition either way — but a button that always 403s teaches people to
+  // ignore the row it sits on.
+  const canApprove = can(user?.role ?? 'user', 'approve');
 
   const status = aiStatus();
   const [context, stored, owners] = await Promise.all([
@@ -248,6 +255,7 @@ export default async function AiPage({
                       status={state}
                       owners={owners}
                       currentOwner={i.ownerEmail}
+                      canApprove={canApprove}
                     />
                   )}
                 </div>

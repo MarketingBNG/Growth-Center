@@ -115,8 +115,8 @@ const POLICY: Record<Permission, Role[]> = {
   'settings:manage': ['owner'],
   // Approval is the owner's alone, which is the whole point of the Build and Operating
   // Manual's Part V: an admin can build and run a campaign but cannot sign it off, so
-  // nobody approves their own work. Nothing checks this yet — there is no approve route
-  // in the app — but the answer is settled here rather than argued again later.
+  // nobody approves their own work. The insight PATCH route is the call site: it refuses
+  // the move to `approved` to anyone this does not name, which is D8's second step.
   approve: ['owner'],
 };
 

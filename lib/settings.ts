@@ -8,6 +8,8 @@ import {
   type CurrencySettings,
 } from './currency.ts';
 import { fetchRates } from './fx.ts';
+import { OWNERS_KEY, OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from './insight-owners.ts';
+import { canonicalEmail } from './roles.ts';
 import { TAGS, cached } from './cache.ts';
 import {
   THRESHOLDS,
@@ -181,4 +183,30 @@ export async function saveThreshold(key: ThresholdKey, value: unknown): Promise<
     update: { value: { value: parsed } },
   });
   return parsed;
+}
+
+/**
+ * Who sits at each insight desk. §5.2, the half that is a fact about the team.
+ *
+ * Here rather than in lib/insight-owners.ts because that module is imported by the
+ * Settings card, which is a client component: the desks and the routing are pure, and
+ * anything reading them out of the database has to live on this side of the line.
+ */
+export async function ownerBindings(): Promise<OwnerBindings> {
+  if (!hasDb()) return {};
+
+  const stored = await db().appSetting.findUnique({ where: { key: OWNERS_KEY } });
+  const raw = stored?.value;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+
+  const out: OwnerBindings = {};
+  for (const domain of Object.keys(OWNER_DOMAINS) as OwnerDomain[]) {
+    const value = (raw as Record<string, unknown>)[domain];
+    if (typeof value !== 'string') continue;
+    // An address outside the firm's domains belongs to somebody who cannot sign in, so it
+    // is dropped rather than kept as a binding that routes findings nowhere.
+    const email = canonicalEmail(value);
+    if (email) out[domain] = email;
+  }
+  return out;
 }

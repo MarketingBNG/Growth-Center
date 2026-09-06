@@ -5,6 +5,7 @@ import { thresholds } from './settings.ts';
 import { attributionSufficiency } from './attribution.ts';
 import { dealActivity } from './deal-activity.ts';
 import { marketingRoster, splitByRoster } from './roster.ts';
+import { ownerFor, unboundDomains } from './insight-owners.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
 import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
@@ -1098,9 +1099,10 @@ export async function runRules(
   window: { from: Date; to: Date },
   now = new Date(),
 ): Promise<RaisedFinding[]> {
-  const [limits, currency] = await Promise.all([
+  const [limits, currency, owners] = await Promise.all([
     thresholds(),
     import('./settings.ts').then((s) => s.currencySettings().then((c) => c.reporting)),
+    import('./settings.ts').then((s) => s.ownerBindings()),
   ]);
 
   const ctx: RuleContext = { from: window.from, to: window.to, now, thresholds: limits, currency };
@@ -1118,6 +1120,11 @@ export async function runRules(
           severity: f.severity ?? rule.severity,
           test: rule.test,
           scope: rule.scope,
+          // §5.2's map, applied where the rule did not name somebody from its own data.
+          // A lead's own owner is a better answer than their desk's, so a rule that found
+          // a person keeps them: routing an SLA breach to a manager instead of to whoever
+          // holds the lead is how the queue stops being workable.
+          ownerEmail: f.ownerEmail ?? ownerFor(rule.id, owners),
         }));
       } catch (e) {
         console.error(`[rules] ${rule.id} failed: ${(e as Error).message}`);
@@ -1126,9 +1133,36 @@ export async function runRules(
     }),
   );
 
-  return results
-    .flat()
-    .sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+  const raised = results.flat();
+
+  // §5.2: "an insight with no owner in this map is a configuration error, shown to
+  // Abhuday as such, and never left sitting unowned in a queue." Reported once, naming
+  // the desks, rather than as a silent null on every finding that routes to one.
+  const unbound = unboundDomains(owners);
+  if (unbound.length > 0 && raised.some((f) => !f.ownerEmail)) {
+    raised.push({
+      ruleId: 'owner_map_incomplete',
+      ruleVersion: 1,
+      section: 'analytics',
+      kind: 'risk',
+      severity: 'high',
+      scope: 'standing',
+      test: 'Insight domains with nobody assigned to them',
+      subject: 'owner-map-incomplete',
+      // Unowned itself, and it has to be: this is the finding that says nobody is bound,
+      // so binding it to somebody would be answering its own complaint.
+      ownerEmail: null,
+      evidence: {
+        unassignedDomains: unbound,
+        findingsWithNoOwner: raised.filter((f) => !f.ownerEmail).length,
+        basis: 'the domains some rule routes to that nobody is bound to',
+      },
+      proposedAction:
+        'Bind each insight domain to a person in Settings, so findings arrive on a desk instead of in a queue nobody owns.',
+    });
+  }
+
+  return raised.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────────────

@@ -19,8 +19,11 @@ test('every status has a label', () => {
   }
 });
 
+// D8: "Reviewed is one state — it does not distinguish Abhuday's review from Shweta's
+// approval." §5.1 makes them two acts by two people, so the path has two steps before any
+// work is handed out.
 test('the happy path runs end to end', () => {
-  const path = ['proposed', 'reviewed', 'assigned', 'in_progress', 'done'] as const;
+  const path = ['proposed', 'reviewed', 'approved', 'assigned', 'in_progress', 'done'] as const;
   for (let i = 0; i < path.length - 1; i++) {
     assert.ok(canTransition(path[i], path[i + 1]), `${path[i]} → ${path[i + 1]}`);
   }
@@ -31,6 +34,20 @@ test('the happy path runs end to end', () => {
 test('nothing jumps straight from proposed to done', () => {
   assert.equal(canTransition('proposed', 'done'), false);
   assert.equal(canTransition('reviewed', 'done'), false);
+});
+
+// The point of the second step: a review is not a signature, so work cannot be handed out
+// on one. Skipping approval would make the two states decorative.
+test('a reviewed finding cannot be assigned without being approved', () => {
+  assert.equal(canTransition('reviewed', 'assigned'), false);
+  assert.ok(canTransition('reviewed', 'approved'));
+  assert.ok(canTransition('approved', 'assigned'));
+});
+
+// Withdrawing a signature. An approved finding sent back is waiting on the approver
+// again, and lib/insight-actions.ts clears the approver's name when it goes.
+test('approval can be withdrawn back to reviewed', () => {
+  assert.ok(canTransition('approved', 'reviewed'));
 });
 
 test('a finding can be dismissed from any open state', () => {
@@ -52,7 +69,9 @@ test('done is terminal apart from reopening the work', () => {
 
 test('work can go back a step when it turns out to be someone else’s', () => {
   assert.ok(canTransition('in_progress', 'assigned'));
-  assert.ok(canTransition('assigned', 'reviewed'));
+  // Back to approved rather than to reviewed: reassigning work does not withdraw the
+  // signature that let it be handed out in the first place.
+  assert.ok(canTransition('assigned', 'approved'));
 });
 
 test('no status can transition to itself', () => {

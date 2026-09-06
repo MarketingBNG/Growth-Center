@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { canonicalEmail } from './roles.ts';
 import {
+  APPROVAL_STATE,
   STATUS_LABELS,
   canTransition,
   isInsightStatus,
@@ -97,6 +98,18 @@ export async function setInsightStatus(
       reviewNote: change.reviewNote?.trim() || undefined,
       reviewedByEmail: actorEmail,
       reviewedAt: now,
+      // The second signature, written only by the act that is a signature. Recording the
+      // approver on every subsequent transition would let assigning a finding overwrite
+      // who signed it, and the two-step exists so both names stay on the record.
+      //
+      // Cleared on the way back: a finding returned to `reviewed` has had its approval
+      // withdrawn, and leaving the name behind would say Shweta approved something that
+      // is once again waiting for her.
+      ...(change.to === APPROVAL_STATE
+        ? { approvedByEmail: actorEmail, approvedAt: now }
+        : change.to === 'reviewed' || change.to === 'proposed'
+          ? { approvedByEmail: null, approvedAt: null }
+          : {}),
       dismissedAt: change.to === 'dismissed' ? now : null,
     },
   });

@@ -1494,7 +1494,7 @@ model AiInsight {
   /// §20.1: "Every insight becomes an action item with an owner, or it is dismissed with
   /// a written reason. No orphan commentary."
 
-  /// proposed | reviewed | assigned | in_progress | done | dismissed.
+  /// proposed | reviewed | approved | assigned | in_progress | done | dismissed.
   ///
   /// The single truth about where a finding stands. `dismissedAt` is kept as the
   /// timestamp for the dismissed state and is only ever written beside this column, by
@@ -1522,6 +1522,17 @@ model AiInsight {
   reviewNote      String?
   reviewedByEmail String?
   reviewedAt      DateTime?
+
+  /// The second signature. D8: "Reviewed is one state — it does not distinguish Abhuday's
+  /// review from Shweta's approval."
+  ///
+  /// Kept apart from `reviewedByEmail` rather than overwriting it, because the two-step
+  /// exists precisely so that both names are on the record. One column holding whoever
+  /// touched it last would answer "who approved this?" with the reviewer's name on any
+  /// finding sent back and re-reviewed, which is the question the second step was added
+  /// to make answerable.
+  approvedByEmail String?
+  approvedAt      DateTime?
 
   dismissedAt DateTime?
 

@@ -5,7 +5,12 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
-import { STATUS_LABELS, nextStatuses, type InsightStatus } from '@/lib/insight-lifecycle';
+import {
+  APPROVAL_STATE,
+  STATUS_LABELS,
+  nextStatuses,
+  type InsightStatus,
+} from '@/lib/insight-lifecycle';
 
 /**
  * Moving one finding along, with whatever that move requires.
@@ -21,11 +26,13 @@ export function InsightAction({
   status,
   owners,
   currentOwner,
+  canApprove,
 }: {
   id: string;
   status: InsightStatus;
   owners: { email: string; name: string | null }[];
   currentOwner: string | null;
+  canApprove: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -34,7 +41,10 @@ export function InsightAction({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const options = nextStatuses(status);
+  // Approval is the one move that belongs to a single identity. Offered only to whoever
+  // holds it: the route refuses it regardless, and a button that always fails teaches
+  // people to ignore the row it sits on.
+  const options = nextStatuses(status).filter((to) => to !== APPROVAL_STATE || canApprove);
   const needsOwner = target === 'assigned' && !currentOwner;
   const needsNote = target === 'dismissed';
 

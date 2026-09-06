@@ -23,8 +23,11 @@ import { thresholds } from '@/lib/settings';
 import { ApiKeys } from './ApiKeys';
 import { Thresholds } from './Thresholds';
 import { MarketingRoster } from './MarketingRoster';
+import { InsightOwners } from './InsightOwners';
 import { marketingRoster } from '@/lib/roster';
 import { attributionCeiling } from '@/lib/attribution-ceiling';
+import { ownerBindings } from '@/lib/settings';
+import { assignableOwners } from '@/lib/insight-actions';
 import { fmtMoneyCompact } from '@/lib/format';
 import { CurrencySettings } from './CurrencySettings';
 import { VerifyEmail } from './VerifyEmail';
@@ -55,7 +58,7 @@ export default async function SettingsPage() {
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
-  const [keys, channels, pipelines, currency, audit, health, ceiling, limits, capacity, roster] = await Promise.all([
+  const [keys, channels, pipelines, currency, audit, health, ceiling, limits, capacity, roster, insightOwners, assignable] = await Promise.all([
     manageKeys
       ? db().apiKey.findMany({
           orderBy: { createdAt: 'desc' },
@@ -80,6 +83,8 @@ export default async function SettingsPage() {
     thresholds(),
     capacitySetting(),
     marketingRoster(),
+    ownerBindings(),
+    assignableOwners(),
   ]);
 
   const ai = aiStatus();
@@ -136,6 +141,32 @@ export default async function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               Reporting in <span className="font-medium text-foreground">{currency.reporting}</span>.
               Only an owner can change this.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* D7. Beside the roster because the two answer halves of one question: the roster
+          says whose debt is this team's, and this says which desk each finding lands on.
+          §5.2's own rule is that a finding with no owner here is a configuration error
+          shown to a person — so an unbound desk raises one rather than going quiet. */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle>Who each finding goes to</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Twelve of the sixteen rules produce findings with nobody on them. The desks are
+            fixed — paid-media findings belong to whoever runs paid media — and who sits at
+            each one is set here. Left blank, the rules say so instead of routing work to
+            nobody.
+          </p>
+        </CardHeader>
+        <CardContent>
+          {manageSettings ? (
+            <InsightOwners initial={insightOwners} owners={assignable} />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {Object.keys(insightOwners).length} of 8 desks have somebody on them. Only an
+              owner can change this.
             </p>
           )}
         </CardContent>

@@ -14,6 +14,7 @@
 export const INSIGHT_STATUSES = [
   'proposed',
   'reviewed',
+  'approved',
   'assigned',
   'in_progress',
   'done',
@@ -25,6 +26,7 @@ export type InsightStatus = (typeof INSIGHT_STATUSES)[number];
 export const STATUS_LABELS: Record<InsightStatus, string> = {
   proposed: 'Proposed',
   reviewed: 'Reviewed',
+  approved: 'Approved',
   assigned: 'Assigned',
   in_progress: 'In progress',
   done: 'Done',
@@ -46,12 +48,23 @@ export const STATUS_LABELS: Record<InsightStatus, string> = {
  */
 const TRANSITIONS: Record<InsightStatus, InsightStatus[]> = {
   proposed: ['reviewed', 'dismissed'],
-  reviewed: ['assigned', 'dismissed', 'proposed'],
-  assigned: ['in_progress', 'done', 'dismissed', 'reviewed'],
+  reviewed: ['approved', 'dismissed', 'proposed'],
+  approved: ['assigned', 'dismissed', 'reviewed'],
+  assigned: ['in_progress', 'done', 'dismissed', 'approved'],
   in_progress: ['done', 'assigned', 'dismissed'],
   done: ['assigned'],
   dismissed: ['proposed'],
 };
+
+/**
+ * The state only the approver may reach.
+ *
+ * Named here rather than checked by string at the route, because "who may approve" is a
+ * property of the lifecycle and the route is only where it is enforced. §5.1: Abhuday
+ * reviews, Shweta signs, and the two are not the same act — which was D8's whole
+ * complaint, that one `reviewed` state stood for both.
+ */
+export const APPROVAL_STATE: InsightStatus = 'approved';
 
 export function isInsightStatus(value: unknown): value is InsightStatus {
   return typeof value === 'string' && (INSIGHT_STATUSES as readonly string[]).includes(value);
@@ -69,6 +82,12 @@ export function nextStatuses(from: InsightStatus): InsightStatus[] {
  *  without listing the states by hand at every call site. */
 export function isOpen(status: InsightStatus): boolean {
   return status !== 'done' && status !== 'dismissed';
+}
+
+/** Waiting on a person to sign it: reviewed by the first-line reviewer and not yet
+ *  approved. The queue §12.1 puts in front of Shweta each morning. */
+export function awaitingApproval(status: InsightStatus): boolean {
+  return status === 'reviewed';
 }
 
 
