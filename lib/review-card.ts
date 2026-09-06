@@ -1,5 +1,6 @@
 import { db } from './prisma.ts';
 import { attributionSufficiency } from './attribution.ts';
+import { fmtMoneyCompact } from './format.ts';
 
 // §21.2 "How to read a review card" and §21.3 "Decision rules — what to approve, return
 // or escalate".
@@ -293,9 +294,21 @@ export async function canScale(now = new Date()): Promise<{ allowed: boolean; re
     };
   }
   if (percent < floor) {
+    // Whether "fix the data first" is advice or a dead end. Of the revenue with no
+    // channel, some belongs to a deal whose contact or company arrived as a channelled
+    // lead and can be inferred; the rest has no evidence anywhere in the CRM, and no
+    // amount of data entry will produce any. A refusal that cannot be satisfied should
+    // say so — a reader who believes the shortfall is fixable spends weeks on it, and one
+    // who discovers it is not learns to route around the refusal.
+    const ceiling = health.ceiling.ceilingPercent;
+    const reachable = ceiling !== null && ceiling >= floor;
+    const detail = reachable
+      ? 'Fix the data first — the ranking that would justify the scale is drawn from a fraction of the money.'
+      : `Attributing everything the CRM has evidence for would reach ${ceiling === null ? 'no' : `${ceiling.toFixed(1)}%`}, still short of the threshold: ${fmtMoneyCompact(health.ceiling.unreachable, health.ceiling.currency)} of revenue has no channel recorded anywhere. Judge a recent, properly captured window instead of this one.`;
+
     return {
       allowed: false,
-      reason: `§21.4: revenue attribution is ${percent.toFixed(1)}% against a ${floor}% threshold, so no scale decision may rest on the channel ranking. Fix the data first — the ranking that would justify the scale is drawn from a tenth of the money.`,
+      reason: `§21.4: revenue attribution is ${percent.toFixed(1)}% against a ${floor}% threshold, so no scale decision may rest on the channel ranking. ${detail}`,
     };
   }
   return { allowed: true, reason: `Revenue attribution is ${percent.toFixed(1)}%, above the ${floor}% threshold.` };

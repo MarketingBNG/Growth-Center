@@ -5,6 +5,7 @@ import { THRESHOLDS, parseThresholdValue } from './thresholds.ts';
 import { num, rate } from './calc.ts';
 import { TAGS, cached } from './cache.ts';
 import { rangeFor } from './range.ts';
+import { attributionCeiling, type AttributionCeiling } from './attribution-ceiling.ts';
 
 // How much of the book can actually be traced to a channel.
 //
@@ -209,8 +210,14 @@ export const SUFFICIENCY_WINDOW_DAYS = 365;
  */
 export async function attributionSufficiency(
   now = new Date(),
-): Promise<AttributionHealth & { windowDays: number }> {
+): Promise<AttributionHealth & { windowDays: number; ceiling: AttributionCeiling }> {
   const { current } = rangeFor(SUFFICIENCY_WINDOW_DAYS, now);
-  const health = await attributionHealth(current.from, current.to);
-  return { ...health, windowDays: SUFFICIENCY_WINDOW_DAYS };
+  // The ceiling comes with the answer, because "7.27% against 70%" and "70% is not
+  // reachable on this data" are different sentences and only the second one tells the
+  // reader what to do. See lib/attribution-ceiling.ts.
+  const [health, ceiling] = await Promise.all([
+    attributionHealth(current.from, current.to),
+    attributionCeiling(current.from, current.to),
+  ]);
+  return { ...health, windowDays: SUFFICIENCY_WINDOW_DAYS, ceiling };
 }

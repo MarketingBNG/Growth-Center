@@ -159,3 +159,42 @@ test('a standing finding is stored with no period, and renders as current state'
   const page = readFileSync('app/(app)/ai/page.tsx', 'utf8');
   assert.match(page, /if \(!from \|\| !to\) return 'current state';/);
 });
+
+// ── K1: what the inheritance can and cannot reach ────────────────────────────────────
+//
+// The manual's second priority is the deal inheriting Channel and Campaign_ID from its
+// converting lead: "this single automation moves deal coverage from 7.81% toward the
+// lead's 99.62% without anyone typing anything."
+//
+// Measured first, against the live database: of 927 deals that came from a lead, 880 have
+// a lead carrying a channel, and all 880 of those deals already have one. The automation
+// would newly attribute zero deals. The gap is that 7,160 of 8,087 deals never came from
+// a lead at all, and of the 6,609 with no channel exactly one carries a source string of
+// its own — so for the rest the CRM records nothing to inherit from.
+
+test('the ceiling separates a data-entry problem from an absent one', () => {
+  const source = readFileSync('lib/attribution-ceiling.ts', 'utf8');
+  // Three buckets, because "not attributed" covers two situations that call for opposite
+  // decisions: one is worth a week of data entry and the other cannot be fixed at all.
+  for (const bucket of ['attributed', 'inferable', 'unreachable']) {
+    assert.match(source, new RegExp(`${bucket}:`), bucket);
+  }
+});
+
+// A refusal nobody can satisfy teaches its readers to route around it. Live, the ceiling
+// over twelve months is 45.0% against a 70% threshold — so the honest sentence is not
+// "fix the data" but "this window cannot clear the bar; judge a captured one".
+test('a refusal that cannot be satisfied says so', () => {
+  const source = readFileSync('lib/review-card.ts', 'utf8');
+  assert.match(source, /const reachable = ceiling !== null && ceiling >= floor;/);
+  assert.match(source, /has no channel recorded anywhere/);
+  assert.match(source, /Fix the data first/);
+});
+
+// Dropped from every bucket rather than counted as zero in one: a missing exchange rate
+// would otherwise read as a coverage shortfall, which is the failure this whole module
+// exists to report accurately.
+test('revenue with no exchange rate is left out of every bucket', () => {
+  const source = readFileSync('lib/attribution-ceiling.ts', 'utf8');
+  assert.match(source, /if \(amount === null\) continue;/);
+});
