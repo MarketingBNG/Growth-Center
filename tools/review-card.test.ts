@@ -108,10 +108,14 @@ test('a stop proposal on a week of data is held, not refused', async () => {
 
 // The rule's version was already stored, and that is the half nobody argues about. What
 // changed silently was the wording.
+// Decided per finding, not per run: one narration can be rejected on its own by the
+// identifier check while the rest of the run stands, and a rejected one badged 'openai'
+// would claim a provenance it does not have.
 test('narrated insights carry the prompt version, and rule-written ones do not', () => {
   const source = readFileSync('lib/ai.ts', 'utf8');
   assert.ok(INSIGHTS_PROMPT_VERSION.length > 0);
-  assert.match(source, /promptVersion: narrated \? INSIGHTS_PROMPT_VERSION : null/);
+  assert.match(source, /promptVersion: f\.narrated \? INSIGHTS_PROMPT_VERSION : null/);
+  assert.match(source, /provider: f\.narrated \? 'openai' : 'rules'/);
 });
 
 // JSON.stringify preserves insertion order, so a rule building its evidence in a

@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { fingerprint, normaliseSubject, toResolve } from './insight-identity.ts';
 import { runRules, type RaisedFinding } from './insight-rules.ts';
 import { notifyNewFindings } from './insight-notify.ts';
+import { unsupportedIdentifiers } from './narration-check.ts';
 import type { Prisma } from './generated/prisma/client.ts';
 
 // AI insights over Growth Center's own data.
@@ -625,7 +626,7 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     }
   }
 
-  type Narrated = RaisedFinding & { title: string; body: string };
+  type Narrated = RaisedFinding & { title: string; body: string; narrated: boolean };
   const byFingerprint = new Map<string, Narrated>();
 
   for (const [index, finding] of raised.entries()) {
@@ -639,11 +640,30 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     }
     if (byFingerprint.has(key)) continue;
 
-    const narration = narrations.get(index);
+    // A narration that names a host or URL the finding never supplied is dropped, not
+    // stored. D1 was five SEO insights citing "usaindiancfo.com" against evidence reading
+    // usaindiacfo.com, and it was read as the SEO connection measuring the wrong website.
+    // Falling back to the rule's own wording costs prose and keeps the finding true.
+    const candidate = narrations.get(index);
+    let narration = candidate;
+    if (candidate) {
+      const invented = unsupportedIdentifiers(
+        `${candidate.title} ${candidate.body}`,
+        finding.evidence,
+      );
+      if (invented.length > 0) {
+        console.error(
+          `[insights] ${finding.ruleId} narration named ${invented.join(', ')}, not in its evidence; storing rule wording.`,
+        );
+        narration = undefined;
+      }
+    }
+
     byFingerprint.set(key, {
       ...finding,
       title: narration?.title ?? finding.test,
       body: narration?.body ?? describeEvidence(finding),
+      narrated: narration !== undefined,
     });
   }
 
@@ -674,8 +694,8 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     // 'rules' rather than 'openai' where the sentences are the rule's own. The badge on
     // the page is the reader's only clue whether a human-sounding sentence was written by
     // a model, and mislabelling that is worse than the plainer wording.
-    provider: narrated ? 'openai' : 'rules',
-    model: narrated ? MODEL : null,
+    provider: f.narrated ? 'openai' : 'rules',
+    model: f.narrated ? MODEL : null,
     subject: normaliseSubject(f.subject),
     ruleId: f.ruleId,
     ruleVersion: f.ruleVersion,
@@ -689,7 +709,7 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     // Appendix B. Null where the sentences are the rule's own — a prompt version on an
     // insight no prompt touched would be a false provenance, which is the failure these
     // two columns exist to prevent rather than to commit.
-    promptVersion: narrated ? INSIGHTS_PROMPT_VERSION : null,
+    promptVersion: f.narrated ? INSIGHTS_PROMPT_VERSION : null,
     // A hash of the figures the model was shown, so a body and the numbers it describes
     // can be shown to belong together — or shown not to. Re-runs are nightly and compute
     // fresh figures under the same fingerprint, so "the model wrote this about these
