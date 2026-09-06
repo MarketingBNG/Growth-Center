@@ -1,3 +1,9 @@
+// `Range` and `rangeFor` live in lib/range.ts now — lib/attribution.ts needs the same
+// window arithmetic and this module imports lib/attribution.ts. Re-exported because every
+// screen and half the library already ask this module for them, and moving a file should
+// not move a hundred import lines.
+export { rangeFor, type Range } from './range.ts';
+import { rangeFor, type Range } from './range.ts';
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
 import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from './kpi.ts';
@@ -23,7 +29,6 @@ export type { Kpi } from './kpi.ts';
 // The one place dashboard, marketing and analytics numbers come from. If a figure
 // appears on two pages it is computed here once, so the pages cannot disagree.
 
-export type Range = { from: Date; to: Date };
 
 /**
  * Blanks the change chip on any KPI whose data does not reach back into the period it is
@@ -169,24 +174,6 @@ async function comparableDeltas(cards: Kpi[], current: Range, previous: Range): 
 
     return { ...card, sources, previous: null, comparisonNote };
   });
-}
-
-/** A period and the equally-long period immediately before it, for deltas. */
-export function rangeFor(days: number, now = new Date()): { current: Range; previous: Range } {
-  const to = new Date(now);
-  to.setUTCHours(23, 59, 59, 999);
-  const from = new Date(to);
-  from.setUTCDate(from.getUTCDate() - (days - 1));
-  from.setUTCHours(0, 0, 0, 0);
-
-  const prevTo = new Date(from);
-  prevTo.setUTCDate(prevTo.getUTCDate() - 1);
-  prevTo.setUTCHours(23, 59, 59, 999);
-  const prevFrom = new Date(prevTo);
-  prevFrom.setUTCDate(prevFrom.getUTCDate() - (days - 1));
-  prevFrom.setUTCHours(0, 0, 0, 0);
-
-  return { current: { from, to }, previous: { from: prevFrom, to: prevTo } };
 }
 
 /** The equally-long period ending the instant before `range` starts. The comparison

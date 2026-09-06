@@ -1,7 +1,5 @@
 import { db } from './prisma.ts';
-import { attributionHealth } from './attribution.ts';
-import { thresholds } from './settings.ts';
-import { rangeFor } from './metrics.ts';
+import { attributionSufficiency } from './attribution.ts';
 
 // §21.2 "How to read a review card" and §21.3 "Decision rules — what to approve, return
 // or escalate".
@@ -277,16 +275,12 @@ export async function reviewCard(asset: AssetUnderReview): Promise<ReviewCard> {
  * budget screens need to check before offering the button, not only after it is pressed.
  */
 export async function canScale(now = new Date()): Promise<{ allowed: boolean; reason: string }> {
-  // Twelve months, matching the window the attribution card on Marketing reports over.
-  // A scale rule measured on a different period from the card that qualifies the ranking
-  // would let the two disagree about whether the data is good enough — which is the
-  // argument, not a detail of it.
-  const { current } = rangeFor(365, now);
-  const [health, limits] = await Promise.all([
-    attributionHealth(current.from, current.to),
-    thresholds(),
-  ]);
-  const floor = limits['attribution.threshold'];
+  // `attributionSufficiency` owns the window, and the coverage rule asks it the same
+  // question. D11 was this panel reporting 10.1% while the coverage insight beside it
+  // reported 7.27% — one idea, two numbers, because each measured its own period off the
+  // same arithmetic. Neither caller chooses a window any more.
+  const health = await attributionSufficiency(now);
+  const floor = health.threshold;
   const percent = health.revenue.percent;
 
   // Null is not a pass. A period with no revenue in it has not met an attribution

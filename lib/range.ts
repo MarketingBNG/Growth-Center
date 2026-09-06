@@ -64,3 +64,31 @@ export function customRange(params: Record<string, string | string[] | undefined
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return { from: start, to, label: `${iso(start)} – ${iso(end)}`, days: spanDays };
 }
+
+/**
+ * A period, as every metric function takes one.
+ *
+ * Here rather than in lib/metrics.ts because lib/attribution.ts needs the window
+ * arithmetic and lib/metrics.ts already imports lib/attribution.ts. Date maths has no
+ * business creating an import cycle, and a second copy of it in the other module is how
+ * two parts of one product come to disagree about where a year starts.
+ */
+export type Range = { from: Date; to: Date };
+
+/** A period and the equally-long period immediately before it, for deltas. */
+export function rangeFor(days: number, now = new Date()): { current: Range; previous: Range } {
+  const to = new Date(now);
+  to.setUTCHours(23, 59, 59, 999);
+  const from = new Date(to);
+  from.setUTCDate(from.getUTCDate() - (days - 1));
+  from.setUTCHours(0, 0, 0, 0);
+
+  const prevTo = new Date(from);
+  prevTo.setUTCDate(prevTo.getUTCDate() - 1);
+  prevTo.setUTCHours(23, 59, 59, 999);
+  const prevFrom = new Date(prevTo);
+  prevFrom.setUTCDate(prevFrom.getUTCDate() - (days - 1));
+  prevFrom.setUTCHours(0, 0, 0, 0);
+
+  return { current: { from, to }, previous: { from: prevFrom, to: prevTo } };
+}

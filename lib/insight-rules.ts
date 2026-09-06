@@ -2,7 +2,7 @@ import { Prisma } from './generated/prisma/client.ts';
 import { db } from './prisma.ts';
 import type { Thresholds } from './thresholds.ts';
 import { thresholds } from './settings.ts';
-import { attributionHealth } from './attribution.ts';
+import { attributionSufficiency } from './attribution.ts';
 import { lintSequence, summarise } from './outreach-lint.ts';
 import { envelopesFor, quarterOf } from './budget.ts';
 import { rate } from './calc.ts';
@@ -147,14 +147,21 @@ const daysAgo = (now: Date, days: number) => hoursAgo(now, days * 24);
 
 const attributionRule: Rule = {
   id: 'attribution_health_below_threshold',
-  scope: 'period',
+  // Standing, and it changed from `period` with D11. Whether the firm's revenue reaches a
+  // channel well enough to move money on is a fact about the data, not about the month
+  // the dashboard is showing — and while it was period-scoped this rule and the refusal
+  // panel quoted two different numbers for it on one screen.
+  scope: 'standing',
   version: 1,
   section: 'dashboard',
   severity: 'high',
   kind: 'risk',
   test: 'Share of revenue that reaches a channel, against the workspace threshold',
   async run(ctx) {
-    const health = await attributionHealth(ctx.from, ctx.to);
+    // Not ctx.from/ctx.to. The window is part of the definition and belongs to
+    // `attributionSufficiency`, which §21.4's refusal reads from too, so the two cannot
+    // disagree about the answer or the figure under it.
+    const health = await attributionSufficiency(ctx.now);
     if (health.sufficient !== false) return [];
     return [
       {
@@ -171,10 +178,17 @@ const attributionRule: Rule = {
           leadsWithAnyChannelPercent: round(health.leads.percent),
           thresholdPercent: health.threshold,
           currency: health.currency,
-          basis: 'coverage across the whole workspace, not one channel',
+          // Stated because the rule no longer measures the screen's period, and a
+          // coverage figure without its window is not checkable against anything.
+          measuredOverDays: health.windowDays,
+          basis: 'coverage across the whole workspace over the last 12 months, not one channel',
         },
+        // D6: right diagnosis, wrong field. Lead_Source is the lead's, and setting it on
+        // the deal by hand at close will not happen across 967 open deals. The deal
+        // inherits Channel and Campaign_ID at conversion instead, and Deal_Type is what
+        // stops a renewal reading as unattributed new business.
         proposedAction:
-          'Set Lead_Source on the deal record at close, so revenue inherits a channel instead of only the lead that never existed.',
+          'Have the deal inherit Channel and Campaign_ID from its converting lead automatically, and record Deal_Type, so revenue carries a channel without anyone typing one.',
       },
     ];
   },

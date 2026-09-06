@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 
 import {
   DEFAULT_THRESHOLD,
+  SUFFICIENCY_WINDOW_DAYS,
   coverageCaveat,
   parseThreshold,
   type AttributionHealth,
@@ -90,4 +92,40 @@ test('nothing to measure is not a failure', () => {
 test('the caveat says what it is safe to do with the ranking', () => {
   const text = coverageCaveat(health(), money) ?? '';
   assert.match(text, /not a basis for moving budget/);
+});
+
+// ── D11: one window behind the word "sufficient" ─────────────────────────────────────
+//
+// The refusal panel reported 10.1% against a 70% threshold while the coverage insight on
+// the same screen reported 7.27%. Both read `attributionHealth`, so the arithmetic was
+// never in dispute — each picked its own period. These lock the fix in the two places
+// that drifted, because the failure is a product one: a partner reads two numbers for one
+// idea and stops believing either.
+
+test('the sufficiency window is a definition, not a caller’s choice', () => {
+  const source = readFileSync('lib/attribution.ts', 'utf8');
+  assert.equal(SUFFICIENCY_WINDOW_DAYS, 365);
+  assert.match(source, /rangeFor\(SUFFICIENCY_WINDOW_DAYS, now\)/);
+});
+
+test('§21.4’s refusal asks the shared function, and picks no window of its own', () => {
+  const source = readFileSync('lib/review-card.ts', 'utf8');
+  assert.match(source, /await attributionSufficiency\(now\)/);
+  assert.doesNotMatch(source, /rangeFor\(/);
+});
+
+test('the coverage rule asks the same function, and states the window it got', () => {
+  const source = readFileSync('lib/insight-rules.ts', 'utf8');
+  assert.match(source, /await attributionSufficiency\(ctx\.now\)/);
+  // Not ctx.from/ctx.to: that was the drift.
+  assert.doesNotMatch(source, /attributionSufficiency\(ctx\.from/);
+  assert.match(source, /measuredOverDays: health\.windowDays/);
+});
+
+// D6. "Right diagnosis, wrong field" — Lead_Source belongs to the lead, and nobody is
+// going to set it by hand on 967 open deals at close.
+test('the coverage rule proposes inheritance, not a field nobody will type', () => {
+  const source = readFileSync('lib/insight-rules.ts', 'utf8');
+  assert.doesNotMatch(source, /Set Lead_Source on the deal/);
+  assert.match(source, /inherit Channel and Campaign_ID/);
 });

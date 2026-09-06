@@ -4,6 +4,7 @@ import { currencySettings, thresholds } from './settings.ts';
 import { THRESHOLDS, parseThresholdValue } from './thresholds.ts';
 import { num, rate } from './calc.ts';
 import { TAGS, cached } from './cache.ts';
+import { rangeFor } from './range.ts';
 
 // How much of the book can actually be traced to a channel.
 //
@@ -179,3 +180,37 @@ export function coverageCaveat(
   return `Built on ${money(covered)} of ${money(total)} — ${Math.round(percent ?? 0)}% of revenue reaches a channel, below the ${health.threshold}% this workspace requires. Treat the ranking as a hint, not a basis for moving budget.`;
 }
 
+
+/**
+ * How much history the sufficiency question is asked over.
+ *
+ * D11: the refusal panel said attribution was 10.1% against a 70% threshold while the
+ * coverage insight two cards away said 7.27%. Both read `attributionHealth`, so the
+ * arithmetic was never in dispute — `canScale` measured twelve months and the rule
+ * measured whatever period the screen was showing. One idea, two numbers, on one screen.
+ *
+ * A window is part of a definition, not a caller's choice. Whether the firm's revenue
+ * reaches a channel well enough to move money on is a standing fact about the data, and a
+ * standing fact cannot be truer in March than over the year — so it is asked once, over
+ * twelve months, which is also what the attribution card on Marketing reports.
+ *
+ * Period-scoped questions still take their own window: `attributionHealth(from, to)`
+ * remains the way to ask what coverage was during a quarter. What may not vary is the
+ * window behind the word "sufficient".
+ */
+export const SUFFICIENCY_WINDOW_DAYS = 365;
+
+/**
+ * Is attribution good enough, right now, to rest a spend decision on?
+ *
+ * The one function §21.4's refusal and the coverage rule both quote, so the two cannot
+ * disagree about the answer or about the number underneath it. Callers that need to say
+ * which period they measured read `windowDays` off the result rather than assuming it.
+ */
+export async function attributionSufficiency(
+  now = new Date(),
+): Promise<AttributionHealth & { windowDays: number }> {
+  const { current } = rangeFor(SUFFICIENCY_WINDOW_DAYS, now);
+  const health = await attributionHealth(current.from, current.to);
+  return { ...health, windowDays: SUFFICIENCY_WINDOW_DAYS };
+}
