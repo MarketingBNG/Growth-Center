@@ -129,3 +129,33 @@ test('the coverage rule proposes inheritance, not a field nobody will type', () 
   assert.doesNotMatch(source, /Set Lead_Source on the deal/);
   assert.match(source, /inherit Channel and Campaign_ID/);
 });
+
+// ── D3: a finding says what window it describes ──────────────────────────────────────
+//
+// The snapshot was fixed at 90 days while every other screen defaulted to 30, so the AI
+// page answered questions about a quarter under a header the reader had set to a month.
+
+test('the snapshot follows the period on screen, and travels to the run', () => {
+  const page = readFileSync('app/(app)/ai/page.tsx', 'utf8');
+  assert.match(page, /growthContext\(days\)/);
+  assert.doesNotMatch(page, /growthContext\(90\)/);
+  const route = readFileSync('app/api/ai/insights/route.ts', 'utf8');
+  assert.match(route, /growthContext\(days\)/);
+});
+
+// A window offered by the picker, not a free number: this decides what a stored finding
+// is a statement about.
+test('the run refuses a window the picker does not offer', () => {
+  const route = readFileSync('app/api/ai/insights/route.ts', 'utf8');
+  assert.match(route, /RANGE_OPTIONS/);
+  assert.match(route, /DAYS\.includes\(d\)/);
+});
+
+// Stamping the run's window on "1,637 customers have nothing logged for 90 days" would
+// claim the count belongs to a month it was merely computed during.
+test('a standing finding is stored with no period, and renders as current state', () => {
+  const ai = readFileSync('lib/ai.ts', 'utf8');
+  assert.match(ai, /periodStart: f\.scope === 'period' \? current\.from : null/);
+  const page = readFileSync('app/(app)/ai/page.tsx', 'utf8');
+  assert.match(page, /if \(!from \|\| !to\) return 'current state';/);
+});

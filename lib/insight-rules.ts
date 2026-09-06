@@ -89,6 +89,10 @@ export type RuleSection =
 
 export type RuleSeverity = 'critical' | 'high' | 'medium' | 'info';
 
+/** Whether a rule measures a period's activity or a condition holding right now. See the
+ *  note on `Rule.scope`, which is where the distinction is argued. */
+export type RuleScope = 'period' | 'standing';
+
 /** What a rule returns when it fires. No prose: the model writes that from `evidence`. */
 export type Finding = {
   /** Stable within a rule, so one rule may raise several distinct findings — task debt
@@ -129,7 +133,7 @@ export type Rule = {
    *
    * `standing` is a claim, and the claim is that firing on any window is correct.
    */
-  scope: 'period' | 'standing';
+  scope: RuleScope;
   run: (ctx: RuleContext) => Promise<Finding[]>;
 };
 
@@ -1028,6 +1032,9 @@ export type RaisedFinding = Finding & {
   kind: InsightKind;
   severity: RuleSeverity;
   test: string;
+  /** Carried out of the rule so a stored finding can say what window it describes — or
+   *  say that it describes no window at all. See the note on `Rule.scope`. */
+  scope: RuleScope;
 };
 
 /**
@@ -1061,6 +1068,7 @@ export async function runRules(
           kind: rule.kind,
           severity: f.severity ?? rule.severity,
           test: rule.test,
+          scope: rule.scope,
         }));
       } catch (e) {
         console.error(`[rules] ${rule.id} failed: ${(e as Error).message}`);

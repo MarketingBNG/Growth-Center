@@ -1,5 +1,6 @@
 import { Brain } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
+import { RangePicker } from '@/components/patterns/range-picker';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { TABLES } from '@/lib/ai-tools';
 import { ageLabel } from '@/lib/insight-identity';
 import { STATUS_LABELS, isInsightStatus } from '@/lib/insight-lifecycle';
 import { assignableOwners } from '@/lib/insight-actions';
+import { rangeParam } from '@/lib/range';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { InsightAction } from './InsightAction';
 import { AskBox } from './AskBox';
@@ -19,6 +21,22 @@ export const metadata = { title: 'AI Insights · Growth Center' };
 
 const READABLE_TABLE_COUNT = Object.keys(TABLES).length;
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * The window a finding describes, or that it describes none.
+ *
+ * UTC, like the range picker's own label, because that is the window the rules actually
+ * queried — anything else is a day out for half the readers.
+ */
+function periodLabel(from: Date | null, to: Date | null): string {
+  if (!from || !to) return 'current state';
+  const day = (d: Date) => `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+  return from.getUTCFullYear() === to.getUTCFullYear()
+    ? `${day(from)} – ${day(to)}, ${to.getUTCFullYear()}`
+    : `${day(from)}, ${from.getUTCFullYear()} – ${day(to)}, ${to.getUTCFullYear()}`;
+}
+
 const KIND_TONE = {
   opportunity: 'success',
   risk: 'danger',
@@ -26,7 +44,15 @@ const KIND_TONE = {
   recommendation: 'info',
 } as const;
 
-export default async function AiPage() {
+// D3: the snapshot was fixed at 90 days while every other screen defaulted to 30, so the
+// page answered questions about a quarter under a header the reader had set to a month.
+// The window is the reader's now, and it travels to the generate button and the route, so
+// the findings are computed over the period on screen rather than over a constant.
+export default async function AiPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!hasDb()) {
     return (
       <>
@@ -36,9 +62,11 @@ export default async function AiPage() {
     );
   }
 
+  const { value: rangeValue, days } = rangeParam(await searchParams);
+
   const status = aiStatus();
   const [context, stored, owners] = await Promise.all([
-    growthContext(90),
+    growthContext(days),
     // Dismissed findings are listed too, below the rest. Hiding them entirely was the
     // old intent, but nothing could dismiss anything, so nobody discovered that a
     // dismissal was unreviewable — and a judgement call with no way back is worse than no
@@ -55,7 +83,7 @@ export default async function AiPage() {
       select: {
         id: true, kind: true, title: true, body: true, provider: true, confidence: true,
         dismissedAt: true, firstSeenAt: true, status: true, ownerEmail: true,
-        reviewNote: true, proposedAction: true,
+        reviewNote: true, proposedAction: true, periodStart: true, periodEnd: true,
       },
     }),
     assignableOwners(),
@@ -70,6 +98,7 @@ export default async function AiPage() {
       <PageHeader
         title="AI Insights"
         subtitle="Questions answered from Growth Center's own numbers — never from anything else."
+        actions={<RangePicker current={rangeValue} />}
       />
 
       {status.configured ? (
@@ -155,7 +184,7 @@ export default async function AiPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-2">
-            <GenerateInsightsButton configured={status.configured} existing={stored.length} />
+            <GenerateInsightsButton configured={status.configured} existing={stored.length} days={days} />
 
             {stored.length === 0 ? (
               <p className="text-xs text-muted-foreground">
@@ -198,6 +227,11 @@ export default async function AiPage() {
                     {[
                       STATUS_LABELS[state],
                       age,
+                      // D3: what window this finding is a statement about, from what the
+                      // rule measured rather than from what the screen happens to show.
+                      // A standing finding carries no period and says so — it describes a
+                      // condition holding now, not a month's activity.
+                      periodLabel(i.periodStart, i.periodEnd),
                       i.ownerEmail ? `${ownerName?.name ?? i.ownerEmail}` : null,
                       i.reviewNote,
                     ]

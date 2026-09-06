@@ -703,8 +703,12 @@ export async function generateInsights(context: GrowthContext): Promise<Generate
     severity: f.severity,
     proposedAction: f.proposedAction,
     evidence: f.evidence as Prisma.InputJsonValue,
-    periodStart: current.from,
-    periodEnd: current.to,
+    // Null for a standing finding, which is the honest answer. Stamping the run's window
+    // on "1,637 customers have nothing logged for 90 days" would say the count belongs to
+    // a month it was merely computed during — D3 in miniature, and the reason the reader
+    // could not tell what any figure covered.
+    periodStart: f.scope === 'period' ? current.from : null,
+    periodEnd: f.scope === 'period' ? current.to : null,
     context: { periodDays: context.periodDays },
     // Appendix B. Null where the sentences are the rule's own — a prompt version on an
     // insight no prompt touched would be a false provenance, which is the failure these

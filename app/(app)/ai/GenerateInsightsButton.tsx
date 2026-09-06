@@ -10,7 +10,18 @@ import { api } from '@/lib/fetcher';
 // something to replace — "Generate" over existing findings reads as though it would add to
 // them.
 
-export function GenerateInsightsButton({ configured, existing }: { configured: boolean; existing: number }) {
+// `days` is the window the page is showing. Sent with the run so the findings are
+// computed over the period the reader chose — generating a quarter's findings under a
+// month's header was D3.
+export function GenerateInsightsButton({
+  configured,
+  existing,
+  days,
+}: {
+  configured: boolean;
+  existing: number;
+  days: number;
+}) {
   const router = useRouter();
   // The findings are rendered by the server component around this button, so a run is not
   // finished when the request returns — it is finished when the refreshed page has painted.
@@ -28,7 +39,7 @@ export function GenerateInsightsButton({ configured, existing }: { configured: b
     try {
       const result = await api<{ written: number; usage?: { input: number; output: number } }>(
         '/api/ai/insights',
-        { method: 'POST', json: {} },
+        { method: 'POST', json: { days } },
       );
       startTransition(() => router.refresh());
       setDone(result);
