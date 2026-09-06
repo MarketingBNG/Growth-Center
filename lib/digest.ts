@@ -292,7 +292,7 @@ export type DigestResult = {
  * digest that went out into one that failed, nor bury the real SMTP error behind a write
  * error about the log — the same argument the sync run rows make.
  */
-async function logDelivery(entry: {
+export async function logDelivery(entry: {
   report: string;
   channel: string;
   recipient: string;
