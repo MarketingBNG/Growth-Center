@@ -146,7 +146,7 @@ export async function insightHealth(from: Date, to: Date): Promise<InsightHealth
         healthy: 'Stable, non-zero',
         drift: 'Zero means the model has stopped admitting uncertainty — a defect, not a win.',
         unavailable:
-          'Nothing checks claims yet. §20.4 pre-review needs a controlled corpus, which does not exist, so there is nothing to defer on — this is not a zero.',
+          'Nothing checks claims yet. Pre-review needs a controlled corpus, which does not exist, so there is nothing to defer on — this is not a zero.',
       },
       {
         key: 'latency',

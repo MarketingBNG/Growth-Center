@@ -300,8 +300,8 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
           kind: 'note',
           title: 'What this pack cannot tell you',
           body:
-            'Two of the seven things §17.1 asks for are missing, and they are missing from the ' +
-            'data rather than from this report. CPQL by channel has no numerator: this CRM stamps ' +
+            'Two of the seven things this pack is meant to carry are missing, and they are missing ' +
+            'from the data rather than from this report. CPQL by channel has no numerator: this CRM stamps ' +
             'a lead qualified only when it converts, so the consultation-booked event the figure ' +
             'divides by does not exist anywhere in the system, and per-channel spend exists for ' +
             'one paid channel. Content against calendar has nothing to compare: the content table ' +

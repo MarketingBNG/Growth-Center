@@ -440,7 +440,14 @@ export default async function SettingsPage() {
                 <TBody>
                   {audit.map((e) => (
                     <TR key={e.id}>
-                      <TD className="whitespace-nowrap text-muted-foreground">
+                      {/* The exact time on hover. Four separate connect events inside one
+                          day all read "10d ago", so the log looked like it was repeating
+                          itself when it was recording four real attempts — which is the
+                          part somebody debugging a flapping integration needs to see. */}
+                      <TD
+                        className="whitespace-nowrap text-muted-foreground"
+                        title={e.createdAt.toISOString()}
+                      >
                         {fmtRelative(e.createdAt)}
                       </TD>
                       <TD className="whitespace-nowrap font-medium">

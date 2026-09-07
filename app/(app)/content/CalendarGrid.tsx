@@ -111,14 +111,22 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                               />
                             ) : null}
                           </span>
-                          <span className="mt-1 flex flex-wrap items-center gap-1">
+                          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
                             {/* The studio's own word for the asset where it gave one —
                                 "CAROUSEL - 5 slides" says more than "social". */}
-                            <Badge tone={FORMAT_TONE[piece.format] ?? 'neutral'}>
+                            {/* max-w-full/truncate because the studio's shape strings run
+                                long — "CAROUSEL - 5 slides" is wider than a day cell, and
+                                a Badge is whitespace-nowrap by default, so it spilled out
+                                of the grid instead of being cut. */}
+                            <Badge
+                              tone={FORMAT_TONE[piece.format] ?? 'neutral'}
+                              className="max-w-full truncate"
+                              title={piece.assetShape ?? piece.format.replaceAll('_', ' ')}
+                            >
                               {piece.assetShape ?? piece.format.replaceAll('_', ' ')}
                             </Badge>
                             {piece.authorEmail ? (
-                              <span className="text-[10px] text-muted-foreground">
+                              <span className="max-w-full truncate text-[10px] text-muted-foreground">
                                 {piece.authorEmail.split('@')[0]}
                               </span>
                             ) : null}

@@ -32,7 +32,7 @@ export const THRESHOLDS = {
     label: 'Deal goes stale after',
     unit: 'days',
     default: 30,
-    hint: 'An open deal with no logged activity for this long. §20.5 names 30 or 60; 30 is the earlier warning.',
+    hint: 'An open deal with no logged activity for this long. The manual names 30 or 60; 30 is the earlier warning.',
   },
   'leads.slaHours': {
     label: 'First-contact SLA',
@@ -50,7 +50,7 @@ export const THRESHOLDS = {
     label: 'Sync considered stale after',
     unit: 'hours',
     default: 24,
-    hint: '§20.5 names 24 hours. The nightly job runs once, so anything past this means a run was missed or failed.',
+    hint: 'The manual names 24 hours. The nightly job runs once, so anything past this means a run was missed or failed.',
   },
   'sync.failedHours': {
     label: 'Sync considered broken after',
@@ -62,19 +62,19 @@ export const THRESHOLDS = {
     label: 'Duplicate pairs waiting before it is raised',
     unit: 'pairs',
     default: 25,
-    hint: '§8’s monthly rule: "duplicate candidates above threshold". A handful is a morning’s work; a backlog means nobody is working the queue and the customer count is drifting.',
+    hint: 'The monthly rule: "duplicate candidates above threshold". A handful is a morning’s work; a backlog means nobody is working the queue and the customer count is drifting.',
   },
   'crm.partnerSilentDays': {
     label: 'Referral partner silent for',
     unit: 'days',
     default: 60,
-    hint: '§8.5 names 60. Measured from the last recorded contact, or from when the partner was added where there has never been one — a partner entered six months ago and never rung is exactly the case worth raising.',
+    hint: 'The manual names 60. Measured from the last recorded contact, or from when the partner was added where there has never been one — a partner entered six months ago and never rung is exactly the case worth raising.',
   },
   'leads.qualityFloor': {
     label: 'Lead quality floor',
     unit: 'score',
     default: 30,
-    hint: '§7.3: "campaigns whose lead quality median falls below floor". A median, so one bad week of traffic does not trip it — and a source below this is producing leads nobody can work.',
+    hint: '"Campaigns whose lead quality median falls below floor". A median, so one bad week of traffic does not trip it — and a source below this is producing leads nobody can work.',
   },
   'seo.highSeverityIssues': {
     label: 'Pages with a serious speed fault before it is raised',
@@ -116,13 +116,13 @@ export const THRESHOLDS = {
     label: 'Decision SLA on a finding',
     unit: 'hours',
     default: 24,
-    hint: '§21.6 wants time from insight to approval under 24 hours. Findings decided inside this count as on time.',
+    hint: 'The manual wants time from insight to approval under 24 hours. Findings decided inside this count as on time.',
   },
   'marketing.pacingTolerance': {
     label: 'Budget pacing tolerance',
     unit: '%',
     default: 15,
-    hint: '§20.5 says ±15% of plan month to date. Spend outside this band either side is off pace.',
+    hint: 'The manual says ±15% of plan month to date. Spend outside this band either side is off pace.',
   },
 } as const;
 

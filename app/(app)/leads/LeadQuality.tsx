@@ -32,7 +32,7 @@ export async function LeadQuality({ window }: { window: { from: Date; to: Date }
         <CardHeader>
           <CardTitle>Cost per lead by channel</CardTitle>
           <p className="text-xs text-muted-foreground">
-            §7.1. The blended cost per lead has been taken off the card row above: it divided
+            The blended cost per lead has been taken off the card row above: it divided
             all paid spend by all leads however they arrived, most of them referrals and
             inbound, so it read as the price of a paid lead and was not. Nobody can buy
             blended. Spend excludes the recruitment campaigns — see the note on Marketing.
@@ -81,7 +81,7 @@ export async function LeadQuality({ window }: { window: { from: Date; to: Date }
         <CardHeader>
           <CardTitle>Lead mix by segment</CardTitle>
           <p className="text-xs text-muted-foreground">
-            §7.4, read from the answer each person gave on the lead form rather than guessed
+            Read from the answer each person gave on the lead form rather than guessed
             from a name. {fmtNumber(segments.known)} of {fmtNumber(segments.total)} leads said
             what kind of business they are; the rest arrived through a chat thread that never
             asked.
@@ -119,7 +119,7 @@ export async function LeadQuality({ window }: { window: { from: Date; to: Date }
         <CardHeader>
           <CardTitle>Why leads were lost</CardTitle>
           <p className="text-xs text-muted-foreground">
-            §7.6, read from the CRM&rsquo;s own status word. Shares are of the losses that give
+            Read from the CRM&rsquo;s own status word. Shares are of the losses that give
             a reason, not of all losses — measured over the whole set, &ldquo;no reason
             given&rdquo; would be reported as the firm&rsquo;s main reason for losing, which is
             true and useless.

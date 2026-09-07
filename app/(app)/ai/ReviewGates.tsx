@@ -29,7 +29,7 @@ export async function ReviewGates() {
       <CardHeader>
         <CardTitle>What cannot be approved today</CardTitle>
         <p className="text-xs text-muted-foreground">
-          §21.4. These are refusals, not warnings — the app applies them whether or not this
+          These are refusals, not warnings — the app applies them whether or not this
           panel is open.
         </p>
       </CardHeader>
@@ -47,7 +47,7 @@ export async function ReviewGates() {
               people the firm already knows
             </p>
             <p className="mt-0.5 text-muted-foreground">
-              §12.5: a cold list must pass the suppression check against clients and referral
+              A cold list must pass the suppression check against clients and referral
               partners. A client receiving a cold pitch is a relationship event, and the person
               who notices is the client. Signing one of these off is refused until they are
               removed — or until the sequence says it is meant for clients.
@@ -75,7 +75,7 @@ export async function ReviewGates() {
               complete registry row
             </p>
             <p className="mt-0.5 text-muted-foreground">
-              §21.4: no campaign may be approved without a row naming its objective, segment,
+              No campaign may be approved without a row naming its objective, segment,
               service line and landing page. The sync fills the objective; the landing page is
               entered by hand.
             </p>

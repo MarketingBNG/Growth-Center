@@ -34,7 +34,7 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
           <CardHeader>
             <CardTitle>What an account is worth</CardTitle>
             <p className="text-xs text-muted-foreground">
-              §8.3. The average moves with one engagement; the median says what a client is
+              The average moves with one engagement; the median says what a client is
               actually worth.
             </p>
           </CardHeader>
@@ -71,7 +71,7 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
           <CardHeader>
             <CardTitle>Engagements and lifecycle debt</CardTitle>
             <p className="text-xs text-muted-foreground">
-              §8.2. The one-off / retainer split is read from the deal-name suffixes the firm
+              The one-off / retainer split is read from the deal-name suffixes the firm
               already writes — it has been in the data all along and nothing had grouped by it.
             </p>
           </CardHeader>

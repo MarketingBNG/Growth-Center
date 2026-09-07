@@ -63,7 +63,7 @@ export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[
         <div>
           <CardTitle>Referral partners</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            §8.5. The referral channel carries 217 leads and the person who sent each one is
+            The referral channel carries 217 leads and the person who sent each one is
             recorded, where it is recorded at all, as free text in a source string — &ldquo;Ref by
             NG&rdquo;. That cannot be counted, thanked, or asked again.
             {partners.length > 0

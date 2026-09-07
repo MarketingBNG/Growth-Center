@@ -24,7 +24,7 @@ export async function OwnerScorecard({ window }: { window: { from: Date; to: Dat
       <CardHeader>
         <CardTitle>Owner scorecard</CardTitle>
         <p className="text-xs text-muted-foreground">
-          §7.5. What each person received and what they did with it, over this period. Rates are
+          What each person received and what they did with it, over this period. Rates are
           against every lead received, not against the ones that were touched — excluding the
           untouched is what made the median response time look healthy while most leads had never
           been contacted at all.
