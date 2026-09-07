@@ -2,7 +2,13 @@ import { db } from './prisma.ts';
 import { csvDocument, csvParse, csvRow } from './csv.ts';
 import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from './enums.ts';
 import { COMPANY_SEGMENTS } from './company-facts.ts';
-import { FORMATS, SERVICE_LINES, TOPIC_CLUSTERS, type ContentFormat } from './content-fields.ts';
+import {
+  FORMATS,
+  MAX_BRIEF,
+  SERVICE_LINES,
+  TOPIC_CLUSTERS,
+  type ContentFormat,
+} from './content-fields.ts';
 
 // The content calendar, as a month rather than a pipeline.
 //
@@ -345,10 +351,26 @@ const fromVocabulary = <T extends string>(list: readonly T[], value: string): T 
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+
 const clamp = (value: string, max: number): string | null => {
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, max) : null;
 };
+
+/**
+ * Tags from one cell.
+ *
+ * Split on whitespace as well as the usual separators, because a hashtag column is
+ * written "#LaborDay #USIndia #CrossBorderBusiness" and splitting only on commas would
+ * store that as a single 39-character tag.
+ */
+export function readTags(value: string): string[] {
+  return value
+    .split(/[;,|\s]+/)
+    .map((t) => t.trim().replace(/^#/, '').slice(0, 40))
+    .filter(Boolean)
+    .slice(0, 20);
+}
 
 export type CalendarRow = {
   publishDate: Date;
@@ -425,11 +447,7 @@ export function readRow(
   const authorEmail = EMAIL.test(author) ? author.toLowerCase() : null;
   const designer = text('designerEmail');
 
-  const tags = text('tags')
-    .split(/[;,|]/)
-    .map((t) => t.trim().replace(/^#/, '').slice(0, 40))
-    .filter(Boolean)
-    .slice(0, 20);
+  const tags = readTags(text('tags'));
 
   return {
     ok: true,
@@ -446,7 +464,7 @@ export function readRow(
       designerEmail: EMAIL.test(designer) ? designer.toLowerCase() : null,
       partnerVoice: clamp(text('partnerVoice'), 120),
       channelSlug: clamp(text('channelSlug'), 60),
-      brief: clamp(text('brief'), 4000),
+      brief: clamp(text('brief'), MAX_BRIEF),
       url: clamp(text('url'), 500),
       assetUrl: clamp(text('assetUrl'), 500),
       targetKeyword: clamp(text('targetKeyword'), 200),
@@ -456,6 +474,318 @@ export function readRow(
       tags,
     },
   };
+}
+
+// ── The other shape a calendar comes in ───────────────────────────────────────────────
+//
+// Everything above reads a table: one row per piece, columns named at the top. That is
+// what a calendar looks like when it was built to be read by something.
+//
+// A calendar built to be *worked from* looks nothing like it. USAIndiaCFO's September
+// master sheet is two columns and 237 rows for 27 posts: a header line per post carrying
+// the date, the slot, the profile, the asset shape, the pillar and the topic, and beneath
+// it a block of labelled fields holding the whole deliverable — the hook, the five-slide
+// script, the caption, the CTA, the hashtags. There is no header row anywhere and no
+// column means one thing all the way down.
+//
+//   1. 07/09/2026 · Monday · 9:30 AM IST · INSTAGRAM + LINKEDIN · STATIC · OCCASION · US Labor Day
+//   HOOK / ON-CREATIVE LINE | TO EVERYONE WHO BUILT SOMETHING TODAY, IN EITHER TIME ZONE.
+//   FULL CREATIVE TEXT      | SINGLE STATIC …
+//   CAPTION                 | It's Labor Day in the US …
+//   HASHTAGS                | #LaborDay #USIndia #CrossBorderBusiness
+//   STATUS                  | Draft | Same creative on Instagram and LinkedIn
+//
+// The table reader refuses this file outright — no header row, so no rows. Handling it is
+// not a favour to one spreadsheet: this is the house format, it is what the studio will
+// send every month, and asking a content team to flatten their working document into a
+// grid before the application will read it is how an import feature goes unused.
+
+/** `1. 07/09/2026 · Monday · …` — a numbered post header, which is what starts a block. */
+const BLOCK_HEADER = /^(\d{1,3})\s*[.)]\s*(.+)$/;
+const TIME_SEGMENT = /^\d{1,2}[:.]\d{2}\s*(?:am|pm)?\b/i;
+const WEEKDAY = /^(mon|tues|wednes|thurs|fri|satur|sun)day$/i;
+const NETWORK = /instagram|linkedin|facebook|youtube|threads|twitter|\bx\b|whatsapp/i;
+const ASSET_SHAPE = /static|carousel|reel|short|video|text|image|webinar|newsletter|story|graphic/i;
+
+/** A row that opens a post block, and the header text after its number. */
+function blockHeader(cell: string): string | null {
+  const match = BLOCK_HEADER.exec(cell.trim());
+  if (!match) return null;
+  const rest = match[2];
+  // A numbered line is only a header if it carries the separators and a date. Otherwise it
+  // is prose that happens to start with "1." — a numbered slide inside a block, say.
+  if (!rest.includes('·')) return null;
+  return rest;
+}
+
+/**
+ * The metadata line at the top of a block.
+ *
+ * Read by anchoring on the time rather than by counting from the left, because the pillar
+ * segment is present on some posts and absent on others — sixteen of September's 27 carry
+ * one — and a positional read would file the topic as the format for the eleven that do
+ * not. The slot is the one segment whose shape is unmistakable, and the format puts the
+ * profile immediately after it and the asset shape after that. The topic is always last.
+ *
+ * With no recognisable time the fields are classified by what they look like instead,
+ * which is weaker but still finds the date and the topic — the two a row cannot do
+ * without.
+ */
+export function readBlockHeader(header: string, month: Date) {
+  const segments = header.split('·').map((s) => s.trim()).filter(Boolean);
+  if (!segments.length) return null;
+
+  const publishDate = parseCalendarDate(segments[0], month);
+  const title = segments.length > 1 ? segments[segments.length - 1] : null;
+
+  const middle = segments.slice(1, -1).filter((s) => !WEEKDAY.test(s));
+  const timeAt = middle.findIndex((s) => TIME_SEGMENT.test(s));
+
+  let slot: string | null = null;
+  let profile: string | null = null;
+  let shape: string | null = null;
+  let pillars: string[] = [];
+
+  if (timeAt !== -1) {
+    slot = middle[timeAt];
+    profile = middle[timeAt + 1] ?? null;
+    shape = middle[timeAt + 2] ?? null;
+    pillars = middle.slice(timeAt + 3);
+  } else {
+    profile = middle.find((s) => NETWORK.test(s)) ?? null;
+    shape = middle.find((s) => ASSET_SHAPE.test(s) && s !== profile) ?? null;
+    pillars = middle.filter((s) => s !== profile && s !== shape);
+  }
+
+  return { publishDate, title, slot, profile, shape, pillars };
+}
+
+/**
+ * The asset shape, read from the block's own words.
+ *
+ * `readFormat` is built for a type column and is not enough here: this sheet's shapes are
+ * "STATIC", "TEXT", "TEXT + IMAGE (1 creative)" and "CAROUSEL - 5 slides", and only the
+ * last of those means anything to a generic alias table. What settles the other three is
+ * the profile beside them — a static or a text post on an Instagram or LinkedIn profile is
+ * a social post, and so is one going out on a partner's own account.
+ */
+function readBlockFormat(shape: string | null, profile: string | null): ContentFormat {
+  const words = `${shape ?? ''}`;
+  if (/carousel|story|graphic|static|image/i.test(words)) return 'social';
+  if (/reel|short|video|webinar/i.test(words)) return 'video';
+  if (/newsletter|mailer|email/i.test(words)) return 'email';
+  // "TEXT" on its own. A text post is a social post when it goes out on a profile, and
+  // only a blog when nothing says otherwise.
+  if (/text/i.test(words)) return profile ? 'social' : 'blog';
+  return readFormat(words || profile || '');
+}
+
+/**
+ * `Draft | Owner: someone@x.com | Asset link: https://…` — several fields in one cell.
+ *
+ * `notes` is the rest, and it exists because reading only the first three threw content
+ * away: two of September's posts say "Draft | Same creative on Instagram and LinkedIn",
+ * and that second clause is a production instruction, not a status. It went nowhere. Any
+ * pipe-separated part that is not the status, the owner or the asset link is kept and
+ * ends up in the brief with the rest of the post's own words.
+ */
+function readStatusCell(value: string) {
+  const parts = value.split('|').map((p) => p.trim()).filter(Boolean);
+  const status = readStatus(parts[0] ?? '');
+
+  let owner: string | null = null;
+  let asset: string | null = null;
+  const notes: string[] = [];
+
+  // A `for…of` rather than `forEach`: assigning a closed-over `let` inside a callback
+  // does not narrow it, and both of these typed as `never` at every later use.
+  for (const part of parts.slice(1)) {
+    const [, ownerValue] = /^owner\s*:\s*(.*)$/i.exec(part) ?? [];
+    if (ownerValue !== undefined) {
+      owner = ownerValue.trim() || null;
+      continue;
+    }
+    const [, assetValue] = /^asset\s*link\s*:\s*(.*)$/i.exec(part) ?? [];
+    if (assetValue !== undefined) {
+      asset = assetValue.trim() || null;
+      continue;
+    }
+    notes.push(part);
+  }
+
+  // A first part that is not a recognisable status is not a status — it is the note of a
+  // cell that leads with something else, and dropping it would be the same fault.
+  if (!status && parts[0]) notes.unshift(parts[0]);
+
+  return { status, owner, asset, notes };
+}
+
+/** Labels whose value is the piece's own tags rather than prose. */
+const TAG_LABELS = /^(hashtags?|tags?)$/i;
+/** Labels naming the pillar, which is the firm's own vocabulary and not `topicCluster`'s. */
+const PILLAR_LABELS = /^(pillar|vertical|category)$/i;
+const STATUS_LABELS = /^status\b/i;
+
+/**
+ * One post block: its header line, and the labelled rows beneath it.
+ *
+ * The labelled rows are kept whole, in the order the sheet has them, as the brief. That is
+ * the deliverable — nobody writes a five-slide script twice — and folding it into one
+ * editable field is what makes the imported piece worth opening. Losing it to a tidier
+ * schema would make the import a list of titles.
+ */
+export function readBlock(
+  header: string,
+  rows: readonly (readonly string[])[],
+  month: Date,
+  rowNumber: number,
+): RowOutcome {
+  const parsed = readBlockHeader(header, month);
+  if (!parsed) return { ok: false, reason: `Row ${rowNumber}: could not read "${header}".` };
+
+  const title = parsed.title ? parsed.title.slice(0, 200) : null;
+  if (!title) return { ok: false, reason: `Row ${rowNumber}: no topic at the end of "${header}".` };
+
+  if (!parsed.publishDate) {
+    return { ok: false, reason: `Row ${rowNumber} ("${title}"): could not read a date in "${header}".` };
+  }
+  const { from, to } = monthRange(month);
+  if (parsed.publishDate < from || parsed.publishDate >= to) {
+    return {
+      ok: false,
+      reason: `Row ${rowNumber} ("${title}"): ${parsed.publishDate.toISOString().slice(0, 10)} is outside ${monthLabel(month)}.`,
+    };
+  }
+
+  const tags = [...parsed.pillars];
+  let status: (typeof CONTENT_STATUSES)[number] | null = null;
+  let owner: string | null = null;
+  let assetUrl: string | null = null;
+  const brief: string[] = [];
+
+  // The header's own words, kept as words. `format` reduces the asset shape to one of six
+  // values, which is what the board needs and is not what a producer needs: "STATIC",
+  // "CAROUSEL - 5 slides" and "TEXT + IMAGE (1 creative)" all become `social`, and after
+  // that nothing on the piece could tell a single image from a five-slide deck. The slot
+  // and the profile go the same way for the same reason — the schema has no field for
+  // either, and a 6:00 PM IST Instagram post is not interchangeable with a 10:00 AM
+  // LinkedIn one.
+  if (parsed.slot) brief.push(`SLOT: ${parsed.slot}`);
+  if (parsed.profile) brief.push(`PROFILE: ${parsed.profile}`);
+  if (parsed.shape) brief.push(`ASSET: ${parsed.shape}`);
+
+  for (const row of rows) {
+    const label = (row[0] ?? '').trim();
+    const value = (row[1] ?? '').trim();
+    if (!label && !value) continue;
+
+    if (TAG_LABELS.test(label)) {
+      tags.push(...readTags(value));
+      continue;
+    }
+    if (PILLAR_LABELS.test(label)) {
+      if (value) tags.push(value);
+      continue;
+    }
+    if (STATUS_LABELS.test(label)) {
+      const read = readStatusCell(value);
+      status = read.status;
+      owner = read.owner;
+      assetUrl = read.asset;
+      for (const note of read.notes) brief.push(`NOTE: ${note}`);
+      continue;
+    }
+    // Everything else is content, and is kept with the label the sheet gave it: "CAPTION"
+    // and "FULL SLIDE CONTENT" are different things to whoever has to produce them.
+    brief.push(label ? `${label}:\n${value}` : value);
+  }
+
+  // Deduped and capped, but NOT re-split. A pillar arrives as one label — "Brand & IP
+  // (IPR vertical)", "Structure & Incorporation", "CASE STUDY" — and running the hashtag
+  // splitter over it a second time turned five pillars into nineteen tags of "&", "(IPR",
+  // "vertical)" and "STUDY". Hashtag cells are split on their way in, above, and nothing
+  // needs splitting twice.
+  const cleanTags = [
+    ...new Set(tags.map((t) => t.trim().replace(/^#/, '').slice(0, 40)).filter(Boolean)),
+  ].slice(0, 20);
+
+  return {
+    ok: true,
+    unresolvedPerson: owner && !EMAIL.test(owner) ? owner : null,
+    row: {
+      publishDate: parsed.publishDate,
+      title,
+      format: readBlockFormat(parsed.shape, parsed.profile),
+      status: status ?? 'idea',
+      authorEmail: owner && EMAIL.test(owner) ? owner.toLowerCase() : null,
+      designerEmail: null,
+      // The profile a post goes out on is either a place or a person. A network is the
+      // channel; a named account — "AKSHAY SIR", "IPR FOUNDER" — is whose voice it is,
+      // which is §15.2's partnerVoice and the reason that column exists.
+      partnerVoice: parsed.profile && !NETWORK.test(parsed.profile) ? parsed.profile.slice(0, 120) : null,
+      channelSlug: parsed.profile && NETWORK.test(parsed.profile) ? parsed.profile.slice(0, 60) : null,
+      brief: brief.length ? brief.join('\n\n').slice(0, MAX_BRIEF) : null,
+      url: null,
+      assetUrl: assetUrl ? assetUrl.slice(0, 500) : null,
+      targetKeyword: null,
+      topicCluster: null,
+      segment: null,
+      serviceLine: null,
+      tags: cleanTags,
+    },
+  };
+}
+
+/**
+ * A whole master sheet: every numbered block in it.
+ *
+ * The blank row between blocks is not the delimiter — the next header is. A sheet with no
+ * blank rows, or two of them, reads the same.
+ */
+export function readMasterSheet(grid: readonly (readonly unknown[])[], month: Date): SheetRead {
+  const cells = grid.map((row) => row.map((c) => (c === null || c === undefined ? '' : String(c))));
+
+  const starts: { at: number; header: string }[] = [];
+  cells.forEach((row, i) => {
+    const header = blockHeader(row[0] ?? '');
+    if (header) starts.push({ at: i, header });
+  });
+
+  const rows: CalendarRow[] = [];
+  const skippedReasons: string[] = [];
+  const unresolvedPeople = new Set<string>();
+
+  starts.forEach((start, index) => {
+    const end = index + 1 < starts.length ? starts[index + 1].at : cells.length;
+    const outcome = readBlock(start.header, cells.slice(start.at + 1, end), month, start.at + 1);
+    if (outcome.ok) {
+      rows.push(outcome.row);
+      if (outcome.unresolvedPerson) unresolvedPeople.add(outcome.unresolvedPerson);
+    } else {
+      skippedReasons.push(outcome.reason);
+    }
+  });
+
+  return {
+    rows,
+    rowsRead: starts.length,
+    skippedReasons,
+    // There are no columns to be unmapped: every label in a block is read, as content if
+    // it is nothing more specific.
+    unmappedHeaders: [],
+    unresolvedPeople: [...unresolvedPeople],
+  };
+}
+
+/** Two or more numbered post blocks means the sheet is a master sheet, not a table. */
+export function looksLikeMasterSheet(grid: readonly (readonly unknown[])[]): boolean {
+  let found = 0;
+  for (const row of grid) {
+    const first = row[0];
+    if (blockHeader(first === null || first === undefined ? '' : String(first))) found++;
+    if (found >= 2) return true;
+  }
+  return false;
 }
 
 export type SheetRead = {
@@ -473,8 +803,14 @@ export type SheetRead = {
  * from Sheets very often starts with a merged title cell — "Content Calendar — September"
  * — and one or two blank rows. The first row that names at least a title column and a
  * date column is the header; anything above it is decoration.
+ *
+ * A sheet with no header row at all may still be a calendar: see `readMasterSheet` for the
+ * block layout this firm's studio actually works in. Detected rather than chosen, because
+ * whoever is uploading a file should not have to know which of two readers it needs.
  */
 export function readSheet(grid: readonly (readonly unknown[])[], month: Date): SheetRead {
+  if (looksLikeMasterSheet(grid)) return readMasterSheet(grid, month);
+
   let headerAt = -1;
   let columns: Partial<Record<CalendarField, number>> = {};
   let unmapped: string[] = [];
@@ -497,7 +833,7 @@ export function readSheet(grid: readonly (readonly unknown[])[], month: Date): S
       unmappedHeaders: [],
       unresolvedPeople: [],
       skippedReasons: [
-        'No header row found. The file needs a row naming at least a title column and a date column — "Title" and "Date" will do.',
+        'No header row found, and no numbered post blocks either. A calendar needs either a row naming at least a title column and a date column — "Title" and "Date" will do — or one numbered header line per post, like "1. 07/09/2026 · 9:30 AM IST · INSTAGRAM · STATIC · Topic".',
       ],
     };
   }

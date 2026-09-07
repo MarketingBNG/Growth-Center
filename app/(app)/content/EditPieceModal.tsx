@@ -8,7 +8,7 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/enums';
-import { FORMAT_LABELS, FORMATS, SERVICE_LINES, TOPIC_CLUSTERS } from '@/lib/content-fields';
+import { FORMAT_LABELS, FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from '@/lib/content-fields';
 import { COMPANY_SEGMENTS } from '@/lib/company-facts';
 
 export type EditablePiece = {
@@ -183,8 +183,16 @@ export function EditPieceModal({
           <Input name="targetKeyword" maxLength={200} defaultValue={piece.targetKeyword ?? ''} />
         </Field>
 
+        {/* Taller than the other fields and scrollable: an imported piece's brief is the
+            whole deliverable — hook, slide script, caption, CTA — not a one-line note. */}
         <Field label="Brief">
-          <Textarea name="brief" rows={3} maxLength={4000} defaultValue={piece.brief ?? ''} />
+          <Textarea
+            name="brief"
+            rows={10}
+            maxLength={MAX_BRIEF}
+            defaultValue={piece.brief ?? ''}
+            className="font-mono text-[11px] leading-relaxed"
+          />
         </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">

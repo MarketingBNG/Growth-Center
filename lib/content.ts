@@ -10,7 +10,7 @@ import {
 } from './content-approval.ts';
 import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from './enums.ts';
 import { COMPANY_SEGMENTS } from './company-facts.ts';
-import { FORMATS, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
+import { FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from './calc.ts';
 
 export const contentInput = z.object({
@@ -20,7 +20,7 @@ export const contentInput = z.object({
   authorEmail: z.string().trim().email().optional(),
   channelSlug: z.string().trim().max(60).optional(),
   campaignId: z.string().min(1).optional(),
-  brief: z.string().trim().max(4000).optional(),
+  brief: z.string().trim().max(MAX_BRIEF).optional(),
   url: z.string().trim().max(500).optional(),
   publishDate: z.string().date().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
@@ -64,7 +64,7 @@ export const contentPatch = z.object({
   designerEmail: z.email().nullable().optional(),
   partnerVoice: z.string().trim().max(120).nullable().optional(),
   channelSlug: z.string().trim().max(60).nullable().optional(),
-  brief: z.string().trim().max(4000).nullable().optional(),
+  brief: z.string().trim().max(MAX_BRIEF).nullable().optional(),
   url: z.string().trim().max(500).nullable().optional(),
   assetUrl: z.string().trim().max(500).nullable().optional(),
   targetKeyword: z.string().trim().max(200).nullable().optional(),

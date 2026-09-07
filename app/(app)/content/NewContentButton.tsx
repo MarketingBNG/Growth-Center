@@ -9,7 +9,7 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
-import { FORMAT_LABELS, FORMATS } from '@/lib/content-fields';
+import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content-fields';
 
 export function NewContentButton() {
   const router = useRouter();
@@ -67,7 +67,7 @@ export function NewContentButton() {
             </Field>
           </div>
           <Field label="Brief">
-            <Textarea name="brief" rows={3} maxLength={4000} />
+            <Textarea name="brief" rows={3} maxLength={MAX_BRIEF} />
           </Field>
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <div className="flex justify-end gap-2">

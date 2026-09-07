@@ -10,6 +10,20 @@
 // The lists live here so the form, the filters and the reports read one copy.
 
 /**
+ * How much of a brief is kept, everywhere that keeps one.
+ *
+ * 4,000 was a form limit standing in for a column limit that does not exist — `brief` is
+ * Postgres text. A studio's master sheet carries the whole deliverable per post: the hook,
+ * the five-slide script, the caption, the CTA. September 2026's is 59KB for 27 posts and
+ * its longest single post copy is over 3,000 characters on its own, so 4,000 would import
+ * the plan and throw away the work.
+ *
+ * Here rather than beside the importer for the same reason as FORMATS below: two of the
+ * things that need it are client components.
+ */
+export const MAX_BRIEF = 20_000;
+
+/**
  * The six values the `format` column holds.
  *
  * Here rather than beside the code that reads a spreadsheet, and rather than typed out

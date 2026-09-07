@@ -7,7 +7,10 @@ import {
   monthLabel,
   parseCalendarDate,
   parseMonth,
+  looksLikeMasterSheet,
+  readBlockHeader,
   readFormat,
+  readMasterSheet,
   readSheet,
   readStatus,
 } from '../lib/content-calendar.ts';
@@ -234,4 +237,165 @@ test('a month is spoken and parsed the same way', () => {
   assert.equal(parseMonth('2026-13'), null);
   assert.equal(parseMonth('nope'), null);
   assert.equal(parseMonth('2026-09')?.toISOString(), '2026-09-01T00:00:00.000Z');
+});
+
+// ── The other shape: a master sheet ──────────────────────────────────────────────────
+//
+// USAIndiaCFO's September 2026 calendar is not a table. It is two columns and 237 rows for
+// 27 posts: a numbered header line carrying the date, slot, profile, asset shape, pillar
+// and topic, and beneath it a block of labelled fields holding the whole deliverable. The
+// table reader refuses it outright — there is no header row to find — and this is the
+// format the studio will send every month.
+
+const MASTER = [
+  ['USAIndiaCFO — September 2026 | MASTERSHEET | every post, date order'],
+  [''],
+  ['1. 07/09/2026 · Monday · 9:30 AM IST · INSTAGRAM + LINKEDIN · STATIC · OCCASION · US Labor Day'],
+  ['HOOK / ON-CREATIVE LINE', 'TO EVERYONE WHO BUILT SOMETHING TODAY.'],
+  ['FULL CREATIVE TEXT', 'SINGLE STATIC\n TOP LINE:\n LABOR DAY'],
+  ['CAPTION', "It's Labor Day in the US."],
+  ['HASHTAGS', '#LaborDay #USIndia #CrossBorderBusiness'],
+  ['STATUS', 'Draft | Same creative on Instagram and LinkedIn'],
+  [''],
+  ['2. 10/09/2026 · Thursday · 10:00 AM IST · AKSHAY SIR · TEXT · Why is your company incorporated where it is?'],
+  ['PILLAR', 'Structure & Incorporation'],
+  ['HOOK / FIRST LINE', 'I talk more founders out of it than into it.'],
+  ['FULL POST COPY', 'We talk more founders out of opening a US company than into one.'],
+  ['CTA / ENGAGEMENT PROMPT', 'What was the trigger that made you open it?'],
+  ['HASHTAGS', '#USIncorporation #IndianFounders'],
+  ['STATUS / OWNER / ASSET LINK', 'Draft | Owner: shweta@usaindiacfo.com | Asset link: https://drive.example/x'],
+];
+
+test('a master sheet is recognised without being asked about', () => {
+  // Whoever uploads a file should not have to know which of two readers it needs.
+  assert.equal(looksLikeMasterSheet(MASTER), true);
+  assert.equal(looksLikeMasterSheet([['Date', 'Title'], ['2026-09-01', 'Hello']]), false);
+  // A numbered line with no separators is prose — a slide inside a block, say — not a header.
+  assert.equal(looksLikeMasterSheet([['1. First slide says this'], ['2. Then this']]), false);
+});
+
+test('the header line is read by anchoring on the time, not by counting segments', () => {
+  // Sixteen of September's 27 posts carry a pillar segment and eleven do not. Counting from
+  // the left files the topic as the format for the eleven that do not.
+  const withPillar = readBlockHeader(
+    '07/09/2026 · Monday · 9:30 AM IST · INSTAGRAM + LINKEDIN · STATIC · OCCASION · US Labor Day',
+    SEP,
+  )!;
+  assert.equal(withPillar.publishDate?.toISOString().slice(0, 10), '2026-09-07');
+  assert.equal(withPillar.slot, '9:30 AM IST');
+  assert.equal(withPillar.profile, 'INSTAGRAM + LINKEDIN');
+  assert.equal(withPillar.shape, 'STATIC');
+  assert.deepEqual(withPillar.pillars, ['OCCASION']);
+  assert.equal(withPillar.title, 'US Labor Day');
+
+  const withoutPillar = readBlockHeader(
+    '10/09/2026 · Thursday · 10:00 AM IST · AKSHAY SIR · TEXT · Why is your company incorporated where it is?',
+    SEP,
+  )!;
+  assert.equal(withoutPillar.shape, 'TEXT');
+  assert.deepEqual(withoutPillar.pillars, []);
+  assert.equal(withoutPillar.title, 'Why is your company incorporated where it is?');
+});
+
+test('a whole master sheet reads every block, and nothing between them', () => {
+  const read = readMasterSheet(MASTER, SEP);
+  assert.equal(read.rowsRead, 2);
+  assert.equal(read.rows.length, 2);
+  assert.deepEqual(read.skippedReasons, []);
+  // The title line at the top is not a post, and the blank row is not a delimiter.
+  assert.deepEqual(read.rows.map((r) => r.title), [
+    'US Labor Day',
+    'Why is your company incorporated where it is?',
+  ]);
+});
+
+test('the profile is a channel when it names a network and a voice when it names a person', () => {
+  // §15.2's partnerVoice is exactly this: whose account it goes out on.
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.equal(labor.channelSlug, 'INSTAGRAM + LINKEDIN');
+  assert.equal(labor.partnerVoice, null);
+  assert.equal(akshay.partnerVoice, 'AKSHAY SIR');
+  assert.equal(akshay.channelSlug, null);
+});
+
+test('a static or text post on a profile is social, not a blog', () => {
+  // "STATIC" and "TEXT" mean nothing to a generic type-column alias table. What settles
+  // them is the profile beside them.
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.equal(labor.format, 'social');
+  assert.equal(akshay.format, 'social');
+});
+
+test('the brief keeps every content row, with the label the sheet gave it', () => {
+  // This is the deliverable — nobody writes a five-slide script twice — and folding it
+  // into one editable field is what makes an imported piece worth opening.
+  const [labor] = readMasterSheet(MASTER, SEP).rows;
+  for (const expected of [
+    'SLOT: 9:30 AM IST',
+    'PROFILE: INSTAGRAM + LINKEDIN',
+    // `format` reduces the shape to one of six values, so "STATIC", "CAROUSEL - 5 slides"
+    // and "TEXT + IMAGE (1 creative)" all become `social`. Without this line nothing on
+    // the piece could tell a single image from a five-slide deck.
+    'ASSET: STATIC',
+    'HOOK / ON-CREATIVE LINE:',
+    'TO EVERYONE WHO BUILT SOMETHING TODAY.',
+    'FULL CREATIVE TEXT:',
+    'LABOR DAY',
+    'CAPTION:',
+    "It's Labor Day in the US.",
+  ]) {
+    assert.ok(labor.brief?.includes(expected), `brief is missing ${JSON.stringify(expected)}`);
+  }
+  // The rows that became fields of their own are not repeated as prose.
+  assert.equal(labor.brief?.includes('#LaborDay'), false);
+  assert.equal(labor.brief?.includes('Draft |'), false);
+});
+
+test('anything in the status cell that is not status, owner or asset link is kept', () => {
+  // Two of September's posts say "Draft | Same creative on Instagram and LinkedIn". That
+  // second clause is a production instruction, not a status, and reading only the first
+  // three fields threw it away — the one fault six independent reviewers of the real sheet
+  // could not see, because every NOTE row survived and nothing suggested this did not.
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.ok(labor.brief?.includes('NOTE: Same creative on Instagram and LinkedIn'));
+  assert.equal(labor.status, 'draft', 'and the status is still read');
+  // A cell that is only status, owner and asset link adds no note.
+  assert.equal(akshay.brief?.includes('NOTE:'), false);
+});
+
+test('a pillar stays one tag and hashtags become many', () => {
+  // Running the hashtag splitter over a pillar a second time turned "Brand & IP (IPR
+  // vertical)" into five tags of "Brand", "&", "IP", "(IPR" and "vertical)".
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.deepEqual(labor.tags, ['OCCASION', 'LaborDay', 'USIndia', 'CrossBorderBusiness']);
+  assert.ok(akshay.tags.includes('Structure & Incorporation'));
+  assert.ok(akshay.tags.includes('USIncorporation'));
+});
+
+test('status, owner and asset link are three fields in one cell', () => {
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.equal(labor.status, 'draft', 'the text before the first pipe');
+  assert.equal(akshay.authorEmail, 'shweta@usaindiacfo.com');
+  assert.equal(akshay.assetUrl, 'https://drive.example/x');
+  // An empty "Owner:" is not an owner, and must not become one.
+  assert.equal(labor.authorEmail, null);
+  assert.equal(labor.assetUrl, null);
+});
+
+test('readSheet sends a master sheet to the right reader on its own', () => {
+  const read = readSheet(MASTER, SEP);
+  assert.equal(read.rows.length, 2);
+  assert.deepEqual(read.unmappedHeaders, [], 'a block layout has no columns to leave unmapped');
+});
+
+test('a block dated outside the month is refused, like a row would be', () => {
+  const october = [
+    ['1. 02/10/2026 · Friday · 10:00 AM IST · LINKEDIN - UIC · TEXT · October opener'],
+    ['STATUS', 'Draft'],
+    ['2. 07/09/2026 · Monday · 9:30 AM IST · INSTAGRAM · STATIC · Kept'],
+    ['STATUS', 'Draft'],
+  ];
+  const read = readMasterSheet(october, SEP);
+  assert.equal(read.rows.length, 1);
+  assert.match(read.skippedReasons[0], /outside September 2026/);
 });
