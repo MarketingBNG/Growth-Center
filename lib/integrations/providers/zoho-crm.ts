@@ -40,6 +40,38 @@ const MAX_PAGES = 400;
 
 type Stored = { refreshToken: string };
 
+/**
+ * Errors a second attempt cannot get past: the client credentials themselves are wrong,
+ * and the retry would send the same pair.
+ */
+const PERMANENT_TOKEN_ERRORS = new Set(['invalid_client', 'invalid_client_secret']);
+
+/** Long enough for a blip at Zoho's end to pass, short enough to be free in a 230s run. */
+const TOKEN_RETRY_MS = 1_500;
+
+/**
+ * This endpoint answers in well under a second — the failure described below took 797ms
+ * including its error — so the 60s default would only ever mean making the second attempt
+ * against a socket that had already stopped answering.
+ */
+const TOKEN_TIMEOUT_MS = 15_000;
+
+/**
+ * A short-lived access token, minted from the stored refresh token.
+ *
+ * Attempted twice, because one bad answer here used to cost a day of syncing. On
+ * 2026-09-06 the nightly cron died 797ms in with `Zoho: invalid_code` and the card
+ * carried that error for 23 hours, until somebody pressed Sync now — at which point the
+ * same stored refresh token pulled 43,750 records on the first try. The credential row
+ * had not been rewritten in between, so the token had never been revoked. Zoho simply
+ * answered badly once.
+ *
+ * Worth repeating because nothing else in a sync is this cheap to repeat: it is one
+ * request, before a page has been fetched or a row written, and the thing it saves is the
+ * entire nightly pull. Two attempts and no more — a refresh token that genuinely has been
+ * revoked still fails inside four seconds, carrying the error Zoho gave for it, because
+ * that error is the one that tells somebody to reconnect.
+ */
 async function accessToken(refreshToken: string): Promise<string> {
   const params = new URLSearchParams({
     refresh_token: refreshToken,
@@ -47,13 +79,42 @@ async function accessToken(refreshToken: string): Promise<string> {
     client_secret: process.env.ZOHO_CLIENT_SECRET ?? '',
     grant_type: 'refresh_token',
   });
-  const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
-  if (!res.ok) throw new IntegrationError(`Zoho token refresh failed (${res.status}).`);
 
-  const json = (await res.json()) as { access_token?: string; error?: string };
-  if (json.error) throw new IntegrationError(`Zoho: ${json.error}`);
-  if (!json.access_token) throw new IntegrationError('Zoho returned no access token.');
-  return json.access_token;
+  let last: IntegrationError | null = null;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt) await new Promise((resolve) => setTimeout(resolve, TOKEN_RETRY_MS));
+
+    let json: { access_token?: string; error?: string };
+    try {
+      const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, {
+        method: 'POST',
+        signal: httpTimeout(TOKEN_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        last = new IntegrationError(`Zoho token refresh failed (${res.status}).`);
+        continue;
+      }
+      json = (await res.json()) as { access_token?: string; error?: string };
+    } catch (e) {
+      // A dropped connection, or the timeout above. Worth one more attempt for the same
+      // reason a bad answer is.
+      last = new IntegrationError(`Zoho token refresh failed: ${(e as Error).message}`);
+      continue;
+    }
+
+    if (json.access_token) return json.access_token;
+
+    if (json.error) {
+      if (PERMANENT_TOKEN_ERRORS.has(json.error)) throw new IntegrationError(`Zoho: ${json.error}`);
+      last = new IntegrationError(`Zoho: ${json.error}`);
+      continue;
+    }
+
+    last = new IntegrationError('Zoho returned no access token.');
+  }
+
+  throw last ?? new IntegrationError('Zoho returned no access token.');
 }
 
 /**
@@ -483,6 +544,13 @@ export const zohoCrm: IntegrationProvider = {
     { name: 'ZOHO_CLIENT_SECRET', description: 'Secret for that Zoho client' },
   ],
   docsUrl: 'https://www.zoho.com/crm/developer/docs/api/v6/',
+
+  // Too slow to share the nightly sync. A full pass over this org's CRM measured 182
+  // seconds inside a single 300s function that has ten other providers to get through,
+  // and whichever provider is mid-flight when that ceiling arrives is killed holding the
+  // sync lock — which is what left this card reading "Sync stalled" next to a sync_run
+  // row still claiming to be running. Runs from /api/cron/zoho instead.
+  ownSchedule: true,
 
   isConfigured() {
     return !!process.env.ZOHO_CLIENT_ID && !!process.env.ZOHO_CLIENT_SECRET;

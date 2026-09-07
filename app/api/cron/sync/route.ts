@@ -18,6 +18,16 @@ import { TAGS, invalidate } from '@/lib/cache';
  */
 export const maxDuration = 300;
 
+/**
+ * How much of that ceiling the syncs may spend.
+ *
+ * The rest of this route runs after them — the duplicate scan, the content autofill, the
+ * cache invalidation and the response — and all of it is inside the same 300 seconds.
+ * Handing `syncAll` an instant to stop at, rather than letting it run until the platform
+ * intervenes, is what keeps a slow provider from being killed holding the sync lock.
+ */
+const SYNC_SHARE_MS = 210_000;
+
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
@@ -36,7 +46,9 @@ export async function GET(req: Request) {
   // what every money figure on every page is converted with.
   const currency = await refreshRatesIfStale();
 
-  const results = await syncAll();
+  // Measured from the top of the request, not from here: the currency refresh above spends
+  // the same 300 seconds, so the syncs get what is left of the share rather than all of it.
+  const results = await syncAll(30, started + SYNC_SHARE_MS);
 
   // After the syncs, deliberately. A scan run first would look at yesterday's records and
   // miss every duplicate the night's import just created — which is the commonest kind

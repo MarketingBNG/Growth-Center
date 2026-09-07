@@ -35,6 +35,9 @@ export type ConfigField = {
 };
 
 export type SyncResult = {
+  /** Rows written across every table the run touched, not metric rows alone. This is the
+   *  number the integration card shows beside the sync time — see totalRows() in
+   *  service.ts for why it counts what it counts. */
   rows: number;
   /** Human-readable summary shown on the integration card after a sync. */
   detail: string;

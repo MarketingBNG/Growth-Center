@@ -1683,6 +1683,15 @@ async function writeOutreach(providerId: string, points: MetricPoint[]): Promise
 const SYNC_BUDGET_MS = 230_000;
 
 /**
+ * The least a provider is worth starting with.
+ *
+ * `syncAll` hands each provider what is left of its own budget, and below this there is
+ * not enough of it to fetch a page and write it. Starting one anyway spends the slice
+ * being killed rather than importing anything, and the kill lands on the sync lock.
+ */
+const MIN_SLICE_MS = 20_000;
+
+/**
  * How long a run may hold the sync lock before another is allowed to take it.
  *
  * A serverless function can be killed without ever clearing `state`, and a provider left
@@ -1704,7 +1713,7 @@ const SYNC_LEASE_MS = 10 * 60 * 1000;
  * claim are one statement. Reading the state first and updating after leaves the window
  * this is meant to close.
  */
-async function claimSync(integrationId: string, providerName: string): Promise<void> {
+async function claimSync(integrationId: string, providerId: string, providerName: string): Promise<void> {
   const claimed = await db().integration.updateMany({
     where: {
       id: integrationId,
@@ -1718,9 +1727,44 @@ async function claimSync(integrationId: string, providerName: string): Promise<v
       `${providerName} is already syncing. It will carry on from where it stopped — no need to start another.`,
     );
   }
+
+  // The lease this run just took may have been held by one the platform killed. That run
+  // wrote no outcome — nothing survived to write one — so its sync_run row still says
+  // `running`, and the history goes on reporting a sync in progress that ended hours ago.
+  // Taking the lease is the moment that claim becomes provably false, so it is closed
+  // here rather than left for a reader to infer.
+  //
+  // `durationMs` is deliberately left null: it is how a run the platform killed is told
+  // apart from one that failed and lived long enough to say so.
+  await db().syncRun.updateMany({
+    where: {
+      provider: providerId,
+      status: 'running',
+      startedAt: { lt: new Date(Date.now() - SYNC_LEASE_MS) },
+    },
+    data: {
+      status: 'failed',
+      complete: false,
+      finishedAt: new Date(),
+      error: 'Killed mid-run: the function ended before the sync did, so no error was recorded at the time.',
+    },
+  });
 }
 
-export async function sync(id: string, days = 30, actorEmail: string | null = null) {
+/**
+ * Syncs one provider.
+ *
+ * `budgetMs` is how long a paged pull may spend fetching before it saves its place and
+ * returns. A parameter rather than a constant because the answer depends on who is
+ * calling: a provider on its own cron has the whole function to itself, while one sharing
+ * the nightly run can only have what the providers before it left behind.
+ */
+export async function sync(
+  id: string,
+  days = 30,
+  actorEmail: string | null = null,
+  budgetMs: number = SYNC_BUDGET_MS,
+) {
   const provider = requireProvider(id);
 
   const integration = await db().integration.findUnique({
@@ -1739,7 +1783,7 @@ export async function sync(id: string, days = 30, actorEmail: string | null = nu
     throw new IntegrationError(`${provider.name} is not connected.`);
   }
 
-  await claimSync(integration.id, provider.name);
+  await claimSync(integration.id, id, provider.name);
 
   // G5.1. Opened before the work starts and closed on both outcomes, so a run killed by
   // the platform mid-flight leaves a row saying 'running' with no finish — which is the
@@ -1780,7 +1824,7 @@ export async function sync(id: string, days = 30, actorEmail: string | null = nu
     const config = (integration.config as Record<string, unknown>) ?? {};
 
     const outcome = provider.syncPaged
-      ? await runPaged(provider, integration, credential, config, { from, to })
+      ? await runPaged(provider, integration, credential, config, { from, to }, budgetMs)
       : await runWhole(provider, integration, credential, config, { from, to });
 
     await db().integration.update({
@@ -1827,7 +1871,7 @@ async function runWhole(
   }
   const points = await provider.sync(credential, config, range);
   const counts = await persist(provider, integration.id, config, points);
-  return { rows: counts.rows, detail: describe(counts), done: true };
+  return { rows: totalRows(counts), detail: describe(counts), done: true };
 }
 
 /**
@@ -1843,9 +1887,10 @@ async function runPaged(
   credential: string,
   config: Record<string, unknown>,
   range: DateRange,
+  budgetMs: number,
 ): Promise<SyncResult> {
   const startedAt = new Date();
-  const deadline = Date.now() + SYNC_BUDGET_MS;
+  const deadline = Date.now() + budgetMs;
 
   let cursor = (integration.syncCursor as SyncCursor | null) ?? null;
 
@@ -1867,6 +1912,14 @@ async function runPaged(
     total.seoRows += counts.seoRows;
     total.crmRows += counts.crmRows;
     total.outreachRows += counts.outreachRows;
+    // Accumulated for the same reason as the eight above, and missed until `rows` began
+    // counting them: a paged provider's activities, conversions and revenue were written
+    // slice by slice and then reported as none, because only the last slice's numbers
+    // reached the total — and `describe` omits a zero, so the detail line simply left
+    // them out.
+    total.linkedRows += counts.linkedRows;
+    total.activityRows += counts.activityRows;
+    total.revenueRows += counts.revenueRows;
 
     cursor = slice.cursor;
     await db().integration.update({
@@ -1890,10 +1943,11 @@ async function runPaged(
     ? `${describe(total)}${since ? ' (changes only).' : '.'}`
     : `${describe(total)} so far — more to fetch, continuing.`;
 
-  return { rows: total.rows, detail, done };
+  return { rows: totalRows(total), detail, done };
 }
 
 type Counts = {
+  /** metric_snapshot rows only. Every other field below is a table of its own. */
   rows: number;
   vitalsRows: number;
   workTaskRows: number;
@@ -1906,6 +1960,37 @@ type Counts = {
   revenueRows: number;
   outreachRows: number;
 };
+
+/**
+ * Every row a run wrote, across every table it writes to.
+ *
+ * What `lastSyncRows` and `SyncRun.rows` are for, and what they were not carrying:
+ * `Counts.rows` is metric_snapshot alone, so a CRM sync that imported 43,750 leads,
+ * contacts and deals recorded `0`, and the card read "0 rows" beside a run that had
+ * worked perfectly. The detail string had it right all along — "Wrote 0 metric rows,
+ * 43750 CRM records" — but the number beside the date is the one anybody reads, and it
+ * was describing a healthy sync as an empty one. sync-health's `medianRows` was reading
+ * the same column, and calling the same sync an import of nothing every night.
+ *
+ * A sum across tables rather than a count of distinct records, which is the honest
+ * reading of "rows written": a point that becomes a Lead also becomes a metric row, and
+ * both were written. `describe()` keeps the breakdown for anyone who wants it.
+ */
+function totalRows(c: Counts): number {
+  return (
+    c.rows +
+    c.vitalsRows +
+    c.workTaskRows +
+    c.campaignDays +
+    c.socialRows +
+    c.seoRows +
+    c.crmRows +
+    c.linkedRows +
+    c.activityRows +
+    c.revenueRows +
+    c.outreachRows
+  );
+}
 
 /**
  * Turns `crm_task` and `crm_activity` points into Task and Activity rows.
@@ -2458,11 +2543,24 @@ export type SyncAllResult = {
  * handful of providers finishing a few seconds apart costs nothing. One provider
  * failing must not stop the others, so each is caught and reported rather than thrown —
  * sync() has already recorded the error against its own integration row.
+ *
+ * `deadline` is the caller's own ceiling, as an absolute instant, and is what keeps
+ * sequential from meaning "until the platform intervenes". Without it every provider was
+ * handed the full 230s budget inside one 300s function that had eleven of them to get
+ * through, so the run did not finish — it was killed, mid-provider, with that provider
+ * holding the sync lock and its run row left saying `running` for ever. Stopping early
+ * costs nothing a resumable pull cannot recover: a provider that does not run tonight
+ * keeps its cursor and goes first tomorrow.
  */
-export async function syncAll(days = 30): Promise<SyncAllResult[]> {
+export async function syncAll(days = 30, deadline: number | null = null): Promise<SyncAllResult[]> {
   const rows = await db().integration.findMany({
     where: { credential: { isNot: null } },
     select: { provider: true, state: true },
+    // Longest without a sync goes first. The order used to be whatever the table gave
+    // back, which meant a run short of time skipped the same tail every night — and a
+    // provider at the end of an unchanging list is a provider that never syncs again.
+    // Nulls first: never synced is the longest wait there is.
+    orderBy: [{ lastSyncAt: { sort: 'asc', nulls: 'first' } }],
   });
 
   const results: SyncAllResult[] = [];
@@ -2484,10 +2582,27 @@ export async function syncAll(days = 30): Promise<SyncAllResult[]> {
       continue;
     }
 
+    // What is left of the caller's ceiling, shared out one provider at a time rather than
+    // divided up front: a provider that finishes in four seconds should leave the rest of
+    // its slice to whoever comes next, not have it written off in advance.
+    let budgetMs = SYNC_BUDGET_MS;
+    if (deadline !== null) {
+      const remaining = deadline - Date.now();
+      if (remaining < MIN_SLICE_MS) {
+        results.push({
+          provider: row.provider,
+          status: 'skipped',
+          reason: 'Out of time in this run. It keeps its place and goes first on the next one.',
+        });
+        continue;
+      }
+      budgetMs = Math.min(SYNC_BUDGET_MS, remaining);
+    }
+
     try {
       // One slice per provider per run. A backfill that needs longer keeps its cursor
       // and resumes on the next run, rather than one large provider starving the rest.
-      const { rows: written, done } = await sync(row.provider, days);
+      const { rows: written, done } = await sync(row.provider, days, null, budgetMs);
       results.push({ provider: row.provider, status: 'synced', rows: written, done });
     } catch (e) {
       const reason = (e as Error).message;

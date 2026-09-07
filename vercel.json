@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
+      "path": "/api/cron/zoho",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/cron/sync",
       "schedule": "30 1 * * *"
     },
