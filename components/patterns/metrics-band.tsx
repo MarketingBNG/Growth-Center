@@ -43,6 +43,39 @@ export type MetricsBandProps = {
 };
 
 /**
+ * Column counts that divide the row evenly, so the last line is never a short one.
+ *
+ * `auto-fit` packs as many columns as fit and leaves whatever is left over stranded: six
+ * cards on a 1280px screen came out four-then-two, with the dead space beside the orphans
+ * reading as a missing card rather than as the end of the row. Counting off the number of
+ * cards instead means every breakpoint divides the set — six goes 3+3 then 6, eight goes
+ * 4+4 then 8 — and the row always ends flush.
+ *
+ * Written as whole literal class strings because the JIT reads them, not as an
+ * interpolated `grid-cols-${n}` it would never see.
+ */
+const COLUMNS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 lg:grid-cols-3',
+  4: 'grid-cols-2 lg:grid-cols-4',
+  5: 'grid-cols-2 lg:grid-cols-5',
+  6: 'grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6',
+  8: 'grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8',
+  9: 'grid-cols-3 lg:grid-cols-3 2xl:grid-cols-9',
+  10: 'grid-cols-2 lg:grid-cols-5 2xl:grid-cols-10',
+  12: 'grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6',
+};
+
+/** A count with no clean division — seven, eleven — keeps the packing behaviour, because
+ *  a stranded card is a smaller problem than a row of seven 90px slivers. */
+const PACKED = '[grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]';
+
+function columnsFor(n: number, min = PACKED): string {
+  return COLUMNS[n] ?? min;
+}
+
+/**
  * The analytics band that opens every module screen: KPI cards, then a trend chart with
  * the weekday bars and a rate gauge beside it.
  *
@@ -133,7 +166,7 @@ export function MetricsBand({
             </div>
           ) : null}
 
-          <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(190px,1fr))]">
+          <div className={cn('grid gap-3.5', columnsFor(kpis.length))}>
             {kpis.map((k, i) => (
               <KpiCard
                 key={k.key}
@@ -151,7 +184,12 @@ export function MetricsBand({
               ) : null}
               {/* Narrower columns than the primary row, so the two are legible as
                   different tiers without a heading saying so. */}
-              <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]">
+              <div
+                className={cn(
+                  'grid gap-3.5',
+                  columnsFor(secondary.length, '[grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]'),
+                )}
+              >
                 {secondary.map((k, i) => (
                   <KpiCard
                     key={k.key}
