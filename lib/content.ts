@@ -60,6 +60,13 @@ export const contentPatch = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   format: z.enum(FORMATS).optional(),
   publishDate: z.string().date().nullable().optional(),
+  /** "09:30" from an <input type="time">, or null to clear the slot. */
+  publishTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'A time looks like 09:30.')
+    .nullable()
+    .optional(),
+  assetShape: z.string().trim().max(60).nullable().optional(),
   authorEmail: z.email().nullable().optional(),
   designerEmail: z.email().nullable().optional(),
   partnerVoice: z.string().trim().max(120).nullable().optional(),
@@ -102,12 +109,21 @@ export async function updateContent(id: string, patch: ContentPatch, actorEmail:
   });
   if (!existing) return null;
 
-  const { publishDate, ...rest } = patch;
+  const { publishDate, publishTime, ...rest } = patch;
   const data: Record<string, unknown> = { ...rest };
   if (publishDate !== undefined) {
     // A date, or null to take the piece off the calendar without deleting it — which is
     // what happens to a post that is postponed and not yet re-planned.
     data.publishDate = publishDate === null ? null : new Date(publishDate);
+  }
+  if (publishTime !== undefined) {
+    // The form sends a wall clock; the column holds minutes from midnight. Converted here
+    // rather than in the browser so the one that reaches the database is the one shape.
+    if (publishTime === null) data.publishMinute = null;
+    else {
+      const [hours, minutes] = publishTime.split(':').map(Number);
+      data.publishMinute = hours * 60 + minutes;
+    }
   }
 
   const changed = Object.keys(data);

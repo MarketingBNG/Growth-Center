@@ -7,6 +7,7 @@ import {
   MAX_BRIEF,
   SERVICE_LINES,
   TOPIC_CLUSTERS,
+  formatSlot,
   type ContentFormat,
 } from './content-fields.ts';
 
@@ -76,6 +77,8 @@ export const monthLabel = (month: Date): string =>
  */
 const HEADER_ALIASES: Record<string, readonly string[]> = {
   publishDate: ['date', 'publishdate', 'publishingdate', 'postdate', 'postingdate', 'golive', 'golivedate', 'day', 'scheduleddate', 'schedule'],
+  publishMinute: ['time', 'slot', 'publishtime', 'posttime', 'postingtime', 'scheduledtime', 'golivetime', 'timeslot'],
+  assetShape: ['assetshape', 'shape', 'assetformat', 'creativetype'],
   title: ['title', 'topic', 'content', 'contenttitle', 'headline', 'subject', 'idea', 'post', 'name', 'description'],
   format: ['format', 'type', 'contenttype', 'assettype', 'medium', 'kind'],
   status: ['status', 'stage', 'state', 'progress'],
@@ -258,6 +261,46 @@ export function parseCalendarDate(value: unknown, month: Date): Date | null {
   return null;
 }
 
+/**
+ * A time of day as minutes from midnight, or null.
+ *
+ * Accepts what a calendar writes: "9:30 AM IST", "6:00 PM", "18:00", "9 AM", "10.30 am".
+ * The timezone suffix is read and discarded — see CALENDAR_TIMEZONE for why there is one
+ * clock and not a column of them.
+ *
+ * Refuses rather than guesses on anything out of range, so "25:00" and "9:75" become no
+ * slot instead of a post scheduled at some hour that does not exist.
+ */
+export function parseSlot(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    // A spreadsheet time cell is a fraction of a day: 0.395833… is 09:30. Whole numbers
+    // are not times — a bare 9 in a slot column means nine o'clock, handled below as text.
+    if (value > 0 && value < 1) return Math.round(value * 1440);
+    return null;
+  }
+
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  const match = /^(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/i.exec(text);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minutes = match[2] === undefined ? 0 : Number(match[2]);
+  const meridiem = match[3]?.toLowerCase();
+
+  if (minutes > 59) return null;
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    if (meridiem === 'am') hour = hour === 12 ? 0 : hour;
+    else hour = hour === 12 ? 12 : hour + 12;
+  } else if (hour > 23) {
+    return null;
+  }
+
+  return hour * 60 + minutes;
+}
+
 // ── Reading the rest of a row ─────────────────────────────────────────────────────────
 
 /**
@@ -374,8 +417,12 @@ export function readTags(value: string): string[] {
 
 export type CalendarRow = {
   publishDate: Date;
+  /** Minutes from midnight, wall-clock. See ContentPiece.publishMinute. */
+  publishMinute: number | null;
   title: string;
   format: ContentFormat;
+  /** The asset in the file's own words, where it said. See ContentPiece.assetShape. */
+  assetShape: string | null;
   status: (typeof CONTENT_STATUSES)[number];
   authorEmail: string | null;
   designerEmail: string | null;
@@ -454,8 +501,13 @@ export function readRow(
     unresolvedPerson: author && !authorEmail ? author : null,
     row: {
       publishDate: parsed,
+      publishMinute: parseSlot(raw('publishMinute')),
       title,
       format: readFormat(text('format')),
+      // The type column's own words, kept beside the six-value `format` derived from
+      // them: "Instagram Reel" and "CAROUSEL - 5 slides" both reduce to one of six, and
+      // the reduction is what the board needs rather than what a producer does.
+      assetShape: clamp(text('assetShape'), 60) ?? clamp(text('format'), 60),
       // A calendar with dates is a plan, and a plan is an idea until somebody works on
       // it. Only a status the file states is taken; §15.3's ordering means a piece cannot
       // be dropped straight into `published` by a spreadsheet either way.
@@ -663,16 +715,10 @@ export function readBlock(
   let assetUrl: string | null = null;
   const brief: string[] = [];
 
-  // The header's own words, kept as words. `format` reduces the asset shape to one of six
-  // values, which is what the board needs and is not what a producer needs: "STATIC",
-  // "CAROUSEL - 5 slides" and "TEXT + IMAGE (1 creative)" all become `social`, and after
-  // that nothing on the piece could tell a single image from a five-slide deck. The slot
-  // and the profile go the same way for the same reason — the schema has no field for
-  // either, and a 6:00 PM IST Instagram post is not interchangeable with a 10:00 AM
-  // LinkedIn one.
-  if (parsed.slot) brief.push(`SLOT: ${parsed.slot}`);
-  if (parsed.profile) brief.push(`PROFILE: ${parsed.profile}`);
-  if (parsed.shape) brief.push(`ASSET: ${parsed.shape}`);
+  // The header's three facts now have columns of their own — publishMinute, assetShape,
+  // and channelSlug or partnerVoice — so they are not copied into the brief as well. They
+  // were, for one commit, because the schema had nowhere else to put them; a field and a
+  // line of prose saying the same thing is how the two come to disagree after an edit.
 
   for (const row of rows) {
     const label = (row[0] ?? '').trim();
@@ -714,8 +760,10 @@ export function readBlock(
     unresolvedPerson: owner && !EMAIL.test(owner) ? owner : null,
     row: {
       publishDate: parsed.publishDate,
+      publishMinute: parseSlot(parsed.slot),
       title,
       format: readBlockFormat(parsed.shape, parsed.profile),
+      assetShape: parsed.shape ? parsed.shape.slice(0, 60) : null,
       status: status ?? 'idea',
       authorEmail: owner && EMAIL.test(owner) ? owner.toLowerCase() : null,
       designerEmail: null,
@@ -886,6 +934,9 @@ export type CalendarPiece = {
   id: string;
   title: string;
   format: string;
+  assetShape: string | null;
+  /** Minutes from midnight, wall-clock, or null where the piece has no slot. */
+  publishMinute: number | null;
   status: (typeof CONTENT_STATUSES)[number];
   publishDate: Date;
   authorEmail: string | null;
@@ -939,9 +990,16 @@ export async function contentCalendar(month: Date) {
   const [pieces, imports] = await Promise.all([
     db().contentPiece.findMany({
       where: { publishDate: { gte: from, lt: to } },
-      orderBy: [{ publishDate: 'asc' }, { createdAt: 'asc' }],
+      // Within a day, by slot: three posts on the 7th are a running order, not a set.
+      // Nulls last, because a piece with no time is not scheduled before one with 9:30.
+      orderBy: [
+        { publishDate: 'asc' },
+        { publishMinute: { sort: 'asc', nulls: 'last' } },
+        { createdAt: 'asc' },
+      ],
       select: {
         id: true, title: true, format: true, status: true, publishDate: true,
+        publishMinute: true, assetShape: true,
         authorEmail: true, designerEmail: true, partnerVoice: true, channelSlug: true,
         brief: true, url: true, assetUrl: true, targetKeyword: true, topicCluster: true,
         segment: true, serviceLine: true, tags: true,
@@ -961,6 +1019,8 @@ export async function contentCalendar(month: Date) {
     id: p.id,
     title: p.title,
     format: p.format,
+    assetShape: p.assetShape,
+    publishMinute: p.publishMinute,
     status: p.status,
     // Non-null by the query: the month is a range filter on this column.
     publishDate: p.publishDate as Date,
@@ -1186,18 +1246,23 @@ export async function importCalendar(input: {
  * worth having: the export is how you get a template.
  */
 export const EXPORT_HEADERS = [
-  'Date', 'Title', 'Format', 'Status', 'Author', 'Designer', 'Partner voice', 'Channel',
-  'Topic cluster', 'Segment', 'Service line', 'Target keyword', 'Brief', 'URL', 'Asset',
-  'Tags', 'Views', 'Leads',
+  'Date', 'Time', 'Title', 'Format', 'Asset shape', 'Status', 'Author', 'Designer',
+  'Partner voice', 'Channel', 'Topic cluster', 'Segment', 'Service line', 'Target keyword',
+  'Brief', 'URL', 'Asset', 'Tags', 'Views', 'Leads',
 ] as const;
 
 export async function calendarRowsForExport(month: Date) {
   const { from, to } = monthRange(month);
   const pieces = await db().contentPiece.findMany({
     where: { publishDate: { gte: from, lt: to } },
-    orderBy: [{ publishDate: 'asc' }, { title: 'asc' }],
+    orderBy: [
+      { publishDate: 'asc' },
+      { publishMinute: { sort: 'asc', nulls: 'last' } },
+      { title: 'asc' },
+    ],
     select: {
-      publishDate: true, title: true, format: true, status: true, authorEmail: true,
+      publishDate: true, publishMinute: true, title: true, format: true, assetShape: true,
+      status: true, authorEmail: true,
       designerEmail: true, partnerVoice: true, channelSlug: true, topicCluster: true,
       segment: true, serviceLine: true, targetKeyword: true, brief: true, url: true,
       assetUrl: true, tags: true, views: true, leadsGenerated: true,
@@ -1206,8 +1271,12 @@ export async function calendarRowsForExport(month: Date) {
 
   return pieces.map((p) => [
     p.publishDate ? p.publishDate.toISOString().slice(0, 10) : '',
+    // "9:30 AM" rather than 570: the export is read by people, and `parseSlot` reads it
+    // straight back on the way in.
+    formatSlot(p.publishMinute) ?? '',
     p.title,
     p.format,
+    p.assetShape ?? '',
     p.status,
     p.authorEmail ?? '',
     p.designerEmail ?? '',

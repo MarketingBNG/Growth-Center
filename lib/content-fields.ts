@@ -10,6 +10,36 @@
 // The lists live here so the form, the filters and the reports read one copy.
 
 /**
+ * The clock a content slot is written against.
+ *
+ * A label, not a conversion. `ContentPiece.publishMinute` is wall-clock minutes from
+ * midnight and the firm is in one timezone — every slot in the studio's calendars is
+ * written IST — so converting to UTC and back would add a class of off-by-five-and-a-half
+ * hours bug in exchange for nothing. This is here so the UI can say which clock it means
+ * rather than showing a bare "9:30" and leaving the reader to guess.
+ *
+ * If content ever has to be scheduled against a second timezone, that is a per-piece
+ * column and a real change — not a matter of editing this string.
+ */
+export const CALENDAR_TIMEZONE = 'IST';
+
+/** `570` → `"9:30 AM"`. Null passes through, because most pieces have no slot. */
+export function formatSlot(minute: number | null | undefined): string | null {
+  if (minute === null || minute === undefined) return null;
+  const hour = Math.floor(minute / 60) % 24;
+  const minutes = minute % 60;
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const shown = hour % 12 === 0 ? 12 : hour % 12;
+  return `${shown}:${String(minutes).padStart(2, '0')} ${suffix}`;
+}
+
+/** `570` → `"09:30"`, for an `<input type="time">`. */
+export function slotToInput(minute: number | null | undefined): string {
+  if (minute === null || minute === undefined) return '';
+  return `${String(Math.floor(minute / 60) % 24).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
+}
+
+/**
  * How much of a brief is kept, everywhere that keeps one.
  *
  * 4,000 was a form limit standing in for a column limit that does not exist — `brief` is

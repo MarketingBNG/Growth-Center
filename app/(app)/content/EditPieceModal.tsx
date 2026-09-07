@@ -8,7 +8,15 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/enums';
-import { FORMAT_LABELS, FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from '@/lib/content-fields';
+import {
+  CALENDAR_TIMEZONE,
+  FORMAT_LABELS,
+  FORMATS,
+  MAX_BRIEF,
+  SERVICE_LINES,
+  TOPIC_CLUSTERS,
+  slotToInput,
+} from '@/lib/content-fields';
 import { COMPANY_SEGMENTS } from '@/lib/company-facts';
 
 export type EditablePiece = {
@@ -18,6 +26,9 @@ export type EditablePiece = {
   status: string;
   /** `YYYY-MM-DD`, for the date input. Null where the piece is not on the calendar. */
   publishDate: string | null;
+  /** Minutes from midnight, wall-clock. Null where the piece has no slot. */
+  publishMinute: number | null;
+  assetShape: string | null;
   authorEmail: string | null;
   designerEmail: string | null;
   partnerVoice: string | null;
@@ -88,6 +99,10 @@ export function EditPieceModal({
           status: form.get('status'),
           format: form.get('format'),
           publishDate: value('publishDate'),
+          // "09:30" from the time input, converted to minutes on the server so there is
+          // one place that knows the column's shape.
+          publishTime: value('publishTime'),
+          assetShape: value('assetShape'),
           authorEmail: value('authorEmail'),
           designerEmail: value('designerEmail'),
           partnerVoice: value('partnerVoice'),
@@ -122,9 +137,12 @@ export function EditPieceModal({
           <Input name="title" required maxLength={200} defaultValue={piece.title} />
         </Field>
 
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <Field label="Date">
             <Input type="date" name="publishDate" defaultValue={piece.publishDate ?? ''} />
+          </Field>
+          <Field label={`Slot (${CALENDAR_TIMEZONE})`}>
+            <Input type="time" name="publishTime" defaultValue={slotToInput(piece.publishMinute)} />
           </Field>
           <Field label="Status">
             <Select name="status" defaultValue={piece.status}>
@@ -139,6 +157,13 @@ export function EditPieceModal({
             </Select>
           </Field>
         </div>
+
+        <Field
+          label="Asset"
+          hint="The shape in your own words — &ldquo;Carousel, 5 slides&rdquo;. Format above is the six-value one the board groups by."
+        >
+          <Input name="assetShape" maxLength={60} defaultValue={piece.assetShape ?? ''} />
+        </Field>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Author" hint="An email address — it is who the board holds responsible.">

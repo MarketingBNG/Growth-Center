@@ -9,11 +9,13 @@ import {
   parseMonth,
   looksLikeMasterSheet,
   readBlockHeader,
+  parseSlot,
   readFormat,
   readMasterSheet,
   readSheet,
   readStatus,
 } from '../lib/content-calendar.ts';
+import { formatSlot, slotToInput } from '../lib/content-fields.ts';
 
 // The content board could only be filled by hand — its own empty state said so — and a
 // month's calendar is always already written, in a spreadsheet, by whoever planned it.
@@ -331,12 +333,6 @@ test('the brief keeps every content row, with the label the sheet gave it', () =
   // into one editable field is what makes an imported piece worth opening.
   const [labor] = readMasterSheet(MASTER, SEP).rows;
   for (const expected of [
-    'SLOT: 9:30 AM IST',
-    'PROFILE: INSTAGRAM + LINKEDIN',
-    // `format` reduces the shape to one of six values, so "STATIC", "CAROUSEL - 5 slides"
-    // and "TEXT + IMAGE (1 creative)" all become `social`. Without this line nothing on
-    // the piece could tell a single image from a five-slide deck.
-    'ASSET: STATIC',
     'HOOK / ON-CREATIVE LINE:',
     'TO EVERYONE WHO BUILT SOMETHING TODAY.',
     'FULL CREATIVE TEXT:',
@@ -349,6 +345,20 @@ test('the brief keeps every content row, with the label the sheet gave it', () =
   // The rows that became fields of their own are not repeated as prose.
   assert.equal(labor.brief?.includes('#LaborDay'), false);
   assert.equal(labor.brief?.includes('Draft |'), false);
+  // Nor are the header's three facts, which have columns of their own. They were copied
+  // into the brief for one commit, while the schema had nowhere else to put them; a field
+  // and a line of prose saying the same thing is how the two come to disagree after an edit.
+  assert.equal(labor.brief?.includes('SLOT:'), false);
+  assert.equal(labor.brief?.includes('ASSET:'), false);
+  assert.equal(labor.brief?.includes('PROFILE:'), false);
+});
+
+test('the slot and the asset shape come off the header into columns of their own', () => {
+  const [labor, akshay] = readMasterSheet(MASTER, SEP).rows;
+  assert.equal(labor.publishMinute, 570, '9:30 AM is 570 minutes from midnight');
+  assert.equal(labor.assetShape, 'STATIC');
+  assert.equal(akshay.publishMinute, 600, '10:00 AM');
+  assert.equal(akshay.assetShape, 'TEXT');
 });
 
 test('anything in the status cell that is not status, owner or asset link is kept', () => {
@@ -398,4 +408,68 @@ test('a block dated outside the month is refused, like a row would be', () => {
   const read = readMasterSheet(october, SEP);
   assert.equal(read.rows.length, 1);
   assert.match(read.skippedReasons[0], /outside September 2026/);
+});
+
+// ── Slots ────────────────────────────────────────────────────────────────────────────
+//
+// September's master sheet schedules every post to the minute — "9:30 AM IST", "6:00 PM
+// IST" — and for one commit that survived only as a line of prose inside the brief. A
+// calendar whose times are text cannot put three posts on the 7th in the order they go
+// out, which is most of what a slot is for.
+
+test('a slot is read from however a calendar writes a time', () => {
+  assert.equal(parseSlot('9:30 AM IST'), 570);
+  assert.equal(parseSlot('6:00 PM IST'), 1080);
+  assert.equal(parseSlot('18:00'), 1080);
+  assert.equal(parseSlot('9 AM'), 540);
+  assert.equal(parseSlot('10.30 am'), 630);
+  // Midnight and noon are the two the twelve-hour clock gets wrong.
+  assert.equal(parseSlot('12:00 AM'), 0);
+  assert.equal(parseSlot('12:30 PM'), 750);
+});
+
+test('an impossible time is no slot rather than a guess', () => {
+  // Otherwise a typo becomes a post scheduled at an hour that does not exist, and the
+  // running order for that day is quietly wrong.
+  assert.equal(parseSlot('25:00'), null);
+  assert.equal(parseSlot('9:75'), null);
+  assert.equal(parseSlot('13:00 PM'), null);
+  assert.equal(parseSlot('sometime'), null);
+  assert.equal(parseSlot(''), null);
+  assert.equal(parseSlot(null), null);
+});
+
+test('a spreadsheet time cell is a fraction of a day', () => {
+  // What Excel and Sheets hand back for a cell formatted as a time. 0.395833… is 09:30.
+  assert.equal(parseSlot(0.3958333333333333), 570);
+  assert.equal(parseSlot(0.75), 1080);
+  // A whole number in a time column is not a fraction of a day — and not a time either.
+  assert.equal(parseSlot(9), null);
+});
+
+test('a slot is shown as a clock and edited as one', () => {
+  assert.equal(formatSlot(570), '9:30 AM');
+  assert.equal(formatSlot(1080), '6:00 PM');
+  assert.equal(formatSlot(0), '12:00 AM');
+  assert.equal(formatSlot(720), '12:00 PM');
+  assert.equal(formatSlot(null), null, 'most pieces have no slot, and that is not an error');
+  assert.equal(slotToInput(570), '09:30');
+  assert.equal(slotToInput(null), '');
+});
+
+test('a table can name a time and an asset shape, and both survive the export', () => {
+  const table = [
+    ['Date', 'Time', 'Title', 'Type'],
+    ['2026-09-02', '6:00 PM', 'Q3 tax recap', 'Instagram Reel'],
+  ];
+  const [row] = readSheet(table, SEP).rows;
+  assert.equal(row.publishMinute, 1080);
+  assert.equal(row.format, 'video', 'the six-value column the board groups by');
+  assert.equal(row.assetShape, 'Instagram Reel', "and the file's own words beside it");
+
+  // The round trip has to keep holding, or an export edited in Sheets loses its times.
+  const { columns, unmapped } = mapHeaders([...EXPORT_HEADERS]);
+  assert.deepEqual(unmapped, []);
+  assert.notEqual(columns.publishMinute, undefined, 'Time is not read back');
+  assert.notEqual(columns.assetShape, undefined, 'Asset shape is not read back');
 });

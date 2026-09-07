@@ -1337,6 +1337,30 @@ model ContentPiece {
   url         String?
   publishDate DateTime?
 
+  /// The slot within the day, as minutes from midnight — 570 is 09:30, 1080 is 18:00.
+  ///
+  /// A separate column rather than a time on `publishDate`, which is a day held as
+  /// midnight UTC and read back with getUTCDate() all over the calendar. Folding a time
+  /// into it would move any post scheduled before 05:30 IST into the previous day's cell
+  /// and make the month grid quietly wrong.
+  ///
+  /// Minutes rather than a "09:30" string because this sorts, and sorting is most of what
+  /// it is for: three posts on the same day are a running order, not a set.
+  ///
+  /// Wall-clock time in the firm's own timezone — see CALENDAR_TIMEZONE. Not a UTC
+  /// instant: a content calendar says "9:30 AM" and means the clock on the wall, and
+  /// every slot in the studio's sheets is written IST.
+  publishMinute Int?
+
+  /// The asset in the studio's own words: "STATIC", "CAROUSEL - 5 slides",
+  /// "TEXT + IMAGE (1 creative)".
+  ///
+  /// `format` cannot carry this and should not: it has six values, and every social post
+  /// in September's calendar is `social` under it — which left a single image and a
+  /// five-slide deck indistinguishable after import. This is what a producer reads; the
+  /// format is what the board groups by.
+  assetShape String?
+
   /// §15.2's record. Everything the agent reviews and everything the reports count hangs
   /// off this, and none of it existed: the board had a title, a format and a brief.
   ///
@@ -1423,8 +1447,9 @@ model ContentPiece {
 
   @@index([status])
   @@index([parentId])
-  /// The calendar reads one month at a time, which is a range scan on this column.
-  @@index([publishDate])
+  /// The calendar reads one month at a time and orders each day by its slot, which is a
+  /// range scan on the first column and a sort on the second.
+  @@index([publishDate, publishMinute])
   @@map("content_piece")
 }
 

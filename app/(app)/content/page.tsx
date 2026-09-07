@@ -224,6 +224,8 @@ function CalendarView({
           format: p.format,
           status: p.status,
           publishDate: p.publishDate.toISOString().slice(0, 10),
+          publishMinute: p.publishMinute,
+          assetShape: p.assetShape,
           authorEmail: p.authorEmail,
           designerEmail: p.designerEmail,
           partnerVoice: p.partnerVoice,

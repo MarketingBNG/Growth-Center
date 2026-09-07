@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { formatSlot } from '@/lib/content-fields';
 import { EditPieceModal, type EditablePiece } from './EditPieceModal';
 
 export type CalendarCell = {
@@ -90,6 +91,14 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                           onClick={() => setEditing(piece)}
                           className="block w-full rounded-lg border border-border bg-secondary/40 p-1.5 text-left transition-colors hover:bg-secondary"
                         >
+                          {/* The slot, where there is one. A day holds three posts here
+                              and the time is what distinguishes them; the running order
+                              comes from the query, which sorts on it. */}
+                          {formatSlot(piece.publishMinute) ? (
+                            <span className="block pb-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                              {formatSlot(piece.publishMinute)}
+                            </span>
+                          ) : null}
                           <span className="flex items-start justify-between gap-1">
                             <span className="line-clamp-2 text-[11.5px] font-medium leading-snug">
                               {piece.title}
@@ -103,8 +112,10 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                             ) : null}
                           </span>
                           <span className="mt-1 flex flex-wrap items-center gap-1">
+                            {/* The studio's own word for the asset where it gave one —
+                                "CAROUSEL - 5 slides" says more than "social". */}
                             <Badge tone={FORMAT_TONE[piece.format] ?? 'neutral'}>
-                              {piece.format.replaceAll('_', ' ')}
+                              {piece.assetShape ?? piece.format.replaceAll('_', ' ')}
                             </Badge>
                             {piece.authorEmail ? (
                               <span className="text-[10px] text-muted-foreground">
