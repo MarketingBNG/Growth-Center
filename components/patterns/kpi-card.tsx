@@ -186,7 +186,10 @@ export function KpiCard({
         ) : null}
       </div>
 
-      <p className="pt-1.5 text-[11.5px] text-muted-foreground">
+      {/* Clamped: when a card has no value this line falls back to the full hint, and
+          one long fallback used to stretch every card in the grid row to match it. The
+          whole text is still a hover away in the tooltip below. */}
+      <p className="line-clamp-2 pt-1.5 text-[11.5px] text-muted-foreground">
         {change === null
           ? kpi.value === null
             ? // The note comes first: when a card has no value the reason is the whole

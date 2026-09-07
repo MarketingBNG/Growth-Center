@@ -322,7 +322,7 @@ export async function dashboardBand(
       kpis: picked,
       secondary: demoted,
       secondaryNote:
-        'Volume and totals. §6.1 moved these below the scorecard: a firm whose constraint is senior delivery time is not managed by its visitor count.',
+        'Volume and totals. Below the scorecard because a firm whose constraint is senior delivery time is not managed by its visitor count.',
       // From the funnel rather than the picked cards: the dashboard shows a subset, and a
       // selection that happened to exclude every money card would lose the currency.
       currency: f.currency,

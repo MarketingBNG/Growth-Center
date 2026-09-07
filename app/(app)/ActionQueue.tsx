@@ -47,13 +47,38 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
     },
   });
 
-  const queue = [...rows]
-    .sort(
-      (a, b) =>
-        (SEVERITY_RANK[a.severity ?? 'info'] ?? 3) - (SEVERITY_RANK[b.severity ?? 'info'] ?? 3) ||
-        (a.firstSeenAt ?? a.createdAt).getTime() - (b.firstSeenAt ?? b.createdAt).getTime(),
-    )
-    .slice(0, take);
+  const sorted = [...rows].sort(
+    (a, b) =>
+      (SEVERITY_RANK[a.severity ?? 'info'] ?? 3) - (SEVERITY_RANK[b.severity ?? 'info'] ?? 3) ||
+      (a.firstSeenAt ?? a.createdAt).getTime() - (b.firstSeenAt ?? b.createdAt).getTime(),
+  );
+
+  // The rules raise one finding per offending record, so a template problem that affects
+  // three sequences arrives as three rows that are word-for-word identical and carry the
+  // same decision. Shown separately they push the numbers off the screen and read as
+  // three problems. Collapsed with a count they read as the one problem they are — and
+  // the count is the part that says how much work it is.
+  //
+  // Grouped on the wording AND the owner AND the status: two rows that say the same thing
+  // but sit with different people are two pieces of work, not one, and merging them would
+  // hide a name.
+  const groups: { row: (typeof sorted)[number]; count: number }[] = [];
+  const seen = new Map<string, number>();
+  for (const row of sorted) {
+    const k = JSON.stringify([row.title, row.proposedAction, row.ownerEmail, row.status]);
+    const at = seen.get(k);
+    if (at === undefined) {
+      seen.set(k, groups.length);
+      // The first of a group is the worst and longest-waiting of it, the list being
+      // sorted already, so the row that represents the group is the one that set its
+      // place in the queue.
+      groups.push({ row, count: 1 });
+    } else {
+      groups[at].count += 1;
+    }
+  }
+
+  const queue = groups.slice(0, take);
 
   const unowned = rows.filter((r) => r.ownerEmail === null).length;
 
@@ -83,7 +108,7 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
         </p>
       ) : (
         <ul className="divide-y divide-border border-t border-border">
-          {queue.map((row) => {
+          {queue.map(({ row, count }) => {
             const status = (row.status as InsightStatus) ?? 'proposed';
             const waiting = row.firstSeenAt ?? row.createdAt;
             return (
@@ -96,6 +121,14 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
                   <Link href="/ai" className="text-xs font-medium hover:text-primary">
                     {row.title}
                   </Link>
+                  {count > 1 ? (
+                    <span
+                      className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold tnum text-muted-foreground"
+                      title={`${count} records raise this same finding`}
+                    >
+                      ×{count}
+                    </span>
+                  ) : null}
                   {/* The action, not the analysis. A row with no proposed action is a row
                       nobody can work, and saying so is more useful than leaving it blank. */}
                   <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
