@@ -10,13 +10,13 @@ import {
 } from './content-approval.ts';
 import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from './enums.ts';
 import { COMPANY_SEGMENTS } from './company-facts.ts';
-import { SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
+import { FORMATS, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from './calc.ts';
 
 export const contentInput = z.object({
   title: z.string().trim().min(1).max(200),
   status: z.enum(CONTENT_STATUSES).default('idea'),
-  format: z.enum(['blog', 'video', 'social', 'email', 'landing_page', 'case_study']).default('blog'),
+  format: z.enum(FORMATS).default('blog'),
   authorEmail: z.string().trim().email().optional(),
   channelSlug: z.string().trim().max(60).optional(),
   campaignId: z.string().min(1).optional(),
@@ -40,6 +40,95 @@ export const contentInput = z.object({
 });
 
 export type ContentInput = z.infer<typeof contentInput>;
+
+/**
+ * What a person may change about a piece after it exists.
+ *
+ * Every field is optional and `null` means "clear it", which is why this is not
+ * `contentInput.partial()`: the create schema cannot tell an omitted field from a
+ * deliberately emptied one, and an edit form sends the whole record every time.
+ *
+ * `status` is absent on purpose. Moving a piece is `setContentStatus`, which enforces
+ * §15.3's ordering and §21.2's publish gate — a status that could also be written through
+ * here would be a way around both.
+ *
+ * The performance columns are absent for the same kind of reason: `views` and
+ * `leadsGenerated` are written by the metrics join, and a board where they can be typed
+ * in is a board whose numbers mean nothing.
+ */
+export const contentPatch = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  format: z.enum(FORMATS).optional(),
+  publishDate: z.string().date().nullable().optional(),
+  authorEmail: z.email().nullable().optional(),
+  designerEmail: z.email().nullable().optional(),
+  partnerVoice: z.string().trim().max(120).nullable().optional(),
+  channelSlug: z.string().trim().max(60).nullable().optional(),
+  brief: z.string().trim().max(4000).nullable().optional(),
+  url: z.string().trim().max(500).nullable().optional(),
+  assetUrl: z.string().trim().max(500).nullable().optional(),
+  targetKeyword: z.string().trim().max(200).nullable().optional(),
+  topicCluster: z.enum(TOPIC_CLUSTERS).nullable().optional(),
+  segment: z.enum(COMPANY_SEGMENTS).nullable().optional(),
+  serviceLine: z.enum(SERVICE_LINES).nullable().optional(),
+  campaignId: z.string().min(1).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+});
+
+export type ContentPatch = z.infer<typeof contentPatch>;
+
+/**
+ * Edits a piece, and records which fields changed.
+ *
+ * Until now a piece could be created and dragged between statuses and nothing else. A
+ * calendar that cannot be corrected is a calendar that gets corrected in the spreadsheet
+ * and re-uploaded, which is how the copy on screen stops being the one anybody trusts.
+ *
+ * Nothing here touches `approvedHash`. That is the point of the hash: §21.2 records the
+ * exact version an approver read, and `approvalState` compares it against the piece as it
+ * now stands — so an edit to a title or a brief makes a standing approval read as stale
+ * on its own, and the publish gate refuses it, without this function having to know which
+ * fields an approval covers. Clearing the approval here would be worse: it would erase the
+ * fact that somebody approved something, which is the record §21.2 asks for.
+ *
+ * The audit detail carries only the field names, not the old and new values. A brief is up
+ * to 4,000 characters and two of them per edit would make the log unreadable for the sake
+ * of a diff nobody reads; the names answer "who changed what", which is the question.
+ */
+export async function updateContent(id: string, patch: ContentPatch, actorEmail: string) {
+  const existing = await db().contentPiece.findUnique({
+    where: { id },
+    select: { id: true, title: true, status: true },
+  });
+  if (!existing) return null;
+
+  const { publishDate, ...rest } = patch;
+  const data: Record<string, unknown> = { ...rest };
+  if (publishDate !== undefined) {
+    // A date, or null to take the piece off the calendar without deleting it — which is
+    // what happens to a post that is postponed and not yet re-planned.
+    data.publishDate = publishDate === null ? null : new Date(publishDate);
+  }
+
+  const changed = Object.keys(data);
+  if (!changed.length) return { id, changed: [] as string[], unchanged: true };
+
+  await db().contentPiece.update({ where: { id }, data });
+
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'content.update',
+      entityType: 'content_piece',
+      entityId: id,
+      // The title as it was, so the log still says which piece this was about after the
+      // piece has been renamed twice.
+      detail: { title: existing.title, fields: changed },
+    },
+  });
+
+  return { id, changed, unchanged: false };
+}
 
 /**
  * The line under the approval label: who, when, and how long this has been waiting.

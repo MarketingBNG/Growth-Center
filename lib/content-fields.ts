@@ -10,6 +10,28 @@
 // The lists live here so the form, the filters and the reports read one copy.
 
 /**
+ * The six values the `format` column holds.
+ *
+ * Here rather than beside the code that reads a spreadsheet, and rather than typed out
+ * again in every form, for the reason this file exists: the form, the calendar's importer
+ * and the create/patch schemas need the same list, and two of those are client
+ * components. A client component that reaches into a module which can also reach the
+ * database drags the `pg` driver into the browser bundle and the build dies on "Can't
+ * resolve 'fs'" — see tools/client-boundary.test.ts, which has caught it four times now.
+ */
+export const FORMATS = ['blog', 'video', 'social', 'email', 'landing_page', 'case_study'] as const;
+export type ContentFormat = (typeof FORMATS)[number];
+
+export const FORMAT_LABELS: Record<ContentFormat, string> = {
+  blog: 'Blog',
+  video: 'Video',
+  social: 'Social',
+  email: 'Email',
+  landing_page: 'Landing page',
+  case_study: 'Case study',
+};
+
+/**
  * §15.2's nine content types, verbatim.
  *
  * Wider than the existing `format` column, which has six values and reads as a technical

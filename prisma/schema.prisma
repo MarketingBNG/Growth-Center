@@ -1409,12 +1409,74 @@ model ContentPiece {
 
   campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
+  /// The import this piece arrived on, where it came from a file rather than a person.
+  ///
+  /// SetNull rather than Cascade, deliberately: replacing a calendar deletes that
+  /// import's pieces explicitly, in one transaction that keeps anything already
+  /// published. A cascade would take the published piece and its views and leads with it,
+  /// and a spreadsheet uploaded twice is not a reason to lose a month of performance.
+  importId String?
+  import   ContentImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([parentId])
+  /// The calendar reads one month at a time, which is a range scan on this column.
+  @@index([publishDate])
   @@map("content_piece")
+}
+
+/// A content calendar that arrived as a file.
+///
+/// §15.4 says a hand-filled board decays in three weeks. This is the other half of that
+/// answer: the month's plan is usually already written, in a spreadsheet, by the person
+/// who planned it — so the board should be able to read it rather than ask for it twice.
+///
+/// One row per import, kept alongside the pieces it created, because "who imported this
+/// and which month is it for" is a question about the calendar on screen and nothing on
+/// a ContentPiece could answer it. Replacing an import deletes the row with its pieces,
+/// so the line on screen always describes the pieces underneath it.
+model ContentImport {
+  id String @id @default(cuid())
+
+  /// The month the calendar is for, as midnight on its first day, UTC.
+  ///
+  /// A month rather than a date range because that is the unit a content calendar is
+  /// planned in, and it is what makes "September's calendar" a single thing that can be
+  /// replaced.
+  month DateTime
+
+  importedByEmail String
+
+  /// The file as it was named on the uploader's machine. Afterwards it is the only clue
+  /// about which of three similarly-named spreadsheets was the one that landed.
+  fileName   String
+  /// csv | xlsx.
+  fileFormat String
+
+  /// Rows found in the file, pieces created from them, and rows refused.
+  ///
+  /// All three, because "34 pieces" out of 40 rows is a different fact from 34 out of 34,
+  /// and only the pair says whether anything was quietly lost on the way in.
+  rowsRead Int @default(0)
+  created  Int @default(0)
+  skipped  Int @default(0)
+
+  /// Why the refused rows were refused, one line each, as read from the file.
+  ///
+  /// Kept rather than logged: a row skipped for having no date is a row somebody has to
+  /// go and fix in the spreadsheet, and telling them at upload time and nowhere else
+  /// means the fix happens once and then gets lost.
+  skippedReasons String[] @default([])
+
+  pieces ContentPiece[]
+
+  createdAt DateTime @default(now())
+
+  @@index([month])
+  @@map("content_import")
 }
 
 // ─── AI, notifications, audit ─────────────────────────────────────────────────

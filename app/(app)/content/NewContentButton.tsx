@@ -9,8 +9,7 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
-
-const FORMATS = ['blog', 'video', 'social', 'email', 'landing_page', 'case_study'] as const;
+import { FORMAT_LABELS, FORMATS } from '@/lib/content-fields';
 
 export function NewContentButton() {
   const router = useRouter();
@@ -63,7 +62,7 @@ export function NewContentButton() {
             </Field>
             <Field label="Format">
               <Select name="format" defaultValue="blog">
-                {FORMATS.map((f) => <option key={f} value={f}>{f.replaceAll('_', ' ')}</option>)}
+                {FORMATS.map((f) => <option key={f} value={f}>{FORMAT_LABELS[f]}</option>)}
               </Select>
             </Field>
           </div>
