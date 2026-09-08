@@ -122,6 +122,15 @@ export default async function PipelinePage({
         </p>
       ) : null}
 
+      {/* Says out loud that there are two ways to move a deal. The board's is a drag,
+          which is invisible until somebody tries it and impossible without a pointer;
+          the table's stage dropdown is the same move from the keyboard. Neither was
+          discoverable, and one of them is the accessible one. */}
+      <p className="mb-3 text-[12.5px] text-muted-foreground">
+        Drag a card between columns to move a deal, or switch to Table and change its
+        stage from the dropdown — the same move, reachable from the keyboard.
+      </p>
+
       <PipelineViews columns={columns} currency={fx.reporting} />
     </>
   );

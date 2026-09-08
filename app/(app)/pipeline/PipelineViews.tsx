@@ -7,6 +7,7 @@ import { Kanban as KanbanIcon, Rows3 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
@@ -261,8 +262,75 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
   );
 }
 
+/**
+ * The Stage cell on the table view — and the only way to move a deal without a mouse.
+ *
+ * The board moves deals by dragging, which a pointer can do and a keyboard cannot. What
+ * is required is that the action be reachable, not that the gesture be reproduced, so the
+ * table carries the same move as a select: tab to it, choose a stage, done. It patches
+ * the endpoint the board drops onto, so both routes go through one guard.
+ *
+ * Shaped after RoleSelect on the Team page — same optimistic set, same revert on failure,
+ * same error line underneath — because a second dropdown that behaved differently would
+ * be a worse answer than either.
+ */
+function StageSelect({
+  dealId,
+  dealName,
+  stageId,
+  stages,
+}: {
+  dealId: string;
+  dealName: string;
+  stageId: string;
+  stages: Column['stage'][];
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState(stageId);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function change(next: string) {
+    const previous = value;
+    setValue(next);
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/api/pipeline/opportunities/${dealId}`, { method: 'PATCH', json: { stageId: next } });
+      router.refresh();
+    } catch (e) {
+      setValue(previous);
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-col gap-1">
+      <Select
+        aria-label={`Stage for ${dealName}`}
+        className="h-8 w-[170px]"
+        value={value}
+        disabled={busy}
+        onChange={(e) => change(e.target.value)}
+      >
+        {stages.map((st) => (
+          <option key={st.id} value={st.id}>
+            {st.name}
+          </option>
+        ))}
+      </Select>
+      {error ? <span className="text-[11px] text-destructive">{error}</span> : null}
+    </span>
+  );
+}
+
 function DealTable({ columns, currency }: { columns: Column[]; currency?: string }) {
-  const rows = columns.flatMap((c) => c.cards.map((d) => ({ ...d, stageName: c.stage.name })));
+  const rows = columns.flatMap((c) =>
+    c.cards.map((d) => ({ ...d, stageName: c.stage.name, stageId: c.stage.id })),
+  );
+  const stages = columns.map((c) => c.stage);
 
   if (rows.length === 0) {
     return (
@@ -303,7 +371,12 @@ function DealTable({ columns, currency }: { columns: Column[]; currency?: string
                 </TD>
                 <TD className="text-muted-foreground">{d.companyName ?? '—'}</TD>
                 <TD>
-                  <Badge tone="info">{d.stageName}</Badge>
+                  <StageSelect
+                    dealId={d.id}
+                    dealName={d.name}
+                    stageId={d.stageId}
+                    stages={stages}
+                  />
                 </TD>
                 <TD className="text-right tnum">{fmtMoney(d.value, false, currency)}</TD>
                 <TD className="text-right text-muted-foreground tnum">{d.probability}%</TD>
