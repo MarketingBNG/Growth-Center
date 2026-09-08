@@ -24,7 +24,12 @@ import { deliveryCapacity } from '@/lib/capacity';
 import { CostPerConsultation } from './CostPerConsultation';
 import { ActionQueue } from './ActionQueue';
 import { isPartnerView } from '@/lib/partner-view';
-import { PartnerViewToggle } from './PartnerView';
+import {
+  PartnerHidden,
+  PartnerViewProvider,
+  PartnerViewSubtitle,
+  PartnerViewToggle,
+} from './PartnerView';
 
 export const metadata = { title: 'Dashboard · Growth Center' };
 
@@ -146,20 +151,19 @@ export default async function DashboardPage({
   ];
 
   return (
-    <>
+    // The param seeds it; from then on the toggle is a client concern. See PartnerView.
+    <PartnerViewProvider initial={partnerView}>
       <PageHeader
         title={`Good to see you, ${first}`}
         subtitle={
-          partnerView
-            ? 'Performance only — owner names and per-person figures are hidden.'
-            : 'What is happening with growth, why, and what to do next.'
+          <PartnerViewSubtitle plain="What is happening with growth, why, and what to do next." />
         }
         actions={
           <>
             <RangePicker current={value} />
             {/* §6.6. Partners open this screen; they should see performance, not
                 individual staff scorecards. */}
-            <PartnerViewToggle active={partnerView} />
+            <PartnerViewToggle />
             {/* §6.3 still holds — the queue is the first thing on the morning screen and
                 sits above the numbers. It is a counted button rather than a card because
                 as a card it filled the whole opening screen and pushed the first figure
@@ -399,7 +403,9 @@ export default async function DashboardPage({
                       </p>
                       <p className="truncate text-meta text-muted-foreground">
                         {l.companyName ?? l.channel?.name ?? 'No company'} · {fmtRelative(l.createdAt)}
-                        {!partnerView && l.ownerEmail ? ` · ${l.ownerEmail.split('@')[0]}` : ''}
+                        {l.ownerEmail ? (
+                          <PartnerHidden> · {l.ownerEmail.split('@')[0]}</PartnerHidden>
+                        ) : null}
                       </p>
                     </div>
                     <LeadStatusBadge status={l.status} />
@@ -444,7 +450,7 @@ export default async function DashboardPage({
           <> · visitor → lead needs sessions from before {fmtDate(visitorsFrom)}</>
         ) : null}
       </p>
-    </>
+    </PartnerViewProvider>
   );
 }
 
