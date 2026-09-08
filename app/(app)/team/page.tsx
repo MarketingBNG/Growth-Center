@@ -109,8 +109,12 @@ async function TeamBody() {
                 <TH>Email</TH>
                 <TH>Role</TH>
                 <TH>Status</TH>
-                <TH>Last seen</TH>
-                <TH>First signed in</TH>
+                {/* Short, and told not to wrap. "First signed in" broke over three lines
+                    in a narrow column, which pushed the row's own action off the right
+                    edge of the card — the table scrolled, but the button you came here
+                    to press was the part out of sight. */}
+                <TH className="whitespace-nowrap">Last seen</TH>
+                <TH className="whitespace-nowrap">Joined</TH>
                 <TH />
               </TR>
             </THead>

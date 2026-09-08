@@ -52,7 +52,7 @@ export function RoleSelect({
     <span className="inline-flex flex-col gap-1">
       <Select
         aria-label={`Role for ${email}`}
-        className="h-8 w-36"
+        className="h-8 w-[124px]"
         value={value}
         disabled={busy}
         onChange={(e) => change(e.target.value as Role)}

@@ -310,7 +310,7 @@ function StageSelect({
     <span className="inline-flex flex-col gap-1">
       <Select
         aria-label={`Stage for ${dealName}`}
-        className="h-8 w-[170px]"
+        className="h-8 w-[148px]"
         value={value}
         disabled={busy}
         onChange={(e) => change(e.target.value)}

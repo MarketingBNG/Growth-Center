@@ -316,7 +316,10 @@ async function SeoBody({
 
       <WebVitals vitals={vitals} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Not side by side. Twenty-five issue cards stack far past the pages table, so
+          the pair left ~800px of empty column under Pages. Each takes the full width
+          and lays its own content across it — the fix the insights list needed too. */}
+      <div className="grid gap-4">
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>Pages</CardTitle>
@@ -354,13 +357,17 @@ async function SeoBody({
 
         <Card>
           <CardHeader><CardTitle>Technical issues ({fmtNumber(issues.length)})</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent>
             {issues.length === 0 ? (
               <p className="text-xs text-muted-foreground">No issues recorded.</p>
-            ) : shownIssues.map((i, idx) => (
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {shownIssues.map((i, idx) => (
               <div key={`${i.url}-${idx}`} className="rounded-md border border-border px-3 py-2">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-mono text-xs">{i.url}</p>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  {/* A URL is one long token with nowhere to wrap, and these cells are a
+                      third of the row now rather than half. break-all or it walks out. */}
+                  <p className="min-w-0 break-all font-mono text-xs">{i.url}</p>
                   <Badge tone={i.severity === 'high' ? 'danger' : i.severity === 'medium' ? 'warning' : 'neutral'}>
                     {i.severity}
                   </Badge>
@@ -369,6 +376,7 @@ async function SeoBody({
                 {i.message ? <p className="text-meta text-muted-foreground">{i.message}</p> : null}
               </div>
             ))}
+            </div>
             {/* Every other list on this page is capped; this one was not, and a crawl of
                 any size rendered the whole of it — the page came out 41,000px tall. The
                 worst are first, and the count says what is not shown. */}
