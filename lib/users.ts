@@ -184,6 +184,28 @@ export async function listAssignable(): Promise<AppUser[]> {
   return rows.map(toUser);
 }
 
+/**
+ * Everyone who has actually opened Growth Center, by email.
+ *
+ * `lastSeenAt` is stamped on sign-in, so a null one is an account that exists on the
+ * roster and has never been used. The distinction matters on the Tasks page: Zoho carries
+ * 16,120 open tasks and only 479 of them belong to somebody who has ever logged in here.
+ * The rest are real work owned by people who do not use this tool, and a queue nobody
+ * reading it can act on is a queue nobody reads.
+ *
+ * Returns emails rather than users because every caller filters a table by them.
+ */
+export async function signedInEmails(): Promise<string[]> {
+  const client = prisma();
+  if (!client) return [];
+
+  const rows = await client.appUser.findMany({
+    where: { active: true, lastSeenAt: { not: null } },
+    select: { email: true },
+  });
+  return rows.map((r) => r.email);
+}
+
 /** The Team page, including deactivated accounts so they can be switched back on. */
 export async function listUsers() {
   const client = prisma();

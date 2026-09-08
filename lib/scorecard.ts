@@ -160,11 +160,17 @@ export type TaskLoad = {
  * the data supports, which is the overdue count and the age, and does not invent a
  * classification to hang three thresholds off.
  */
-export async function taskLoad(now = new Date()): Promise<TaskLoad[]> {
+export async function taskLoad(now = new Date(), assignees?: string[]): Promise<TaskLoad[]> {
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 86_400_000);
 
   const tasks = await db().task.findMany({
-    where: { status: { in: ['open', 'in_progress'] } },
+    where: {
+      status: { in: ['open', 'in_progress'] },
+      // Scoped to whoever the caller is reporting on. Passed in rather than read here so
+      // this stays the answer to §19.4's question and not a second opinion about who
+      // counts as a person.
+      ...(assignees ? { assigneeEmail: { in: assignees } } : {}),
+    },
     select: { assigneeEmail: true, dueDate: true, createdAt: true },
   });
 

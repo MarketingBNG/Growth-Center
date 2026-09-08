@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { db, hasDb } from '@/lib/prisma';
 import { pageQuery } from '@/lib/query';
-import { listAssignable, peopleOn, personOptions } from '@/lib/users';
+import { listAssignable, peopleOn, personOptions, signedInEmails } from '@/lib/users';
 import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/enums';
 import { ProgressLink } from '@/components/NavProgress';
 import { fmtDate, fmtNumber, fmtRelative } from '@/lib/format';
@@ -47,7 +47,11 @@ async function TasksBody({
   if (!hasDb()) return <Card><NoDatabaseState /></Card>;
 
   const params = await searchParams;
-  const [people, assignees] = await Promise.all([listAssignable(), peopleOn('task', 'assigneeEmail')]);
+  const [people, assignees, signedIn] = await Promise.all([
+    listAssignable(),
+    peopleOn('task', 'assigneeEmail'),
+    signedInEmails(),
+  ]);
   const q = pageQuery(params);
   const status = typeof params.status === 'string' ? params.status : '';
   const assignee = typeof params.assigneeEmail === 'string' ? params.assigneeEmail : '';
@@ -56,16 +60,25 @@ async function TasksBody({
   // Everything except the kind. Kept separate so the per-kind counts below can reuse the
   // exact scope the table is showing — if they were computed against a different `where`,
   // the tab could say 42 over a list of 11 and neither number would be wrong.
+  // Tasks belonging to people who have actually opened this app, unless asked otherwise.
+  //
+  // Zoho carries 16,120 open tasks and 479 of them belong to somebody who has ever logged
+  // in here. The rest are real work owned by people who do not use this tool, and a queue
+  // nobody reading it can act on is a queue nobody reads — it made the page a count of
+  // another system's backlog. `everyone` is the way back to all of it, because the
+  // backlog is still a fact about the CRM even when it is not this team's work.
+  const everyone = assignee === 'everyone';
   const scope: Record<string, unknown> = {};
   if (status) scope.status = status;
   else scope.status = { in: ['open', 'in_progress'] };
-  if (assignee) scope.assigneeEmail = assignee === 'unassigned' ? null : assignee;
+  if (assignee && !everyone) scope.assigneeEmail = assignee === 'unassigned' ? null : assignee;
+  else if (!everyone && signedIn.length > 0) scope.assigneeEmail = { in: signedIn };
   if (q.q) scope.title = { contains: q.q, mode: 'insensitive' };
 
   // §19.1's split. Derived from `source`, never a stored column — see taskKind.
   const where = { ...scope, ...(taskKindWhere(kind) ?? {}) };
 
-  const filtered = Boolean(status || assignee || q.q || kind);
+  const filtered = Boolean(status || (assignee && !everyone) || q.q || kind);
 
   // §19.2's "older than 90 days". Built from a Date rather than Date.now() because a
   // component has to be pure and the linter is right that a bare clock read inside one
@@ -94,6 +107,14 @@ async function TasksBody({
     filtered ? db().task.count() : Promise.resolve(0),
   ]);
 
+  // What the roster scope is holding back. Counted on the same status window as the list,
+  // so "479 of 16,120" compares two answers to one question rather than two questions.
+  const allOwners = everyone
+    ? 0
+    : await db().task.count({
+        where: { ...scope, assigneeEmail: undefined },
+      });
+
   // How much unfinished work sits on each side of the split. Counted on the same status
   // window the page is showing, not over the whole table — a "Delivery 42" beside a list
   // of open tasks must mean 42 open ones, or the number is a different question wearing
@@ -113,7 +134,7 @@ async function TasksBody({
       orderBy: { createdAt: 'asc' },
       select: { createdAt: true },
     }),
-    taskLoad(),
+    taskLoad(new Date(), everyone ? undefined : signedIn),
   ]);
 
   const today = new Date();
@@ -148,10 +169,33 @@ async function TasksBody({
             label: 'Assignee',
             // The roster AND whoever the records are actually assigned to. Almost every
             // task here belongs to someone with no account in this app.
-            options: [{ value: 'unassigned', label: 'Unassigned' }, ...personOptions(people, assignees)],
+            options: [
+              // Named for what it does rather than "All": the default is already a
+              // filter, so "All" here would be the second thing on the row claiming to
+              // show everything.
+              { value: 'everyone', label: 'Everyone, including Zoho-only' },
+              { value: 'unassigned', label: 'Unassigned' },
+              ...personOptions(people, assignees),
+            ],
           },
         ]}
       />
+
+      {/* The scope, stated. A page that quietly shows 479 of 16,120 is worse than one
+          that shows all of them: the reader has no way to know which they are looking
+          at, and the difference is a factor of thirty. */}
+      {!everyone && signedIn.length > 0 && allOwners > total ? (
+        <p className="mb-4 text-xs text-muted-foreground">
+          <span className="font-semibold tnum">{fmtNumber(total)}</span> of{' '}
+          <span className="tnum">{fmtNumber(allOwners)}</span> open tasks belong to the{' '}
+          {signedIn.length} {signedIn.length === 1 ? 'person' : 'people'} who have signed in to
+          Growth Center. The rest are owned by CRM accounts that have never opened it —{' '}
+          <a href="?assigneeEmail=everyone" className="text-primary hover:underline">
+            show all
+          </a>
+          .
+        </p>
+      ) : null}
 
       {/* §19.2's hygiene metric. "4,802 open tasks means the task system carries no
           signal. Nothing built on top of it will either." Shown until it reaches zero and
