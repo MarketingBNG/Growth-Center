@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { ArrowRight, ListChecks } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import { ListChecks } from 'lucide-react';
+import { ActionQueueDrawer } from './ActionQueueDrawer';
 import { db } from '@/lib/prisma';
 import { STATUS_LABELS, type InsightStatus } from '@/lib/insight-lifecycle';
 import { fmtRelative } from '@/lib/format';
@@ -31,7 +30,7 @@ const SEVERITY_TONE: Record<string, string> = {
 /** Only the states that mean nobody is on it yet get the muted treatment. */
 const UNOWNED: InsightStatus[] = ['proposed', 'reviewed'];
 
-export async function ActionQueue({ take = 6 }: { take?: number }) {
+export async function ActionQueue({ take = 12 }: { take?: number }) {
   const rows = await db().aiInsight.findMany({
     // Resolved as well as dismissed: a finding the last run stopped reporting is kept for
     // its history, not because it is still true, and this asserts what is true now.
@@ -82,41 +81,24 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
   const queue = groups.slice(0, take);
 
   const unowned = rows.filter((r) => r.ownerEmail === null).length;
+  // The worst severity still open, so the button can colour its count. Read off the
+  // sorted list rather than recomputed: the first row is the worst by construction.
+  const worst = sorted[0]?.severity ?? null;
 
   return (
-    <Card className="mb-[18px] overflow-hidden">
-      <CardHeader className="flex-row items-start justify-between gap-3">
-        <div>
-          <CardTitle>Action queue</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {rows.length === 0
-              ? 'Nothing waiting on a decision.'
-              : `${rows.length} open${unowned > 0 ? `, ${unowned} with no owner` : ''}. Worst first, then longest waiting.`}
-          </p>
-        </div>
-        {/* The most important thing on the morning screen is deciding what is in this
-            queue, so its control is the one filled button on the page. It had been an
-            11px text link — quieter than the outline buttons in the header above it, which
-            only change what the screen shows. Weight should follow what the action does. */}
-        <Button asChild size="sm" className="shrink-0">
-          <Link href="/ai">
-            Work the queue <ArrowRight className="size-3" />
-          </Link>
-        </Button>
-      </CardHeader>
-
+    <ActionQueueDrawer count={rows.length} unowned={unowned} worst={worst}>
       {queue.length === 0 ? (
-        <p className="flex items-center gap-2 px-4 pb-4 text-xs text-muted-foreground">
+        <p className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <ListChecks className="size-4 shrink-0" />
           The rules ran and raised nothing that needs a decision.
         </p>
       ) : (
-        <ul className="divide-y divide-border border-t border-border">
+        <ul className="divide-y divide-border">
           {queue.map(({ row, count }) => {
             const status = (row.status as InsightStatus) ?? 'proposed';
             const waiting = row.firstSeenAt ?? row.createdAt;
             return (
-              <li key={row.id} className="flex items-start gap-3 px-4 py-2.5">
+              <li key={row.id} className="flex items-start gap-3 py-2.5">
                 <span
                   aria-hidden
                   className={`mt-[7px] size-2 shrink-0 rounded-full ${SEVERITY_TONE[row.severity ?? 'info'] ?? 'bg-border'}`}
@@ -135,7 +117,7 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
                   ) : null}
                   {/* The action, not the analysis. A row with no proposed action is a row
                       nobody can work, and saying so is more useful than leaving it blank. */}
-                  <p className="mt-0.5 truncate text-meta text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-2 text-meta text-muted-foreground">
                     {row.proposedAction ?? 'No action proposed yet.'}
                   </p>
                 </div>
@@ -152,6 +134,6 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
           })}
         </ul>
       )}
-    </Card>
+    </ActionQueueDrawer>
   );
 }

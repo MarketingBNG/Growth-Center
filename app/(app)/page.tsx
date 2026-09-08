@@ -3,7 +3,6 @@ import { ArrowRight } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { AddWidgetDrawer } from '@/components/patterns/add-widget-drawer';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
@@ -161,7 +160,13 @@ export default async function DashboardPage({
             {/* §6.6. Partners open this screen; they should see performance, not
                 individual staff scorecards. */}
             <PartnerViewToggle active={partnerView} />
-            <AddWidgetDrawer />
+            {/* §6.3 still holds — the queue is the first thing on the morning screen and
+                sits above the numbers. It is a counted button rather than a card because
+                as a card it filled the whole opening screen and pushed the first figure
+                below the fold, and most mornings this page is opened to read figures. The
+                count, red when anything critical is open, is what announces it; the panel
+                is there when the count says to look. */}
+            <ActionQueue />
           </>
         }
       />
@@ -170,11 +175,6 @@ export default async function DashboardPage({
           toggle that lifts the cards it feeds and dims the rest. It reads the sources
           off the cards themselves, so it cannot fall out of step with them the way a
           hand-written list above the numbers could. */}
-      {/* §6.3: "Move AI insights to the top and render as an action queue." Above the
-          numbers, because the numbers are context for the decisions and not the other way
-          round — this is the first thing on the morning screen. */}
-      <ActionQueue />
-
       <MetricsBand {...band} />
 
       {/* 1.75fr / 1fr: the tables need the width, the summary cards do not.
