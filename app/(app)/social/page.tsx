@@ -170,7 +170,7 @@ async function SocialBody() {
                         <span className="font-medium capitalize">{a.network}</span>
                         {a.live ? null : <Badge tone="warning">seeded</Badge>}
                       </span>
-                      <p className="text-[11px] text-muted-foreground">@{a.handle}</p>
+                      <p className="text-meta text-muted-foreground">@{a.handle}</p>
                     </TD>
                     <TD className="text-right tnum">{fmtNumber(a.followers)}</TD>
                     {reported ? (
@@ -191,7 +191,7 @@ async function SocialBody() {
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Recent posts</CardTitle>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             Reporting only — there is deliberately no publishing here, which would need a live
             publish API.
           </p>

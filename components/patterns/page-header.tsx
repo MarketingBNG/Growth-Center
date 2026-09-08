@@ -12,9 +12,9 @@ export function PageHeader({
   return (
     <div className="flex flex-wrap items-start gap-3 pb-5">
       <div className="min-w-0">
-        <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{title}</h1>
+        <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{title}</h1>
         {subtitle ? (
-          <p className="mt-1 text-[13.5px] text-muted-foreground">{subtitle}</p>
+          <p className="mt-1 text-label text-muted-foreground">{subtitle}</p>
         ) : null}
       </div>
       {/* whitespace-nowrap keeps individual button labels intact; flex-wrap lets the row

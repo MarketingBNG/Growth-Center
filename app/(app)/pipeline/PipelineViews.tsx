@@ -181,13 +181,13 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                   {/* Two lines rather than one. The firm's stage names share their
                       opening words — "Project Initiated" and "Project Completed" both
                       cut to "Project" — so a truncated heading named nothing. */}
-                  <p className="line-clamp-2 text-[13px] font-bold leading-tight">{col.stage.name}</p>
+                  <p className="line-clamp-2 text-label font-bold leading-tight">{col.stage.name}</p>
                   {col.stage.isWon ? <Badge tone="success">won</Badge> : null}
                   {col.stage.isLost ? <Badge tone="danger">lost</Badge> : null}
                 </div>
                 {/* What this column is actually showing. A capped column used to print the
                     value of the cards on screen as though it were the stage's total. */}
-                <p className="shrink-0 text-[11.5px] text-muted-foreground tnum">
+                <p className="shrink-0 text-meta text-muted-foreground tnum">
                   {col.cards.length < col.total
                     ? `${fmtNumber(col.cards.length)} of ${fmtNumber(col.total)}`
                     : sum > 0
@@ -218,20 +218,20 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                       }`}
                     >
                       <ProgressLink href={`/pipeline/${deal.id}`} className="block hover:text-primary">
-                        <p className="break-words text-[12.5px] font-bold leading-[1.35]">
+                        <p className="break-words text-body font-bold leading-[1.35]">
                           {deal.name}
                         </p>
                       </ProgressLink>
                       {deal.companyName ? (
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        <p className="mt-0.5 truncate text-meta text-muted-foreground">
                           {deal.companyName}
                         </p>
                       ) : null}
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-bold tnum">{fmtMoney(deal.value, false, currency)}</span>
+                        <span className="text-label font-bold tnum">{fmtMoney(deal.value, false, currency)}</span>
                         <span className="flex shrink-0 items-center gap-1.5">
                           <SourceBadge source={deal.source ?? DEMO_SOURCE} />
-                          <span className="rounded-full bg-track px-2 py-0.5 text-[10.5px] font-bold text-muted-foreground tnum">
+                          <span className="rounded-full bg-track px-2 py-0.5 text-micro font-bold text-muted-foreground tnum">
                             {deal.probability}%
                           </span>
                         </span>
@@ -241,7 +241,7 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                 </AnimatePresence>
 
                 {col.cards.length === 0 ? (
-                  <p className="px-1 py-4 text-center text-[11px] text-muted-foreground">
+                  <p className="px-1 py-4 text-center text-meta text-muted-foreground">
                     {/* A won or lost column is empty by definition — the board is the open
                         pipeline — so "Drag a deal here" needed to say what dropping one
                         there would do, rather than read as a stage with nothing in it. */}
@@ -321,7 +321,7 @@ function StageSelect({
           </option>
         ))}
       </Select>
-      {error ? <span className="text-[11px] text-destructive">{error}</span> : null}
+      {error ? <span className="text-meta text-destructive">{error}</span> : null}
     </span>
   );
 }

@@ -33,7 +33,7 @@ export async function CostPerConsultation({ range, currency }: { range: Range; c
             </span>
           </div>
         ))}
-        <p className="pt-1.5 text-[11px] text-muted-foreground">
+        <p className="pt-1.5 text-meta text-muted-foreground">
           Only the channels that carried acquisition spend. An organic channel&rsquo;s
           consultations cost something and nothing measures what, so a row of dashes under a
           heading about cost would be noise. Recruitment spend is excluded.

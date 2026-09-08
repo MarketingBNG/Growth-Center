@@ -105,7 +105,7 @@ export function Notifications() {
       >
         <Bell className="size-4" />
         {unread > 0 ? (
-          <span className="absolute right-1 top-1 grid min-w-[15px] place-items-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-[15px] text-white">
+          <span className="absolute right-1 top-1 grid min-w-[15px] place-items-center rounded-full bg-destructive px-1 text-micro font-bold leading-[15px] text-white">
             {unread > 9 ? '9+' : unread}
           </span>
         ) : null}
@@ -119,7 +119,7 @@ export function Notifications() {
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-[11px] text-muted-foreground hover:text-foreground"
+                className="text-meta text-muted-foreground hover:text-foreground"
               >
                 Mark all read
               </button>
@@ -143,11 +143,11 @@ export function Notifications() {
                     <span className="min-w-0 flex-1">
                       <span className="block text-xs font-medium">{n.title}</span>
                       {n.body ? (
-                        <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                        <span className="mt-0.5 block text-meta leading-relaxed text-muted-foreground">
                           {n.body}
                         </span>
                       ) : null}
-                      <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                      <span className="mt-0.5 block text-micro text-muted-foreground">
                         {fmtRelative(n.createdAt)}
                       </span>
                     </span>

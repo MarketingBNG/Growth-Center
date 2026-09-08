@@ -154,6 +154,38 @@
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
 
+  /* The type scale.
+   *
+   * Every size in the app was an arbitrary value, and they had drifted to fifteen of
+   * them: 11px beside 11.5px, 12px beside 12.5px, 13px beside 13.5px, 10px beside
+   * 10.5px. Half a pixel is not a decision anybody made or a difference anybody sees —
+   * it is what happens when each screen picks its own number. Named steps so the next
+   * one has to be chosen from the scale rather than invented.
+   *
+   * Eight steps, set at the sizes already carrying the weight rather than at a tidy
+   * ratio, so adopting the scale did not restyle the whole app. Where two strays sat
+   * either side of a step the more-used one won it: `label` is 13px rather than 13.5px
+   * because sixteen places wanted 13 and nine wanted 13.5, and rounding the majority up
+   * was enough extra width to wrap the header's buttons onto a second line.
+   *
+   *   micro    badges, source chips, relative timestamps
+   *   meta     captions and hints — the app's most common text by far
+   *   body     labels, inputs, table cells
+   *   label    card titles, emphasised body
+   *   lead     section headings
+   *   title    drawer and sheet headings
+   *   figure   the headline number inside a chart
+   *   display  page titles
+   */
+  --text-micro: 10px;
+  --text-meta: 11px;
+  --text-body: 12.5px;
+  --text-label: 13px;
+  --text-lead: 15px;
+  --text-title: 17px;
+  --text-figure: 30px;
+  --text-display: 26px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

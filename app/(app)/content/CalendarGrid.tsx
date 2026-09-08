@@ -51,7 +51,7 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
             {WEEKDAYS.map((day) => (
               <p
                 key={day}
-                className="px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                className="px-1 text-meta font-medium uppercase tracking-wide text-muted-foreground"
               >
                 {day}
               </p>
@@ -77,7 +77,7 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                   <>
                     <p
                       className={[
-                        'px-0.5 pb-1 text-[11px] tnum',
+                        'px-0.5 pb-1 text-meta tnum',
                         cell.today ? 'font-semibold text-primary' : 'text-muted-foreground',
                       ].join(' ')}
                     >
@@ -95,12 +95,12 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                               and the time is what distinguishes them; the running order
                               comes from the query, which sorts on it. */}
                           {formatSlot(piece.publishMinute) ? (
-                            <span className="block pb-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                            <span className="block pb-0.5 text-micro font-semibold tabular-nums text-muted-foreground">
                               {formatSlot(piece.publishMinute)}
                             </span>
                           ) : null}
                           <span className="flex items-start justify-between gap-1">
-                            <span className="line-clamp-2 text-[11.5px] font-medium leading-snug">
+                            <span className="line-clamp-2 text-meta font-medium leading-snug">
                               {piece.title}
                             </span>
                             {piece.approved ? (
@@ -127,7 +127,7 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                               {piece.assetShape ?? piece.format.replaceAll('_', ' ')}
                             </Badge>
                             {piece.authorEmail ? (
-                              <span className="max-w-full truncate text-[10px] text-muted-foreground">
+                              <span className="max-w-full truncate text-micro text-muted-foreground">
                                 {piece.authorEmail.split('@')[0]}
                               </span>
                             ) : null}

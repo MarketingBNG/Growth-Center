@@ -114,7 +114,7 @@ export default async function AdsPage({
         <Card className="mb-4 border-warning/40 bg-warning/5">
           <CardHeader>
             <CardTitle>No ad platform is connected</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Every figure below is seeded. Connect a platform on the Integrations page to replace
               it with reported spend.
             </p>
@@ -124,7 +124,7 @@ export default async function AdsPage({
         <Card className="mb-4 border-warning/40 bg-warning/5">
           <CardHeader>
             <CardTitle>Mixed sources</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               {seeded.length} of {active.length} campaigns below were seeded rather than reported by
               a platform, so the totals blend real and demo spend.
             </p>
@@ -167,7 +167,7 @@ export default async function AdsPage({
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Campaigns</CardTitle>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             Only campaigns with spend in this period.
             {attributed
               ? ' A dash means nothing has been attributed yet, not zero.'

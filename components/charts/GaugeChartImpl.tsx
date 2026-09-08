@@ -86,14 +86,14 @@ export function GaugeChart({
         </svg>
 
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-          <span className="text-[30px] font-extrabold leading-none tracking-[-0.04em] tnum">
+          <span className="text-figure font-extrabold leading-none tracking-[-0.04em] tnum">
             {value === null ? '—' : fmtPercent(value)}
           </span>
         </div>
       </div>
 
       {note ? (
-        <p className="pt-2 text-center text-[11px] text-muted-foreground">{note}</p>
+        <p className="pt-2 text-center text-meta text-muted-foreground">{note}</p>
       ) : null}
     </div>
   );

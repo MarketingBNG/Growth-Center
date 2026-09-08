@@ -91,7 +91,7 @@ export function DateRangePicker({
             // carrying the first still lights the button that writes the second.
             aria-pressed={!custom && (range === p.value || (range === 'today' && p.value === '1'))}
             className={cn(
-              'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+              'rounded-lg px-2.5 py-1.5 text-label transition-colors',
               !custom && (range === p.value || (range === 'today' && p.value === '1'))
                 ? chosen
                 : unchosen,
@@ -108,7 +108,7 @@ export function DateRangePicker({
           aria-expanded={open}
           aria-haspopup="dialog"
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-label transition-colors',
             custom ? chosen : unchosen,
           )}
         >

@@ -118,7 +118,7 @@ export function RangePicker({ current }: { current?: string }) {
           aria-expanded={open}
           aria-haspopup="dialog"
           className={cn(
-            'inline-flex h-[38px] items-center gap-2 whitespace-nowrap rounded-[10px] border bg-card px-3 text-[13px] font-medium transition-colors',
+            'inline-flex h-[38px] items-center gap-2 whitespace-nowrap rounded-[10px] border bg-card px-3 text-label font-medium transition-colors',
             // Outlined while a hand-picked window is in force: it is the one state where
             // none of the preset buttons is highlighted, so without this the whole control
             // looks like nothing is selected.
@@ -148,7 +148,7 @@ export function RangePicker({ current }: { current?: string }) {
             // outlined pill beside these is saying.
             aria-pressed={!picked && active === o.value}
             className={cn(
-              'rounded-lg px-2.5 py-1.5 text-[13px] transition-colors',
+              'rounded-lg px-2.5 py-1.5 text-label transition-colors',
               // The same blue the pill wears when a hand-picked window is in force. A grey
               // highlight here and a blue outline there said "this is your selection" in
               // two different colours for what is one setting.

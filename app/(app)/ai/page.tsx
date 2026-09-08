@@ -136,7 +136,7 @@ export default async function AiPage({
 
         <Card>
           <CardHeader><CardTitle>What the model can see</CardTitle></CardHeader>
-          <CardContent className="space-y-1 text-[11px] text-muted-foreground">
+          <CardContent className="space-y-1 text-meta text-muted-foreground">
             <p>A JSON snapshot of the last {context.periodDays} days:</p>
             <p>· the funnel and its conversion rates</p>
             <p>· revenue, spend, CAC and ROAS</p>
@@ -166,7 +166,7 @@ export default async function AiPage({
         <Card>
           <CardHeader>
             <CardTitle>Computed observations</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Derived by arithmetic from the data. No model involved, so these are always available.
             </p>
           </CardHeader>
@@ -179,11 +179,11 @@ export default async function AiPage({
                   <p className="text-xs font-medium leading-snug">{f.title}</p>
                   <Badge tone={KIND_TONE[f.kind]}>{f.kind}</Badge>
                 </div>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{f.body}</p>
+                <p className="mt-1 text-meta leading-relaxed text-muted-foreground">{f.body}</p>
               </div>
             ))}
             {computed.length > FINDING_ROWS ? (
-              <p className="pt-1 text-[11px] text-muted-foreground">
+              <p className="pt-1 text-meta text-muted-foreground">
                 Showing {FINDING_ROWS} of {computed.length}.
               </p>
             ) : null}
@@ -193,7 +193,7 @@ export default async function AiPage({
         <Card>
           <CardHeader>
             <CardTitle>Saved insights</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Written by the model when you ask for them. A finding still true on the next run
               keeps its place and its date rather than being rewritten as new; one no longer
               found drops off the list. Anything marked{' '}
@@ -231,10 +231,10 @@ export default async function AiPage({
                       </Badge>
                     </span>
                   </div>
-                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{i.body}</p>
+                  <p className="mt-1 text-meta leading-relaxed text-muted-foreground">{i.body}</p>
 
                   {i.proposedAction ? (
-                    <p className="mt-1.5 text-[11px] leading-relaxed">
+                    <p className="mt-1.5 text-meta leading-relaxed">
                       <span className="text-muted-foreground">Proposed: </span>
                       {i.proposedAction}
                     </p>
@@ -244,7 +244,7 @@ export default async function AiPage({
                       this has been true is often the most useful fact on the row — a
                       finding in its second month is a different conversation from one
                       raised today — and it is the thing regeneration used to throw away. */}
-                  <p className="mt-1 text-[11px] text-muted-foreground/80">
+                  <p className="mt-1 text-meta text-muted-foreground/80">
                     {[
                       STATUS_LABELS[state],
                       age,
@@ -277,7 +277,7 @@ export default async function AiPage({
               })}
             </div>
             {stored.length > FINDING_ROWS ? (
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 Showing {FINDING_ROWS} of {stored.length}. Decide these and the rest follow.
               </p>
             ) : null}
@@ -285,7 +285,7 @@ export default async function AiPage({
         </Card>
       </div>
 
-      <p className="flex items-center gap-1.5 pt-4 text-[11px] text-muted-foreground">
+      <p className="flex items-center gap-1.5 pt-4 text-meta text-muted-foreground">
         <Brain className="size-3" />
         Answers are not stored unless you save them.
       </p>

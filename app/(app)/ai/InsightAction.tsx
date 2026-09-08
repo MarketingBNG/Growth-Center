@@ -88,7 +88,7 @@ export function InsightAction({
             key={to}
             type="button"
             variant="ghost"
-            className="h-6 px-2 text-[11px]"
+            className="h-6 px-2 text-meta"
             disabled={pending}
             onClick={() => move(to)}
           >
@@ -101,7 +101,7 @@ export function InsightAction({
             <select
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
-              className="h-6 rounded border border-input bg-background px-1 text-[11px]"
+              className="h-6 rounded border border-input bg-background px-1 text-meta"
             >
               <option value="">Choose an owner…</option>
               {owners.map((o) => (
@@ -118,13 +118,13 @@ export function InsightAction({
               placeholder="Why — one line"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="h-6 w-56 text-[11px]"
+              className="h-6 w-56 text-meta"
             />
           ) : null}
 
           <Button
             type="button"
-            className="h-6 px-2 text-[11px]"
+            className="h-6 px-2 text-meta"
             disabled={pending}
             onClick={() => submit(target)}
           >
@@ -133,7 +133,7 @@ export function InsightAction({
           <Button
             type="button"
             variant="ghost"
-            className="h-6 px-2 text-[11px]"
+            className="h-6 px-2 text-meta"
             disabled={pending}
             onClick={() => {
               setTarget(null);
@@ -145,7 +145,7 @@ export function InsightAction({
         </>
       )}
 
-      {error ? <p className="basis-full text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="basis-full text-meta text-destructive">{error}</p> : null}
     </div>
   );
 }

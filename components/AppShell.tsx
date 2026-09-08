@@ -42,7 +42,7 @@ export function AppShell({
               <span className="grid size-[30px] shrink-0 place-items-center rounded-[9px] bg-primary text-on-primary">
                 <TrendingUp className="size-[17px]" />
               </span>
-              <span className="text-[15px] font-bold tracking-[-0.02em]">Growth Center</span>
+              <span className="text-lead font-bold tracking-[-0.02em]">Growth Center</span>
             </Link>
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-2 pt-3">
               <SidebarNav onNavigate={() => setMobileOpen(false)} />
@@ -78,7 +78,7 @@ export function AppShell({
               <Link
                 href="/integrations"
                 title={`Seeded data: ${demoSources.join(', ')}. Connect these to replace it.`}
-                className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2.5 py-[5px] text-[11px] font-semibold text-warning-strong hover:bg-warning/20 md:inline-flex"
+                className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border border-warning bg-warning-soft px-2.5 py-[5px] text-meta font-semibold text-warning-strong hover:bg-warning/20 md:inline-flex"
               >
                 <TriangleAlert className="size-3" />
                 Demo data · {demoSources.length === 1 ? demoSources[0] : `${demoSources.length} sources`}
@@ -89,7 +89,7 @@ export function AppShell({
 
             <Notifications />
 
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[linear-gradient(140deg,var(--chart-1),var(--chart-6))] text-[12px] font-bold text-white">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[linear-gradient(140deg,var(--chart-1),var(--chart-6))] text-body font-bold text-white">
               {user.initials}
             </span>
           </div>

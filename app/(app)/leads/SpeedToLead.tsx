@@ -31,7 +31,7 @@ export function SpeedToLead({ data }: { data: Distribution }) {
       <CardHeader className="gap-1">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <CardTitle>Speed to lead</CardTitle>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             {data.medianHours === null
               ? 'Nothing was contacted in this period'
               : `Median ${hours(data.medianHours)} across the ${data.touched.toLocaleString()} that were contacted`}
@@ -42,17 +42,17 @@ export function SpeedToLead({ data }: { data: Distribution }) {
       <CardContent className="space-y-1.5">
         {data.bands.map((b) => (
           <div key={b.key} className="flex items-center gap-3">
-            <span className="w-[104px] shrink-0 text-[11px] text-muted-foreground">{b.label}</span>
+            <span className="w-[104px] shrink-0 text-meta text-muted-foreground">{b.label}</span>
             <span className="h-2 flex-1 overflow-hidden rounded-full bg-track">
               <span
                 className="block h-full rounded-full bg-primary"
                 style={{ width: `${(b.leads / widest) * 100}%` }}
               />
             </span>
-            <span className="w-14 shrink-0 text-right text-[11px] tabular-nums">
+            <span className="w-14 shrink-0 text-right text-meta tabular-nums">
               {b.leads.toLocaleString()}
             </span>
-            <span className="w-11 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+            <span className="w-11 shrink-0 text-right text-meta tabular-nums text-muted-foreground">
               {b.percent}%
             </span>
           </div>
@@ -62,7 +62,7 @@ export function SpeedToLead({ data }: { data: Distribution }) {
             the bands above it. */}
         <div className="!mt-3 border-t pt-3">
           <div className="flex items-center gap-3">
-            <span className="w-[104px] shrink-0 text-[11px] font-medium text-destructive">
+            <span className="w-[104px] shrink-0 text-meta font-medium text-destructive">
               Never contacted
             </span>
             <span className="h-2 flex-1 overflow-hidden rounded-full bg-track">
@@ -71,15 +71,15 @@ export function SpeedToLead({ data }: { data: Distribution }) {
                 style={{ width: `${data.untouchedPercent}%` }}
               />
             </span>
-            <span className="w-14 shrink-0 text-right text-[11px] font-medium tabular-nums text-destructive">
+            <span className="w-14 shrink-0 text-right text-meta font-medium tabular-nums text-destructive">
               {data.untouched.toLocaleString()}
             </span>
-            <span className="w-11 shrink-0 text-right text-[11px] font-medium tabular-nums text-destructive">
+            <span className="w-11 shrink-0 text-right text-meta font-medium tabular-nums text-destructive">
               {data.untouchedPercent}%
             </span>
           </div>
 
-          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-2 text-meta leading-relaxed text-muted-foreground">
             {/* Said plainly, because the median above it invites the opposite conclusion.
                 This bar is measured against every lead in the period; the bands above are
                 measured against the same total, so the two can be read together. */}

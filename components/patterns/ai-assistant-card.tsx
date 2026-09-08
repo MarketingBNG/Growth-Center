@@ -45,7 +45,7 @@ export function AiAssistantCard({ configured }: { configured: boolean }) {
   return (
     <Card className="px-5 pb-5 pt-[18px]">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[14.5px] font-bold leading-tight tracking-tight">AI Assistant</h3>
+        <h3 className="text-lead font-bold leading-tight tracking-tight">AI Assistant</h3>
         <Link
           href="/ai"
           title="Open AI Insights"
@@ -77,11 +77,11 @@ export function AiAssistantCard({ configured }: { configured: boolean }) {
       </div>
 
       {answer ? (
-        <p className="mt-3 whitespace-pre-wrap rounded-xl bg-surface-sunken p-3 text-[12px] leading-relaxed">
+        <p className="mt-3 whitespace-pre-wrap rounded-xl bg-surface-sunken p-3 text-body leading-relaxed">
           {answer}
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-[11.5px] text-destructive">{error}</p> : null}
+      {error ? <p className="mt-3 text-meta text-destructive">{error}</p> : null}
 
       <form
         onSubmit={(e) => {
@@ -98,7 +98,7 @@ export function AiAssistantCard({ configured }: { configured: boolean }) {
           placeholder={configured ? 'Ask a question…' : 'Unavailable — no API key'}
           aria-label="Ask the assistant a question"
           // The pill row supplies the border and ground, so the Input drops its own.
-          className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-[12.5px] focus-visible:ring-0"
+          className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 text-body focus-visible:ring-0"
         />
         <Button
           type="submit"

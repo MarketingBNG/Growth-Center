@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
  *  mapping is unchanged from before. Text uses the *-strong tokens, which are the same
  *  hues stepped dark enough to clear 4.5:1 on their own ground at 11px bold. */
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-[9px] py-[3px] text-[11px] font-bold leading-tight',
+  'inline-flex items-center gap-1 whitespace-nowrap rounded-full px-[9px] py-[3px] text-meta font-bold leading-tight',
   {
     variants: {
       tone: {

@@ -123,7 +123,7 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
                   </Link>
                   {count > 1 ? (
                     <span
-                      className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-[10px] font-bold tnum text-muted-foreground"
+                      className="ml-1.5 rounded-full bg-secondary px-1.5 py-0.5 text-micro font-bold tnum text-muted-foreground"
                       title={`${count} records raise this same finding`}
                     >
                       ×{count}
@@ -131,11 +131,11 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
                   ) : null}
                   {/* The action, not the analysis. A row with no proposed action is a row
                       nobody can work, and saying so is more useful than leaving it blank. */}
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 truncate text-meta text-muted-foreground">
                     {row.proposedAction ?? 'No action proposed yet.'}
                   </p>
                 </div>
-                <div className="shrink-0 text-right text-[11px]">
+                <div className="shrink-0 text-right text-meta">
                   <p className={row.ownerEmail ? 'font-medium' : 'text-muted-foreground'}>
                     {row.ownerEmail ? row.ownerEmail.split('@')[0] : 'Unowned'}
                   </p>

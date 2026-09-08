@@ -156,13 +156,13 @@ export default async function ContentPage({
               >
                 <div className="flex items-baseline justify-between gap-2 pb-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    <p className="truncate text-[13px] font-bold capitalize">{col.status}</p>
+                    <p className="truncate text-label font-bold capitalize">{col.status}</p>
                     <Badge tone={STATUS_TONE[col.status]}>{col.pieces.length}</Badge>
                   </div>
                 </div>
                 <div className="flex-1 space-y-2">
                   {col.pieces.length === 0 ? (
-                    <p className="px-1 py-4 text-center text-[11px] text-muted-foreground">Nothing here</p>
+                    <p className="px-1 py-4 text-center text-meta text-muted-foreground">Nothing here</p>
                   ) : col.pieces.map((p) => (
                     <ContentCard
                       key={p.id}
@@ -263,7 +263,7 @@ function CalendarView({
           </Button>
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           {calendar.counts.total} {calendar.counts.total === 1 ? 'piece' : 'pieces'}
           {calendar.counts.imported ? ` · ${calendar.counts.imported} imported` : ''}
           {calendar.counts.byHand ? ` · ${calendar.counts.byHand} added here` : ''}
@@ -273,7 +273,7 @@ function CalendarView({
 
       {lastImport ? (
         <div className="mb-3 rounded-xl border border-border bg-secondary/40 px-3 py-2.5">
-          <p className="text-[11.5px]">
+          <p className="text-meta">
             <span className="font-medium">{lastImport.fileName}</span>
             <span className="text-muted-foreground">
               {' '}· imported by {lastImport.importedByEmail.split('@')[0]} on{' '}
@@ -283,17 +283,17 @@ function CalendarView({
             </span>
           </p>
           {lastImport.remaining !== lastImport.created ? (
-            <p className="pt-0.5 text-[11px] text-muted-foreground">
+            <p className="pt-0.5 text-meta text-muted-foreground">
               {lastImport.remaining} of them {lastImport.remaining === 1 ? 'is' : 'are'} still here — the
               rest have been replaced or deleted since.
             </p>
           ) : null}
           {lastImport.skippedReasons.length ? (
             <details className="pt-1">
-              <summary className="cursor-pointer text-[11px] font-medium text-warning-strong">
+              <summary className="cursor-pointer text-meta font-medium text-warning-strong">
                 What was refused
               </summary>
-              <ul className="pt-1 text-[11px] text-muted-foreground">
+              <ul className="pt-1 text-meta text-muted-foreground">
                 {lastImport.skippedReasons.slice(0, 10).map((reason) => (
                   <li key={reason}>{reason}</li>
                 ))}

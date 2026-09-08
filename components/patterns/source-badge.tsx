@@ -29,7 +29,7 @@ export function SourceBadge({
     <span
       title={meta.hint}
       className={cn(
-        'inline-flex shrink-0 items-center rounded border px-1.5 py-px text-[10px] font-medium leading-4',
+        'inline-flex shrink-0 items-center rounded border px-1.5 py-px text-micro font-medium leading-4',
         TONE[meta.tone],
         className,
       )}
@@ -60,13 +60,13 @@ export function SourceLine({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5 pb-4', className)}>
-      <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
+      <span className="text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground">
         Sources
       </span>
       {items.map((item) => {
         const unique = [...new Set(item.sources.length ? item.sources : [null])];
         return (
-          <span key={item.label} className="inline-flex items-center gap-1.5 text-[11px]">
+          <span key={item.label} className="inline-flex items-center gap-1.5 text-meta">
             <span className="text-muted-foreground">{item.label}</span>
             {unique.map((s) => (
               <SourceBadge key={s ?? 'internal'} source={s} />

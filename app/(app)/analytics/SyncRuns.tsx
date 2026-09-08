@@ -63,7 +63,7 @@ export async function SyncRuns({ take = 25 }: { take?: number }) {
                       {/* Null actor is the cron. Named rather than left blank, because
                           "who started this" is the first question asked of a run that
                           overlapped another one. */}
-                      <span className="ml-1 text-[11px]">
+                      <span className="ml-1 text-meta">
                         · {run.actorEmail ?? 'scheduled'}
                       </span>
                     </TD>

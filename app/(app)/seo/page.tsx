@@ -366,14 +366,14 @@ async function SeoBody({
                   </Badge>
                 </div>
                 <p className="mt-0.5 text-xs">{i.code.replaceAll('-', ' ')}</p>
-                {i.message ? <p className="text-[11px] text-muted-foreground">{i.message}</p> : null}
+                {i.message ? <p className="text-meta text-muted-foreground">{i.message}</p> : null}
               </div>
             ))}
             {/* Every other list on this page is capped; this one was not, and a crawl of
                 any size rendered the whole of it — the page came out 41,000px tall. The
                 worst are first, and the count says what is not shown. */}
             {issues.length > shownIssues.length ? (
-              <p className="pt-1 text-[11px] text-muted-foreground">
+              <p className="pt-1 text-meta text-muted-foreground">
                 Showing the {ISSUE_ROWS} most severe of {fmtNumber(issues.length)}.
               </p>
             ) : null}
@@ -417,7 +417,7 @@ function Vital({ k, value }: { k: keyof typeof VITAL_BANDS; value: number | null
     b === 'good' ? 'text-success' : b === 'needs' ? 'text-warning' : b === 'poor' ? 'text-danger' : 'text-muted-foreground';
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground" title={VITAL_BANDS[k].of}>
+      <p className="text-meta uppercase tracking-wide text-muted-foreground" title={VITAL_BANDS[k].of}>
         {VITAL_BANDS[k].label}
       </p>
       <p className={`tnum text-lg font-medium ${tone}`}>{vitalText(k, value)}</p>
@@ -491,7 +491,7 @@ function WebVitals({ vitals }: { vitals: Awaited<ReturnType<typeof webVitals>> }
             <div className="space-y-1">
               {worst.map((p) => (
                 <div key={p.url} className="flex items-baseline justify-between gap-2">
-                  <span className="truncate font-mono text-[11px]">{p.url}</span>
+                  <span className="truncate font-mono text-meta">{p.url}</span>
                   <span
                     className={`tnum shrink-0 text-xs font-medium ${
                       (p.mobileScore ?? 0) >= 90
@@ -506,7 +506,7 @@ function WebVitals({ vitals }: { vitals: Awaited<ReturnType<typeof webVitals>> }
                 </div>
               ))}
             </div>
-            <p className="mt-2 text-[11px] text-muted-foreground">
+            <p className="mt-2 text-meta text-muted-foreground">
               A lab score is one run in a datacentre. It finds problems reliably and is not
               what a person on a phone experiences — that is the field data above.
             </p>

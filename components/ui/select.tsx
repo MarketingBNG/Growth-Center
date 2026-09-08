@@ -80,7 +80,7 @@ export function Select({
         <SelectPrimitive.Trigger
           aria-label={ariaLabel}
           className={cn(
-            'flex h-9 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-card px-2.5 text-[12.5px]',
+            'flex h-9 w-full items-center justify-between gap-2 rounded-[10px] border border-border bg-card px-2.5 text-body',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',
             'data-[placeholder]:text-muted-foreground/70',
             className,
@@ -110,7 +110,7 @@ export function Select({
                   value={toRadix(o.value)!}
                   disabled={o.disabled}
                   className={cn(
-                    'relative flex cursor-default select-none items-center rounded-[7px] py-1.5 pl-2.5 pr-7 text-[12.5px] outline-none',
+                    'relative flex cursor-default select-none items-center rounded-[7px] py-1.5 pl-2.5 pr-7 text-body outline-none',
                     'data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground',
                     'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
                   )}

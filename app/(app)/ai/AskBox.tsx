@@ -83,7 +83,7 @@ export function AskBox({ configured }: { configured: boolean }) {
                 if (configured) ask(q);
               }}
               disabled={busy || !configured}
-              className="rounded-md border border-border px-2 py-1 text-left text-[11px] text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md border border-border px-2 py-1 text-left text-meta text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               {q}
             </button>
@@ -101,13 +101,13 @@ export function AskBox({ configured }: { configured: boolean }) {
             <AnswerText text={answer} />
             {/* A cut-off answer used to be shown as if it were complete. */}
             {truncated ? (
-              <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning">
+              <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1 text-meta text-warning">
                 This answer hit the length limit and stops mid-thought. Ask something
                 narrower for a complete one.
               </p>
             ) : null}
             {model ? (
-              <p className="mt-2 text-[11px] text-muted-foreground">
+              <p className="mt-2 text-meta text-muted-foreground">
                 {/* The wording has to follow what actually happened: "from the snapshot
                     only" was a promise the answer no longer keeps once the model has read
                     the database, and the reader is entitled to know which it was. */}

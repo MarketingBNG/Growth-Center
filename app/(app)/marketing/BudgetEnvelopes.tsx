@@ -80,7 +80,7 @@ export function BudgetEnvelopes({
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <CardTitle>Budget envelope · {period.label}</CardTitle>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             What the firm decided to spend, not what the ad platform was told
           </span>
         </div>
@@ -117,14 +117,14 @@ export function BudgetEnvelopes({
                     type="button"
                     disabled={pending}
                     onClick={() => save(r.channelId)}
-                    className="h-7 rounded bg-primary px-2.5 text-[11px] text-primary-foreground disabled:opacity-50"
+                    className="h-7 rounded bg-primary px-2.5 text-meta text-primary-foreground disabled:opacity-50"
                   >
                     Save
                   </button>
                   <button
                     type="button"
                     onClick={() => { setEditing(null); setError(null); }}
-                    className="h-7 px-1.5 text-[11px] text-muted-foreground"
+                    className="h-7 px-1.5 text-meta text-muted-foreground"
                   >
                     Cancel
                   </button>
@@ -132,7 +132,7 @@ export function BudgetEnvelopes({
               ) : (
                 <>
                   <span className="w-28 text-right text-xs tabular-nums">{r.spent}</span>
-                  <span className="text-[11px] text-muted-foreground">of</span>
+                  <span className="text-meta text-muted-foreground">of</span>
                   <span className="w-28 text-xs tabular-nums">
                     {r.amount === 0 ? <span className="text-muted-foreground">not set</span> : r.envelope}
                   </span>
@@ -147,7 +147,7 @@ export function BudgetEnvelopes({
                     />
                   </span>
                   <span
-                    className={`w-14 text-right text-[11px] tabular-nums ${r.breached ? 'text-destructive' : 'text-muted-foreground'}`}
+                    className={`w-14 text-right text-meta tabular-nums ${r.breached ? 'text-destructive' : 'text-muted-foreground'}`}
                   >
                     {r.usedPercent === null ? '—' : `${Math.round(r.usedPercent)}%`}
                   </span>
@@ -155,7 +155,7 @@ export function BudgetEnvelopes({
                     <button
                       type="button"
                       onClick={() => { setEditing(r.channelId); setValue(String(r.amount)); setError(null); }}
-                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                      className="text-meta text-muted-foreground hover:text-foreground"
                     >
                       {r.amount === 0 ? 'Set' : 'Change'}
                     </button>
@@ -166,7 +166,7 @@ export function BudgetEnvelopes({
           ))}
         </div>
 
-        {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+        {error ? <p className="text-meta text-destructive">{error}</p> : null}
       </CardHeader>
     </Card>
   );

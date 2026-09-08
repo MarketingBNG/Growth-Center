@@ -78,7 +78,7 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
       {saved ? <p className="text-xs text-success">Saved and recorded in the activity log.</p> : null}
 
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-meta text-muted-foreground">
         Blank means no ceiling has been decided, and the dashboard says so rather than
         defaulting — a default ceiling is a number nobody chose being used to authorise
         spending. Zero is different and is a real instruction: take on nothing this month.

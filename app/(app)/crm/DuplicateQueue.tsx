@@ -99,7 +99,7 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
             const stale = !row.primary || !row.duplicate;
             return (
               <li key={row.id} className="px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
                   <span className="rounded border border-border px-1.5 py-px uppercase tracking-wide">
                     {row.entityType}
                   </span>
@@ -121,23 +121,23 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
                         such: without that the two columns are just two records and the
                         button says "merge" without saying which way round. */}
                     <div className="rounded-lg border border-success/30 bg-success/5 px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-success">
+                      <p className="text-micro font-semibold uppercase tracking-wide text-success">
                         Keep
                       </p>
                       <p className="mt-0.5 text-xs font-medium">{row.primary?.label}</p>
-                      <p className="text-[11px] text-muted-foreground">{row.primary?.detail}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="text-meta text-muted-foreground">{row.primary?.detail}</p>
+                      <p className="mt-1 text-meta text-muted-foreground">
                         {row.primary?.weight ?? 0} linked record
                         {(row.primary?.weight ?? 0) === 1 ? '' : 's'}
                       </p>
                     </div>
                     <div className="rounded-lg border border-border px-3 py-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      <p className="text-micro font-semibold uppercase tracking-wide text-muted-foreground">
                         Fold in and delete
                       </p>
                       <p className="mt-0.5 text-xs font-medium">{row.duplicate?.label}</p>
-                      <p className="text-[11px] text-muted-foreground">{row.duplicate?.detail}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="text-meta text-muted-foreground">{row.duplicate?.detail}</p>
+                      <p className="mt-1 text-meta text-muted-foreground">
                         {row.duplicate?.weight ?? 0} linked record
                         {(row.duplicate?.weight ?? 0) === 1 ? '' : 's'} — moved across first
                       </p>

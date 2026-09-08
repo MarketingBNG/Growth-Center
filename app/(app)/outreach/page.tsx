@@ -170,7 +170,7 @@ export default async function OutreachPage({
                   {s.steps.map((step, i) => (
                     <div key={step.id} className="rounded-md border border-border px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <span className="grid size-5 shrink-0 place-items-center rounded bg-secondary text-[11px] font-semibold">
+                        <span className="grid size-5 shrink-0 place-items-center rounded bg-secondary text-meta font-semibold">
                           {i + 1}
                         </span>
                         {/* A follow-up in the same thread carries no subject, and 38 of
@@ -179,11 +179,11 @@ export default async function OutreachPage({
                         <p className={`text-xs font-medium ${step.subject ? '' : 'text-muted-foreground'}`}>
                           {step.subject ?? '(no subject)'}
                         </p>
-                        <span className="ml-auto text-[11px] text-muted-foreground">
+                        <span className="ml-auto text-meta text-muted-foreground">
                           {step.waitDays === 0 ? 'immediately' : `wait ${step.waitDays}d`} · {step.channel}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-4 whitespace-pre-wrap pl-7 text-[11px] leading-relaxed text-muted-foreground">
+                      <p className="mt-1 line-clamp-4 whitespace-pre-wrap pl-7 text-meta leading-relaxed text-muted-foreground">
                         {step.body}
                       </p>
                       {/* Findings sit against the step that carries them, so fixing one
@@ -193,7 +193,7 @@ export default async function OutreachPage({
                         .map((f, n) => (
                           <p
                             key={`${f.code}-${n}`}
-                            className={`mt-1 flex items-start gap-1.5 pl-7 text-[11px] ${
+                            className={`mt-1 flex items-start gap-1.5 pl-7 text-meta ${
                               f.severity === 'critical' ? 'text-destructive' : 'text-warning'
                             }`}
                           >
@@ -228,9 +228,9 @@ function plural(n: number, noun: string): string {
 function Sent({ label, value, note }: { label: string; value: number; note?: string }) {
   return (
     <div className="rounded-md border border-border px-2 py-1.5">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-meta text-muted-foreground">{label}</p>
       <p className="text-sm font-semibold tabular-nums">{fmtNumber(value)}</p>
-      {note ? <p className="text-[11px] text-muted-foreground">{note}</p> : null}
+      {note ? <p className="text-meta text-muted-foreground">{note}</p> : null}
     </div>
   );
 }

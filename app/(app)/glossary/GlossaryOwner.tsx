@@ -64,9 +64,9 @@ export function GlossaryOwner({
         className="h-7 w-40 text-xs"
       />
       {error ? (
-        <span className="text-[11px] text-destructive">{error}</span>
+        <span className="text-meta text-destructive">{error}</span>
       ) : isDefault ? (
-        <span className="text-[11px] text-muted-foreground/70">from the manual</span>
+        <span className="text-meta text-muted-foreground/70">from the manual</span>
       ) : null}
     </div>
   );

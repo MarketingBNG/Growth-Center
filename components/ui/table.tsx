@@ -24,7 +24,7 @@ export function TableCard({ className, ...props }: React.ComponentProps<'div'>) 
 }
 
 export function Table({ className, ...props }: React.ComponentProps<'table'>) {
-  return <table className={cn('w-full caption-bottom text-[13px]', className)} {...props} />;
+  return <table className={cn('w-full caption-bottom text-label', className)} {...props} />;
 }
 
 export function THead({ className, ...props }: React.ComponentProps<'thead'>) {
@@ -47,7 +47,7 @@ export function TR({ className, ...props }: React.ComponentProps<'tr'>) {
 /** Exported so `SortHeader` can render its own `<th>` — aria-sort belongs on the cell,
  *  not on the button inside it — without restating these classes. */
 export const TH_CLASS =
-  'px-5 py-[9px] text-left align-middle text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground';
+  'px-5 py-[9px] text-left align-middle text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground';
 
 export function TH({ className, ...props }: React.ComponentProps<'th'>) {
   return <th className={cn(TH_CLASS, className)} {...props} />;
@@ -77,7 +77,7 @@ export function THNum({ className, ...props }: React.ComponentProps<'th'>) {
   return (
     <th
       className={cn(
-        'px-5 py-[9px] text-right align-middle text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground',
+        'px-5 py-[9px] text-right align-middle text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground',
         className,
       )}
       {...props}

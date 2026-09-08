@@ -159,7 +159,7 @@ export default async function MarketingPage({
       <MetricsBand {...band} />
 
       {channelId || source ? (
-        <p className="-mt-2 pb-3 text-[11px] text-muted-foreground">
+        <p className="-mt-2 pb-3 text-meta text-muted-foreground">
           {channelId
             ? `Every figure on this page covers ${allChannels.find((c) => c.id === channelId)?.name ?? 'this channel'} only.`
             : null}
@@ -244,7 +244,7 @@ export default async function MarketingPage({
         <CardHeader>
           <CardTitle>Campaigns</CardTitle>
           {active.length > 0 && !attributed ? (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Delivery only. The CRM records which channel a lead came from but never which
               campaign, so leads, CPL, deals, revenue, CAC and ROAS cannot be attributed to a
               campaign here — they would be blank on every row rather than zero.
@@ -299,7 +299,7 @@ export default async function MarketingPage({
                           — and what explains why the footer's CPL is lower than the
                           column above it appears to average to. */}
                       {c.acquisition ? null : (
-                        <span className="ml-1.5 rounded border border-border px-1 py-px text-[10px] uppercase tracking-wide text-muted-foreground">
+                        <span className="ml-1.5 rounded border border-border px-1 py-px text-micro uppercase tracking-wide text-muted-foreground">
                           {c.objective}
                         </span>
                       )}

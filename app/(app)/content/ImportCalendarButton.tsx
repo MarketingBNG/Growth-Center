@@ -101,7 +101,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
           {replaceable ? (
             <label className="flex items-start gap-2 rounded-lg border border-border bg-secondary/40 p-2.5">
               <input type="checkbox" name="replace" value="true" defaultChecked className="mt-0.5" />
-              <span className="text-[11px] leading-relaxed text-muted-foreground">
+              <span className="text-meta leading-relaxed text-muted-foreground">
                 <span className="font-medium text-foreground">Replace the imported calendar for this month.</span>{' '}
                 Removes the pieces earlier imports left here. Anything added by hand stays, and so does
                 anything already published — that has a URL, an approval and performance against it.
@@ -112,7 +112,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
           {summary ? (
-            <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-2.5 text-[11px]">
+            <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-2.5 text-meta">
               <p className="text-xs font-semibold text-foreground">
                 {summary.created} {summary.created === 1 ? 'piece' : 'pieces'} imported
                 {summary.rowsRead !== summary.created ? ` from ${summary.rowsRead} rows` : ''}.

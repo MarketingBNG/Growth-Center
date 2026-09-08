@@ -43,7 +43,7 @@ export function Field({
       {/* Outside the <label> deliberately. Inside, its text became part of the field's
           accessible name — "EmailUsed to detect duplicates and link the CRM record."
           rather than "Email". */}
-      {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="text-meta text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }

@@ -17,7 +17,7 @@ export function VerifyEmail({ configured }: { configured: boolean }) {
 
   if (!configured) {
     return (
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-meta text-muted-foreground">
         Set <code>SMTP_HOST</code>, <code>SMTP_USER</code> and <code>SMTP_PASSWORD</code> to
         send. Zoho Mail uses <code>smtp.zoho.in</code> on port 465.
       </p>
@@ -38,12 +38,12 @@ export function VerifyEmail({ configured }: { configured: boolean }) {
             }
           })
         }
-        className="h-7 rounded border px-2.5 text-[11px] disabled:opacity-50"
+        className="h-7 rounded border px-2.5 text-meta disabled:opacity-50"
       >
         {pending ? 'Checking…' : 'Check the connection'}
       </button>
       {result ? (
-        <span className={`text-[11px] ${result.ok ? 'text-success-strong' : 'text-destructive'}`}>
+        <span className={`text-meta ${result.ok ? 'text-success-strong' : 'text-destructive'}`}>
           {result.detail}
         </span>
       ) : null}

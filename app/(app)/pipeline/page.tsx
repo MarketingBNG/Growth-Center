@@ -114,7 +114,7 @@ export default async function PipelinePage({
       <MetricsBand {...band} />
 
       {data.truncated ? (
-        <p className="mb-3 rounded-xl border border-border bg-card px-4 py-2.5 text-[12.5px] text-muted-foreground">
+        <p className="mb-3 rounded-xl border border-border bg-card px-4 py-2.5 text-body text-muted-foreground">
           Each column shows its {BOARD_LIMIT} most recently updated deals — the ones still
           open, or for the won and lost columns, the ones that ended there. The figures
           above cover all {fmtNumber(data.openTotal)} open deals, and each column says how
@@ -126,7 +126,7 @@ export default async function PipelinePage({
           which is invisible until somebody tries it and impossible without a pointer;
           the table's stage dropdown is the same move from the keyboard. Neither was
           discoverable, and one of them is the accessible one. */}
-      <p className="mb-3 text-[12.5px] text-muted-foreground">
+      <p className="mb-3 text-body text-muted-foreground">
         Drag a card between columns to move a deal, or switch to Table and change its
         stage from the dropdown — the same move, reachable from the keyboard.
       </p>

@@ -61,7 +61,7 @@ export function GenerateInsightsButton({
       </Button>
 
       {done && !pending ? (
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           Wrote {done.written} {done.written === 1 ? 'finding' : 'findings'}
           {done.usage
             ? `, ${done.usage.input.toLocaleString('en-US')} tokens in and ${done.usage.output.toLocaleString('en-US')} out.`
@@ -70,7 +70,7 @@ export function GenerateInsightsButton({
       ) : null}
 
       {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
           {error}
         </p>
       ) : null}

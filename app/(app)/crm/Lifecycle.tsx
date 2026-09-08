@@ -106,7 +106,7 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
             ))}
           </ul>
           {/* Said plainly rather than left to be inferred from four identical counts. */}
-          <p className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+          <p className="border-t border-border px-4 py-2.5 text-meta text-muted-foreground">
             Nothing infers these from activity: a logged call is not evidence that a referral was
             asked for. They read as never-done until somebody records the ask, which is what makes
             them worth acting on rather than worth arguing with.
@@ -213,7 +213,7 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
 function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p className="text-meta text-muted-foreground">{label}</p>
       <p className={`tnum ${strong ? 'text-base font-semibold' : 'text-sm'}`}>{value}</p>
     </div>
   );

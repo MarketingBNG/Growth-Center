@@ -43,8 +43,8 @@ export function ChartFrame({
     <figure className={cn('rounded-2xl border border-border bg-card shadow-card', className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-5 pb-1 pt-[18px]">
         <figcaption>
-          <h3 className="text-[14.5px] font-bold leading-tight tracking-tight">{title}</h3>
-          {subtitle ? <p className="text-[11.5px] text-muted-foreground">{subtitle}</p> : null}
+          <h3 className="text-lead font-bold leading-tight tracking-tight">{title}</h3>
+          {subtitle ? <p className="text-meta text-muted-foreground">{subtitle}</p> : null}
         </figcaption>
         {/* A legend is always present for two or more series, so identity is never
             colour-alone. One series needs none — the title names it. */}
@@ -53,7 +53,7 @@ export function ChartFrame({
             {legend.map((l) => (
               <li
                 key={l.label}
-                className="flex items-center gap-1.5 text-[11.5px] font-semibold text-muted-foreground"
+                className="flex items-center gap-1.5 text-meta font-semibold text-muted-foreground"
               >
                 {/* Mirrors the mark on the plot: a solid swatch for the filled series,
                     a split one for the dashed. Colour is never the only cue. */}
@@ -86,10 +86,10 @@ export function Tip({
 }) {
   return (
     <div className="pointer-events-none w-[156px] rounded-xl border border-border bg-card px-3 py-2.5 shadow-card">
-      <p className="pb-1.5 text-[11.5px] font-bold">{label}</p>
+      <p className="pb-1.5 text-meta font-bold">{label}</p>
       <ul className="space-y-1">
         {rows.map((r) => (
-          <li key={r.key} className="flex items-center gap-2 text-[11.5px]">
+          <li key={r.key} className="flex items-center gap-2 text-meta">
             <span aria-hidden className="size-2 shrink-0 rounded-[3px]" style={{ background: r.color }} />
             <span className="text-muted-foreground">{r.label}</span>
             <span className="ml-auto font-bold text-foreground tnum">{r.value}</span>

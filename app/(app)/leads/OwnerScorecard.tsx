@@ -73,7 +73,7 @@ export async function OwnerScorecard({ window }: { window: { from: Date; to: Dat
           </TBody>
         </Table>
       </TableWrap>
-      <p className="border-t border-border px-4 py-2.5 text-[11px] text-muted-foreground">
+      <p className="border-t border-border px-4 py-2.5 text-meta text-muted-foreground">
         Median quality is the deterministic 0–100 score on the leads this person was handed. It is
         here because handling and quality are two explanations for the same low conversion rate,
         and the argument cannot be settled with only one of them on the row.

@@ -211,7 +211,7 @@ export default async function SettingsPage() {
               this history can ever reach" is the fact that decides what the bar should
               be. Whoever sets it should not have to go and compute this first. */}
           {ceiling.ceilingPercent !== null && ceiling.ceilingPercent < health.threshold ? (
-            <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+            <p className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-meta text-warning">
               Revenue attribution cannot reach its {health.threshold}% threshold on this
               history. Attributing everything the CRM has evidence for would reach{' '}
               <span className="font-medium">{ceiling.ceilingPercent.toFixed(1)}%</span> —{' '}
@@ -283,10 +283,10 @@ export default async function SettingsPage() {
                   <p className="text-sm font-medium">
                     {e.label}
                     {!e.required ? (
-                      <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">optional</span>
+                      <span className="ml-1.5 text-meta font-normal text-muted-foreground">optional</span>
                     ) : null}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">{e.detail}</p>
+                  <p className="text-meta text-muted-foreground">{e.detail}</p>
                   {/* Only under the email row, and only for someone who can act on it.
                       "Configured" and "the server accepts these credentials" are
                       different claims, and the digest not arriving is the only symptom
@@ -310,11 +310,11 @@ export default async function SettingsPage() {
                 <span className="text-sm">{c.name}</span>
                 <span className="flex items-center gap-2">
                   <Badge tone="neutral">{c.kind}</Badge>
-                  <span className="font-mono text-[11px] text-muted-foreground">{c.slug}</span>
+                  <span className="font-mono text-meta text-muted-foreground">{c.slug}</span>
                 </span>
               </div>
             ))}
-            <p className="pt-1 text-[11px] text-muted-foreground">
+            <p className="pt-1 text-meta text-muted-foreground">
               Channels are a table rather than an enum, so adding one needs no migration.
             </p>
           </CardContent>
@@ -339,7 +339,7 @@ export default async function SettingsPage() {
                       {s.isWon ? <span className="ml-1 text-success">won</span> : null}
                       {s.isLost ? <span className="ml-1 text-destructive">lost</span> : null}
                     </p>
-                    <p className="text-[11px] text-muted-foreground tnum">{s.probability}% probability</p>
+                    <p className="text-meta text-muted-foreground tnum">{s.probability}% probability</p>
                   </div>
                 ))}
               </div>
@@ -352,7 +352,7 @@ export default async function SettingsPage() {
         <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle>API keys</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               For website forms posting to{' '}
               <span className="font-mono">POST /api/public/v1/leads</span> with an{' '}
               <span className="font-mono">X-API-Key</span> header. Only a SHA-256 hash is stored, so
@@ -417,7 +417,7 @@ export default async function SettingsPage() {
         <Card className="mt-4 overflow-hidden">
           <CardHeader>
             <CardTitle>Activity log</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Who changed what, newest first. Both the administrative acts — connections,
               keys, roles, access, thresholds, currency — and changes to records: a lead
               reassigned, a deal moved, a task ticked off. Those come from the activity

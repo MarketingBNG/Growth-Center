@@ -242,7 +242,7 @@ export default async function DashboardPage({
                     <TR key={c.id}>
                       <TD>
                         <span className="font-medium">{c.name}</span>
-                        <span className="ml-1.5 text-[11px] text-muted-foreground">{c.kind}</span>
+                        <span className="ml-1.5 text-meta text-muted-foreground">{c.kind}</span>
                       </TD>
                       <TD className="text-right tnum">{money(c.spend)}</TD>
                       <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
@@ -303,7 +303,7 @@ export default async function DashboardPage({
                       <TR key={c.id}>
                         <TD>
                           <span className="font-medium">{c.name}</span>
-                          <p className="text-[11px] text-muted-foreground">{c.channelName}</p>
+                          <p className="text-meta text-muted-foreground">{c.channelName}</p>
                         </TD>
                         <TD className="text-right tnum">{money(c.spend)}</TD>
                         {campaignsAttributed ? (
@@ -339,7 +339,7 @@ export default async function DashboardPage({
               </TableWrap>
             )}
             {!campaignsAttributed && topCampaigns.length > 0 ? (
-              <p className="px-5 pb-4 pt-1 text-[11px] text-muted-foreground">
+              <p className="px-5 pb-4 pt-1 text-meta text-muted-foreground">
                 Delivery only. No lead or deal records which campaign it came from, so
                 cost per lead and return cannot be attributed to a campaign yet.
               </p>
@@ -404,7 +404,7 @@ export default async function DashboardPage({
                 hint="Deals opened. This CRM records no consultation event — the same gap that leaves CPQL without a numerator."
               />
               {capacity.ceiling === null ? (
-                <p className="pt-1 text-[11px] text-muted-foreground">
+                <p className="pt-1 text-meta text-muted-foreground">
                   No monthly ceiling has been set, so there is nothing to measure this against.
                   A default would be a number nobody chose being used to authorise spending.
                   Set one in Settings.
@@ -461,7 +461,7 @@ export default async function DashboardPage({
                       through a chat thread that asked them nothing, and a five-way split
                       over the remaining fifth reads as the whole picture unless the page
                       says how much of it is missing. */}
-                  <p className="pt-1 text-[11px] text-muted-foreground">
+                  <p className="pt-1 text-meta text-muted-foreground">
                     {fmtNumber(segments.known)} of {fmtNumber(segments.total)} leads said what
                     kind of business they are. The rest came through channels that never asked.
                   </p>
@@ -488,7 +488,7 @@ export default async function DashboardPage({
                       <p className="truncate text-xs font-medium">
                         {[l.firstName, l.lastName].filter(Boolean).join(' ')}
                       </p>
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-meta text-muted-foreground">
                         {l.companyName ?? l.channel?.name ?? 'No company'} · {fmtRelative(l.createdAt)}
                         {!partnerView && l.ownerEmail ? ` · ${l.ownerEmail.split('@')[0]}` : ''}
                       </p>
@@ -515,7 +515,7 @@ export default async function DashboardPage({
                   <div key={t.id} className="flex items-start justify-between gap-2 py-1">
                     <div className="min-w-0">
                       <p className="truncate text-xs">{t.title}</p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-meta text-muted-foreground">
                         {t.dueDate ? fmtRelative(t.dueDate) : 'No due date'}
                         {/* §6.6. Hidden in partner view: the panel still says what is
                             outstanding, which is performance, and stops naming who is
@@ -534,13 +534,13 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      <p className="pt-4 text-[11px] text-muted-foreground">
+      <p className="pt-4 text-meta text-muted-foreground">
         ROAS and CAC measure <span className="text-foreground">the paid channels only</span>: new
         business booked against a channel that carried spend, over that spend. Revenue that reached
         no channel, and customers who arrived another way, are real but they are not a return on
         advertising. Recurring income from customers won earlier is left out for the same reason.
       </p>
-      <p className="pt-1 text-[11px] text-muted-foreground">
+      <p className="pt-1 text-meta text-muted-foreground">
         Conversion:{' '}
         {/* Dropped rather than printed when sessions cover less of the period than leads
             do — leads over a shorter visitor series is not a conversion rate, and over
@@ -570,7 +570,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
     <div className="flex items-baseline justify-between gap-2">
       <span className="text-xs text-muted-foreground">
         {label}
-        {hint ? <span className="block text-[10px]">{hint}</span> : null}
+        {hint ? <span className="block text-micro">{hint}</span> : null}
       </span>
       <span className="text-sm font-semibold tnum">{value}</span>
     </div>

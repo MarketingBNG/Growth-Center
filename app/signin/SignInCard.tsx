@@ -61,7 +61,7 @@ export function SignInCard({
             </div>
           )}
 
-          <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+          <p className="mt-4 text-meta leading-relaxed text-muted-foreground">
             Restricted to {ALLOWED_DOMAINS.join(' and ')} accounts on the Growth Center roster.
           </p>
         </CardContent>

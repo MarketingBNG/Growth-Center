@@ -119,7 +119,7 @@ export function MetricsBand({
           type="button"
           onClick={() => setOpen(!open)}
           aria-expanded={open}
-          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-[11.5px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1 text-meta font-semibold text-muted-foreground transition-colors hover:text-foreground"
         >
           {open ? 'Hide the numbers' : 'Show the numbers'}
           {open ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
@@ -131,7 +131,7 @@ export function MetricsBand({
           {/* Only worth showing when there is more than one to tell apart. */}
           {sources.length > 1 ? (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
+              <span className="text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground">
                 Sources
               </span>
               {sources.map((id) => {
@@ -146,14 +146,14 @@ export function MetricsBand({
                     title={`${meta.name} — ${meta.hint}`}
                     onClick={() => setFocus(on ? null : id)}
                     className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition-colors',
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-meta font-semibold transition-colors',
                       on
                         ? 'border-foreground/25 bg-secondary text-foreground'
                         : 'border-border text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {meta.label}
-                    <span className="text-[10px] font-bold tnum opacity-60">{count}</span>
+                    <span className="text-micro font-bold tnum opacity-60">{count}</span>
                   </button>
                 );
               })}
@@ -161,7 +161,7 @@ export function MetricsBand({
                 <button
                   type="button"
                   onClick={() => setFocus(null)}
-                  className="text-[11px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
+                  className="text-meta font-semibold text-muted-foreground underline-offset-2 hover:underline"
                 >
                   Clear
                 </button>
@@ -183,7 +183,7 @@ export function MetricsBand({
           {secondary && secondary.length > 0 ? (
             <div>
               {secondaryNote ? (
-                <p className="pb-2 text-[11px] text-muted-foreground">{secondaryNote}</p>
+                <p className="pb-2 text-meta text-muted-foreground">{secondaryNote}</p>
               ) : null}
               {/* Narrower columns than the primary row, so the two are legible as
                   different tiers without a heading saying so. */}

@@ -50,10 +50,10 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{name}</h1>
+            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{name}</h1>
             <LeadStatusBadge status={lead.status} />
           </div>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
+          <p className="mt-1 text-label text-muted-foreground">
             {[lead.title, lead.companyName].filter(Boolean).join(' · ') || 'No company recorded'}
           </p>
         </div>
@@ -156,7 +156,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               {lead.noteEntries.map((n) => (
                 <div key={n.id} className="rounded-md border border-border px-3 py-2">
                   <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 text-meta text-muted-foreground">
                     {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
                   </p>
                 </div>
@@ -191,7 +191,7 @@ function Detail({
 }) {
   return (
     <div className={className}>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
     </div>
   );

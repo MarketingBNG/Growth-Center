@@ -43,7 +43,7 @@ export function Sheet({
         >
           <div className="flex items-start justify-between gap-4 border-b border-border px-[22px] pb-4 pt-5">
             <div className="min-w-0">
-              <Dialog.Title className="text-[17px] font-extrabold tracking-[-0.02em]">
+              <Dialog.Title className="text-title font-extrabold tracking-[-0.02em]">
                 {title}
               </Dialog.Title>
               {description ? (

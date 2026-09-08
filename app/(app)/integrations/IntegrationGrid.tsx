@@ -177,10 +177,10 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
     <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-[18px] shadow-card">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
+          <p className="pb-0.5 text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground">
             {CATEGORY_LABEL[card.category] ?? card.category}
           </p>
-          <h3 className="text-[14.5px] font-bold tracking-tight">{card.name}</h3>
+          <h3 className="text-lead font-bold tracking-tight">{card.name}</h3>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{card.summary}</p>
         </div>
         <StateBadge state={card.state} />
@@ -190,14 +190,14 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         {card.provides.map((p) => (
           <span
             key={p}
-            className="rounded border border-border bg-secondary/50 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            className="rounded border border-border bg-secondary/50 px-1.5 py-0.5 text-micro text-muted-foreground"
           >
             {p}
           </span>
         ))}
       </div>
 
-      <dl className="space-y-0.5 pt-3 text-[11px]">
+      <dl className="space-y-0.5 pt-3 text-meta">
         <Meta label="Auth" value={card.authKind === 'oauth2' ? 'OAuth' : 'API key'} />
         <Meta
           label="Last sync"
@@ -215,13 +215,13 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
       </dl>
 
       {card.state === 'demo_data' ? (
-        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-meta text-warning">
           Showing seeded demo figures. This is not a live connection.
         </p>
       ) : null}
 
       {card.lastError ? (
-        <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
+        <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
           {card.lastError}
           {card.lastErrorAt ? (
             <span className="block opacity-70">{fmtRelative(card.lastErrorAt)}</span>
@@ -235,7 +235,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
             const days = card.credentialExpiresInDays;
             if (days > 14) return null;
             return (
-              <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+              <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-meta text-warning">
                 {days <= 0
                   ? 'The stored authorisation has expired. Reconnect.'
                   : `Authorisation expires in ${days} ${days === 1 ? 'day' : 'days'}. A sync renews it automatically.`}
@@ -245,17 +245,17 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         : null}
 
       {card.hasCredential && card.missingConfig.length > 0 ? (
-        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+        <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-meta text-warning">
           Connected, but syncing needs {card.missingConfig.join(' and ')}. Open Settings.
         </p>
       ) : null}
 
       {card.missingEnv.length > 0 ? (
         <div className="mt-3 rounded-md border border-border bg-secondary/40 px-2 py-1.5">
-          <p className="text-[11px] font-medium">Requires API credentials</p>
+          <p className="text-meta font-medium">Requires API credentials</p>
           <ul className="mt-0.5 space-y-0.5">
             {card.missingEnv.map((e) => (
-              <li key={e.name} className="text-[11px] text-muted-foreground">
+              <li key={e.name} className="text-meta text-muted-foreground">
                 <span className="font-mono">{e.name}</span> — {e.description}
               </li>
             ))}
@@ -263,14 +263,14 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="mt-3 text-meta text-destructive">{error}</p> : null}
       {progress && !error ? (
-        <p className="mt-3 text-[11px] text-muted-foreground">{progress}</p>
+        <p className="mt-3 text-meta text-muted-foreground">{progress}</p>
       ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
         {!canManage ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             Your role cannot change integrations.
           </p>
         ) : connected ? (
@@ -323,7 +323,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
             href={card.docsUrl}
             target="_blank"
             rel="noreferrer"
-            className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            className="ml-auto inline-flex items-center gap-1 text-meta text-muted-foreground hover:text-foreground"
           >
             Docs <ExternalLink className="size-3" />
           </a>

@@ -24,8 +24,8 @@ export function ModulePending({
         <span className="grid size-11 place-items-center rounded-xl bg-primary-soft text-primary">
           <Hammer className="size-5" />
         </span>
-        <p className="text-[15px] font-bold">Not built yet — scheduled for {phase}</p>
-        <div className="max-w-[460px] text-[12.5px] leading-[1.6] text-muted-foreground">
+        <p className="text-lead font-bold">Not built yet — scheduled for {phase}</p>
+        <div className="max-w-[460px] text-body leading-[1.6] text-muted-foreground">
           <p>
             This route, its schema tables and its API are in place; the interface is not.
             Planned for this module:

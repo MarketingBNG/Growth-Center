@@ -80,7 +80,7 @@ export function Overview({
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs font-medium">
                       {s.label}
-                      <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">{s.hint}</span>
+                      <span className="ml-1.5 text-meta font-normal text-muted-foreground">{s.hint}</span>
                     </span>
                     <span className="tnum text-xs font-semibold">{fmtNumber(count)}</span>
                   </div>
@@ -159,7 +159,7 @@ function Tile({ label, value, sub }: { label: string; value: string; sub: string
       <CardContent className="pt-4">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="mt-0.5 text-2xl font-semibold tnum">{value}</p>
-        <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>
+        <p className="mt-0.5 text-meta text-muted-foreground">{sub}</p>
       </CardContent>
     </Card>
   );

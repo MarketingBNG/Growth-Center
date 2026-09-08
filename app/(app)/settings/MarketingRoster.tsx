@@ -75,7 +75,7 @@ export function MarketingRoster({ initial }: { initial: string[] }) {
           {emails.map((email) => (
             <li
               key={email}
-              className="flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-1 text-[11px]"
+              className="flex items-center gap-1 rounded border border-border bg-muted/40 px-2 py-1 text-meta"
             >
               {email}
               <button
@@ -112,9 +112,9 @@ export function MarketingRoster({ initial }: { initial: string[] }) {
         </Button>
       </div>
 
-      {note ? <p className="text-[11px] text-muted-foreground">{note}</p> : null}
+      {note ? <p className="text-meta text-muted-foreground">{note}</p> : null}
       {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
           {error}
         </p>
       ) : null}

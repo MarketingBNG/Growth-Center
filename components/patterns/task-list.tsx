@@ -36,7 +36,7 @@ export function TaskList({ tasks }: { tasks: TaskRow[] }) {
               <p className="text-sm leading-snug">{t.title}</p>
               <PriorityBadge priority={t.priority as never} />
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-meta text-muted-foreground">
               {t.dueDate ? `Due ${fmtDate(t.dueDate)}` : 'No due date'}
               {t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
             </p>

@@ -155,7 +155,7 @@ export default async function AnalyticsPage({
                   <p className="truncate text-xs font-medium">{p.name}</p>
                   {/* Env var names are long single tokens with no space to wrap at, so a
                       provider needing two of them pushed the badge out of the card. */}
-                  <p className="text-[11px] break-words text-muted-foreground">
+                  <p className="text-meta break-words text-muted-foreground">
                     {p.state === 'connected'
                       ? `Last sync ${fmtRelative(p.lastSyncAt)}`
                       : p.state === 'demo_data'

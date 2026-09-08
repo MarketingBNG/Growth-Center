@@ -22,7 +22,7 @@ const buttonVariants = cva(
         lg: 'h-10 px-6',
         icon: 'size-9',
         /* The 38px page-header action row: date range, range select, Add widget, Export. */
-        action: 'h-[38px] px-3 text-[13px]',
+        action: 'h-[38px] px-3 text-label',
       },
     },
     defaultVariants: { variant: 'default', size: 'default' },

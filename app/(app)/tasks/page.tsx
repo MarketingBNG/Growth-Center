@@ -252,7 +252,7 @@ async function TasksBody({
                               <Badge tone="neutral">{sourceMeta(t.source).label}</Badge>
                             ) : null}
                           </div>
-                          {t.detail ? <p className="text-[11px] text-muted-foreground">{t.detail}</p> : null}
+                          {t.detail ? <p className="text-meta text-muted-foreground">{t.detail}</p> : null}
                         </TD>
                         <TD className="text-muted-foreground">
                           {t.lead ? (

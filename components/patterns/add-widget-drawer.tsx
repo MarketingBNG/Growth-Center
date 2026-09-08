@@ -158,10 +158,10 @@ export function AddWidgetDrawer() {
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="text-[13.5px] font-bold">{w.title}</p>
-                <p className="pt-0.5 text-[12px] leading-[1.55] text-muted-foreground">{w.body}</p>
+                <p className="text-label font-bold">{w.title}</p>
+                <p className="pt-0.5 text-body leading-[1.55] text-muted-foreground">{w.body}</p>
                 <div className="flex flex-wrap items-center gap-2 pt-2.5">
-                  <span className="rounded-full border border-border bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold">
+                  <span className="rounded-full border border-border bg-surface-sunken px-2 py-0.5 text-meta font-semibold">
                     #{w.tag}
                   </span>
                   <Button
@@ -176,7 +176,7 @@ export function AddWidgetDrawer() {
           ))}
         </ul>
 
-        <p className="py-4 text-[11.5px] text-muted-foreground" role="status">
+        <p className="py-4 text-meta text-muted-foreground" role="status">
           {picked
             ? `"${picked}" is selected. Placing widgets on the dashboard is not built yet, so nothing has been added.`
             : 'Placing widgets on the dashboard is not built yet.'}

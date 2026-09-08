@@ -34,7 +34,7 @@ export function Timeline({ entries }: { entries: Entry[] }) {
             aria-hidden
           />
           <p className="text-sm leading-snug">{e.summary}</p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             {e.actorEmail ? `${e.actorEmail.split('@')[0]} · ` : 'System · '}
             {fmtRelative(e.createdAt)}
           </p>

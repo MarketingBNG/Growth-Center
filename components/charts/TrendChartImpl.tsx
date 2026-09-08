@@ -60,11 +60,11 @@ export function TrendChart({
     >
       {headline ? (
         <div className="px-3 pb-1 pt-1">
-          <p className="text-[32px] font-extrabold leading-none tracking-[-0.04em] tnum">
+          <p className="text-figure font-extrabold leading-none tracking-[-0.04em] tnum">
             {headline}
           </p>
           {headlineNote ? (
-            <p className="pt-1.5 text-[11.5px] text-muted-foreground">{headlineNote}</p>
+            <p className="pt-1.5 text-meta text-muted-foreground">{headlineNote}</p>
           ) : null}
         </div>
       ) : null}

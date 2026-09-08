@@ -216,7 +216,7 @@ export function EditPieceModal({
             rows={10}
             maxLength={MAX_BRIEF}
             defaultValue={piece.brief ?? ''}
-            className="font-mono text-[11px] leading-relaxed"
+            className="font-mono text-meta leading-relaxed"
           />
         </Field>
 

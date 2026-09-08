@@ -22,7 +22,7 @@ export function Sparkline({
   // One reading is a dot, not a line, and drawing it as a flat line would claim a
   // stability the data has not shown.
   if (values.length < 2) {
-    return <span className="text-[11px] text-muted-foreground">—</span>;
+    return <span className="text-meta text-muted-foreground">—</span>;
   }
 
   const min = Math.min(...values);

@@ -50,13 +50,13 @@ export default async function ReportsPage({
                 for. PDF first, because it is the one that gets sent to somebody. */}
             <a
               href={`/api/reports/export?report=${id}&days=${days}&format=pdf`}
-              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-secondary"
+              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-label font-medium transition-colors hover:bg-secondary"
             >
               <Download className="size-4" /> PDF
             </a>
             <a
               href={`/api/reports/export?report=${id}&days=${days}`}
-              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-secondary"
+              className="inline-flex h-[38px] items-center gap-2 rounded-[10px] border border-border bg-card px-3 text-label font-medium transition-colors hover:bg-secondary"
             >
               <Download className="size-4" /> CSV
             </a>
@@ -109,13 +109,13 @@ export default async function ReportsPage({
                 <CardContent className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                   {section.rows.map((r) => (
                     <div key={r.label}>
-                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{r.label}</p>
+                      <p className="text-meta uppercase tracking-wide text-muted-foreground">{r.label}</p>
                       <p className="pt-0.5 text-xl font-semibold tnum">{r.value}</p>
                       {/* Clamped: one figure's hint runs to a paragraph, and grid rows
                           are as tall as their tallest cell — so a single long note left
                           every other figure sitting on 200px of nothing. */}
                       {r.hint ? (
-                        <p className="line-clamp-3 text-[11px] text-muted-foreground" title={r.hint}>
+                        <p className="line-clamp-3 text-meta text-muted-foreground" title={r.hint}>
                           {r.hint}
                         </p>
                       ) : null}
@@ -168,7 +168,7 @@ export default async function ReportsPage({
         })}
       </div>
 
-      <p className="flex items-center gap-1.5 pt-4 text-[11px] text-muted-foreground">
+      <p className="flex items-center gap-1.5 pt-4 text-meta text-muted-foreground">
         <ClipboardList className="size-3" />
         Export CSV downloads this report for the range above, section by section.
       </p>

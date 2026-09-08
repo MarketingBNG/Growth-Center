@@ -185,7 +185,7 @@ export function DateRangeCalendar({
         >
           <ChevronLeft className="size-4" />
         </button>
-        <p className="text-[13px] font-semibold">
+        <p className="text-label font-semibold">
           {MONTHS[months[0].month]} {months[0].year}
           <span className="font-normal text-muted-foreground"> – </span>
           {MONTHS[months[1].month]} {months[1].year}
@@ -219,7 +219,7 @@ export function DateRangeCalendar({
               {WEEKDAYS.map((w) => (
                 <span
                   key={w}
-                  className="pb-1 text-center text-[10.5px] font-medium text-muted-foreground"
+                  className="pb-1 text-center text-micro font-medium text-muted-foreground"
                 >
                   {w}
                 </span>
@@ -246,7 +246,7 @@ export function DateRangeCalendar({
                       // No colour transition. The shaded band follows the cursor, so a
                       // 150ms fade meant the whole range caught up to the pointer rather
                       // than tracking it — it read as lag, not polish.
-                      'mx-auto grid size-8 place-items-center rounded-lg text-[12.5px] tabular-nums',
+                      'mx-auto grid size-8 place-items-center rounded-lg text-body tabular-nums',
                       disabled && 'cursor-not-allowed text-muted-foreground/40',
                       !disabled &&
                         !isStart &&
@@ -269,7 +269,7 @@ export function DateRangeCalendar({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
-        <p className="mr-auto text-[12px] text-muted-foreground">
+        <p className="mr-auto text-body text-muted-foreground">
           {start && end
             ? `${isoDay(start)} – ${isoDay(end)} · ${spanDays} ${spanDays === 1 ? 'day' : 'days'}`
             : start
@@ -279,7 +279,7 @@ export function DateRangeCalendar({
         <button
           type="button"
           onClick={onClear}
-          className="rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          className="rounded-lg px-2.5 py-1.5 text-body font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           Reset
         </button>
@@ -290,7 +290,7 @@ export function DateRangeCalendar({
           // returns null for a single date.
           disabled={!start || !end}
           onClick={() => start && end && onApply({ from: start, to: end })}
-          className="rounded-lg bg-primary px-3 py-1.5 text-[12.5px] font-semibold text-on-primary transition-opacity disabled:opacity-40"
+          className="rounded-lg bg-primary px-3 py-1.5 text-body font-semibold text-on-primary transition-opacity disabled:opacity-40"
         >
           Apply
         </button>

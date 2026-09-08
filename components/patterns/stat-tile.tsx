@@ -34,11 +34,11 @@ export function StatTile({
         className,
       )}
     >
-      <p className="text-[12.5px] font-semibold text-muted-foreground">{label}</p>
+      <p className="text-body font-semibold text-muted-foreground">{label}</p>
       <p className="pt-1.5 text-[clamp(19px,1.8vw,27px)] font-extrabold leading-none tracking-[-0.035em] tnum">
         {value}
       </p>
-      {sub ? <p className="pt-1.5 text-[11px] leading-snug text-muted-foreground">{sub}</p> : null}
+      {sub ? <p className="pt-1.5 text-meta leading-snug text-muted-foreground">{sub}</p> : null}
     </div>
   );
 }

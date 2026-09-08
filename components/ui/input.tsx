@@ -9,7 +9,7 @@ export function Input({ className, ...props }: React.ComponentProps<'input'>) {
   return (
     <input
       className={cn(
-        'h-9 w-full rounded-[10px] border border-border bg-card px-3 text-[12.5px] placeholder:text-muted-foreground/70',
+        'h-9 w-full rounded-[10px] border border-border bg-card px-3 text-body placeholder:text-muted-foreground/70',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',
         className,
       )}
@@ -22,7 +22,7 @@ export function Textarea({ className, ...props }: React.ComponentProps<'textarea
   return (
     <textarea
       className={cn(
-        'min-h-20 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-[12.5px] placeholder:text-muted-foreground/70',
+        'min-h-20 w-full rounded-[10px] border border-border bg-card px-3 py-2 text-body placeholder:text-muted-foreground/70',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50',
         className,
       )}

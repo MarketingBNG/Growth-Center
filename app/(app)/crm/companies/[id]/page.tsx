@@ -48,14 +48,14 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
+            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
             {company.customer ? <Badge tone="success">customer</Badge> : null}
           </div>
           {/* Domain, industry and country are empty on all 2,953 imported companies —
               Zoho holds none of the three — so this line read "No details recorded"
               under every name on the site while the phone number and owner sat unread
               in the same row. */}
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
+          <p className="mt-1 text-label text-muted-foreground">
             {[company.domain, company.industry, company.country, company.phone]
               .filter(Boolean)
               .join(' · ') || 'No details recorded'}
@@ -63,10 +63,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
         {revenue > 0 ? (
           <div className="text-right">
-            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Revenue</p>
+            <p className="text-meta uppercase tracking-wide text-muted-foreground">Revenue</p>
             <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
             {converted ? (
-              <p className="text-[11px] text-muted-foreground">Converted to {fx.reporting}</p>
+              <p className="text-meta text-muted-foreground">Converted to {fx.reporting}</p>
             ) : null}
           </div>
         ) : null}
@@ -210,7 +210,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               {company.noteEntries.map((n) => (
                 <div key={n.id} className="rounded-md border border-border px-3 py-2">
                   <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 text-meta text-muted-foreground">
                     {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
                   </p>
                 </div>
@@ -257,7 +257,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
     </div>
   );

@@ -51,7 +51,7 @@ export function WeekdayChart({
               />
               <span
                 className={cn(
-                  'text-[11px]',
+                  'text-meta',
                   isPeak ? 'font-bold text-chart-1' : 'font-medium text-muted-foreground',
                 )}
               >

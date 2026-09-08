@@ -71,14 +71,14 @@ export function FunnelChart({
           return (
             <li key={s.key}>
               <div className="flex items-baseline gap-3 pb-1.5">
-                <span className="min-w-0 truncate text-[12.5px] font-semibold" title={s.label}>
+                <span className="min-w-0 truncate text-body font-semibold" title={s.label}>
                   {s.label}
                 </span>
-                <span className="ml-auto shrink-0 text-[13.5px] font-bold tnum">
+                <span className="ml-auto shrink-0 text-label font-bold tnum">
                   {s.value >= 100000 ? fmtCompact(s.value) : fmtNumber(s.value)}
                 </span>
                 {step !== null ? (
-                  <span className="shrink-0 text-[11px] text-muted-foreground tnum">
+                  <span className="shrink-0 text-meta text-muted-foreground tnum">
                     {fmtPercent(step, step < 10 ? 2 : 1)} of {previous!.label.toLowerCase()}
                   </span>
                 ) : null}
@@ -92,7 +92,7 @@ export function FunnelChart({
               </div>
 
               {s.hint ? (
-                <p className="pt-1 text-[11px] text-muted-foreground">{s.hint}</p>
+                <p className="pt-1 text-meta text-muted-foreground">{s.hint}</p>
               ) : null}
             </li>
           );

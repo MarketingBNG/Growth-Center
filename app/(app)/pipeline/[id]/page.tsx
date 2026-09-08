@@ -59,12 +59,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-[26px] font-extrabold leading-tight tracking-[-0.03em]">{deal.name}</h1>
+            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{deal.name}</h1>
             <Badge tone={deal.stage.isWon ? 'success' : deal.stage.isLost ? 'danger' : 'info'}>
               {deal.stage.name}
             </Badge>
           </div>
-          <p className="mt-1 text-[13.5px] text-muted-foreground">
+          <p className="mt-1 text-label text-muted-foreground">
             {fmtMoney(Number(deal.value), false, deal.currency)} · {deal.probability}% ·{' '}
             {deal.company?.name ?? 'No company'}
           </p>
@@ -159,7 +159,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
               {deal.noteEntries.map((n) => (
                 <div key={n.id} className="rounded-md border border-border px-3 py-2">
                   <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
+                  <p className="mt-1 text-meta text-muted-foreground">
                     {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
                   </p>
                 </div>
@@ -182,7 +182,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 function Detail({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
     </div>
   );

@@ -30,12 +30,12 @@ export function CardHeaderRow({ className, ...props }: React.ComponentProps<'div
 
 export function CardTitle({ className, ...props }: React.ComponentProps<'h3'>) {
   return (
-    <h3 className={cn('text-[14.5px] font-bold leading-tight tracking-tight', className)} {...props} />
+    <h3 className={cn('text-lead font-bold leading-tight tracking-tight', className)} {...props} />
   );
 }
 
 export function CardDescription({ className, ...props }: React.ComponentProps<'p'>) {
-  return <p className={cn('text-[11.5px] text-muted-foreground', className)} {...props} />;
+  return <p className={cn('text-meta text-muted-foreground', className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.ComponentProps<'div'>) {

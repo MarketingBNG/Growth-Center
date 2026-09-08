@@ -83,7 +83,7 @@ export function SequenceRegistry({
 
   return (
     <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-meta">
         <Field label="Purpose" value={purpose ? PURPOSE_LABELS[purpose as keyof typeof PURPOSE_LABELS] ?? purpose : null} />
         <Field label="Segment" value={segment} />
         <Field label="Service line" value={serviceLine} />
@@ -91,7 +91,7 @@ export function SequenceRegistry({
         <Button
           size="sm"
           variant="ghost"
-          className="ml-auto h-6 px-2 text-[11px]"
+          className="ml-auto h-6 px-2 text-meta"
           disabled={busy}
           onClick={() => setOpen((v) => !v)}
         >
@@ -101,7 +101,7 @@ export function SequenceRegistry({
 
       {open ? (
         <div className="mt-2.5 grid gap-2 sm:grid-cols-4">
-          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+          <label className="flex flex-col gap-1 text-meta text-muted-foreground">
             Purpose
             <Select
               aria-label="Purpose"
@@ -159,7 +159,7 @@ export function SequenceRegistry({
         />
       </div>
 
-      {error ? <p className="mt-2 text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="mt-2 text-meta text-destructive">{error}</p> : null}
     </div>
   );
 }
@@ -185,7 +185,7 @@ function TextField({
   onChange: (v: string) => void;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+    <label className="flex flex-col gap-1 text-meta text-muted-foreground">
       {label}
       <Input className="h-8" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
@@ -211,7 +211,7 @@ function SignOffControl({
   const when = view.state === 'none' ? null : fmtDate(view.at);
 
   return (
-    <span className="flex items-center gap-2 text-[11px]">
+    <span className="flex items-center gap-2 text-meta">
       {view.state === 'current' ? (
         <Check className="size-3.5 shrink-0 text-success" />
       ) : view.state === 'stale' ? (
@@ -234,14 +234,14 @@ function SignOffControl({
       </span>
 
       {view.state === 'current' ? (
-        <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" disabled={busy} onClick={onWithdraw}>
+        <Button size="sm" variant="ghost" className="h-6 px-2 text-meta" disabled={busy} onClick={onWithdraw}>
           Withdraw
         </Button>
       ) : (
         <Button
           size="sm"
           variant="outline"
-          className="h-6 px-2 text-[11px]"
+          className="h-6 px-2 text-meta"
           disabled={busy || blocked}
           // The linter's verdict disables the button as well as the server refusing it,
           // so the reason is visible before the click rather than after.

@@ -62,7 +62,7 @@ export function Thresholds({ initial }: { initial: Values }) {
               <label htmlFor={key} className="text-xs font-medium">
                 {spec.label}
               </label>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">{spec.hint}</p>
+              <p className="text-meta leading-relaxed text-muted-foreground">{spec.hint}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Input
@@ -76,14 +76,14 @@ export function Thresholds({ initial }: { initial: Values }) {
                 onBlur={() => commit(key)}
                 className="h-7 w-20 text-xs"
               />
-              <span className="w-[86px] text-[11px] text-muted-foreground">{spec.unit}</span>
+              <span className="w-[86px] text-meta text-muted-foreground">{spec.unit}</span>
               {/* Shown against the default so a reader can tell a chosen number from an
                   inherited one — which is the difference between a decision and a
                   placeholder nobody has looked at. */}
-              <span className="w-[70px] text-[11px] text-muted-foreground/70">
+              <span className="w-[70px] text-meta text-muted-foreground/70">
                 {Number(values[key]) === spec.default ? 'default' : `was ${spec.default}`}
               </span>
-              <span className="w-10 text-[11px] text-muted-foreground">
+              <span className="w-10 text-meta text-muted-foreground">
                 {saved === key ? 'Saved' : ''}
               </span>
             </div>
@@ -91,7 +91,7 @@ export function Thresholds({ initial }: { initial: Values }) {
         );
       })}
 
-      {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="text-meta text-destructive">{error}</p> : null}
     </div>
   );
 }

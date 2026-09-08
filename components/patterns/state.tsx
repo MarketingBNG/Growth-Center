@@ -54,10 +54,10 @@ export function NoDatabaseState() {
       title="No database configured"
       hint={
         <>
-          Set <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">DATABASE_URL</code>{' '}
-          in <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">.env.local</code> to a
-          Neon connection string, then run <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">npm run db:migrate</code>{' '}
-          and <code className="rounded bg-secondary px-1 py-0.5 font-mono text-[11px]">npm run db:seed</code>.
+          Set <code className="rounded bg-secondary px-1 py-0.5 font-mono text-meta">DATABASE_URL</code>{' '}
+          in <code className="rounded bg-secondary px-1 py-0.5 font-mono text-meta">.env.local</code> to a
+          Neon connection string, then run <code className="rounded bg-secondary px-1 py-0.5 font-mono text-meta">npm run db:migrate</code>{' '}
+          and <code className="rounded bg-secondary px-1 py-0.5 font-mono text-meta">npm run db:seed</code>.
         </>
       }
     />

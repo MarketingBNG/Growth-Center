@@ -66,7 +66,7 @@ async function TeamBody() {
         <Card className="mb-4 border-warning/40 bg-warning/5">
           <CardHeader>
             <CardTitle>Everyone has full access</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Role tiers are switched off: every signed-in person can manage integrations, mint
               API keys and edit any record, whatever role they hold. Roles set here are recorded
               and audited now so they are already correct on the day tiers are switched on in{' '}
@@ -79,7 +79,7 @@ async function TeamBody() {
         <Card className="mb-4">
           <CardHeader>
             <CardTitle>Role tiers are on, and everyone is an Owner</CardTitle>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               Permissions are enforced from the Role column now, not merely recorded. That
               currently changes nothing, because every account here holds Owner and an Owner
               holds every permission — the tiers begin to bite the moment somebody is made
@@ -93,7 +93,7 @@ async function TeamBody() {
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Who has signed in</CardTitle>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             Sign-in requires a Google account on {ALLOWED_DOMAINS.join(' or ')}. Revoking takes
             effect on that person&apos;s next request; their existing records stay intact.{' '}
             {ADMIN_EMAILS.length === 1 ? 'The admin account cannot' : 'Admin accounts cannot'} be
@@ -126,7 +126,7 @@ async function TeamBody() {
                   <TR key={p.email} className={p.active ? undefined : 'opacity-60'}>
                     <TD>
                       <span className="inline-flex items-center gap-2">
-                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-[10px] font-semibold">
+                        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-micro font-semibold">
                           {p.initials}
                         </span>
                         <span className="font-medium">{p.name}</span>

@@ -82,7 +82,7 @@ export default async function GlossaryPage() {
                   ) : (
                     <div className="flex flex-col items-end gap-0.5">
                       <span className="text-xs font-medium">{owner}</span>
-                      <span className="text-[11px] text-muted-foreground/70">
+                      <span className="text-meta text-muted-foreground/70">
                         owns this definition
                       </span>
                     </div>
@@ -91,14 +91,14 @@ export default async function GlossaryPage() {
               </CardHeader>
 
               <CardContent className="space-y-2.5 pt-0">
-                <p className="text-[13px] leading-relaxed">{term.definition}</p>
+                <p className="text-label leading-relaxed">{term.definition}</p>
 
                 {/* The manual's wording is shown only where it differs. Repeating it under
                     every entry that agrees would be the second copy of a document this
                     page exists to avoid. */}
                 {term.agreement !== 'agrees' ? (
                   <div className="rounded-md border-l-2 border-warning-soft bg-track/60 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <p className="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
                       The manual says
                     </p>
                     <p className="mt-0.5 text-xs italic leading-relaxed text-muted-foreground">
@@ -111,7 +111,7 @@ export default async function GlossaryPage() {
                 ) : null}
 
                 {term.where ? (
-                  <p className="text-[11px] text-muted-foreground/70">
+                  <p className="text-meta text-muted-foreground/70">
                     Computed in <code>{term.where}</code>
                   </p>
                 ) : null}

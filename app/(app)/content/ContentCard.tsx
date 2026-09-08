@@ -65,19 +65,19 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
   return (
     <div className="rounded-lg border border-border bg-card p-2.5">
       <p className="text-sm font-medium leading-snug">{piece.title}</p>
-      <p className="mt-0.5 text-[11px] text-muted-foreground">
+      <p className="mt-0.5 text-meta text-muted-foreground">
         {piece.format.replaceAll('_', ' ')}
         {piece.authorEmail ? ` · ${piece.authorEmail.split('@')[0]}` : ''}
       </p>
       {piece.campaignName ? (
-        <p className="text-[11px] text-muted-foreground">{piece.campaignName}</p>
+        <p className="text-meta text-muted-foreground">{piece.campaignName}</p>
       ) : null}
       {piece.publishDate ? (
-        <p className="text-[11px] text-muted-foreground">{piece.publishDate}</p>
+        <p className="text-meta text-muted-foreground">{piece.publishDate}</p>
       ) : null}
 
       {piece.views > 0 || piece.leadsGenerated > 0 ? (
-        <p className="mt-1.5 text-[11px] tnum">
+        <p className="mt-1.5 text-meta tnum">
           <span className="text-muted-foreground">views</span> {piece.views.toLocaleString('en-US')}
           {' · '}
           <span className="text-muted-foreground">leads</span> {piece.leadsGenerated}
@@ -89,7 +89,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
           status will be refused. */}
       {piece.approval.state === 'unapproved' ? null : (
         <p
-          className={`mt-1.5 text-[11px] ${
+          className={`mt-1.5 text-meta ${
             piece.approval.state === 'approved'
               ? 'text-success'
               : piece.approval.state === 'stale'
@@ -111,13 +111,13 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
                 placeholder="What needs changing"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-[11px]"
+                className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-meta"
               />
               <button
                 type="button"
                 disabled={busy || !note.trim()}
                 onClick={() => decide('return')}
-                className="h-7 rounded border border-input px-2 text-[11px] disabled:opacity-50"
+                className="h-7 rounded border border-input px-2 text-meta disabled:opacity-50"
               >
                 Send back
               </button>
@@ -125,7 +125,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
                 type="button"
                 disabled={busy}
                 onClick={() => { setReturning(false); setError(null); }}
-                className="h-7 px-1.5 text-[11px] text-muted-foreground"
+                className="h-7 px-1.5 text-meta text-muted-foreground"
               >
                 Cancel
               </button>
@@ -136,7 +136,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
                 type="button"
                 disabled={busy}
                 onClick={() => decide('approve')}
-                className="h-7 rounded bg-primary px-2.5 text-[11px] text-primary-foreground disabled:opacity-50"
+                className="h-7 rounded bg-primary px-2.5 text-meta text-primary-foreground disabled:opacity-50"
               >
                 {piece.approval.state === 'stale' ? 'Approve again' : 'Approve'}
               </button>
@@ -144,7 +144,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
                 type="button"
                 disabled={busy}
                 onClick={() => setReturning(true)}
-                className="h-7 rounded border border-input px-2 text-[11px] disabled:opacity-50"
+                className="h-7 rounded border border-input px-2 text-meta disabled:opacity-50"
               >
                 Return to author
               </button>
@@ -156,7 +156,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
       <div className="mt-2 flex items-center gap-1.5">
         <Select
           aria-label="Status"
-          className="h-7 flex-1 text-[11px]"
+          className="h-7 flex-1 text-meta"
           value={piece.status}
           disabled={busy}
           onChange={(e) => move(e.target.value)}
@@ -177,7 +177,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
           </a>
         ) : null}
       </div>
-      {error ? <p className="mt-1 text-[11px] text-destructive">{error}</p> : null}
+      {error ? <p className="mt-1 text-meta text-destructive">{error}</p> : null}
     </div>
   );
 }

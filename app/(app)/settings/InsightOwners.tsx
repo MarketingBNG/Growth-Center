@@ -68,7 +68,7 @@ export function InsightOwners({
         </div>
       ))}
       {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-[11px] text-destructive">
+        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
           {error}
         </p>
       ) : null}

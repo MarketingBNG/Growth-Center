@@ -47,7 +47,7 @@ export function CompleteButton({ taskId, done = false }: { taskId: string; done?
         </Button>
       )}
       {error ? (
-        <span className="max-w-56 text-right text-[11px] leading-snug text-destructive">{error}</span>
+        <span className="max-w-56 text-right text-meta leading-snug text-destructive">{error}</span>
       ) : null}
     </span>
   );

@@ -147,7 +147,7 @@ export function KpiCard({
       aria-describedby={hasTip ? tipId : undefined}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[12.5px] font-semibold text-muted-foreground">{kpi.label}</p>
+        <p className="text-body font-semibold text-muted-foreground">{kpi.label}</p>
         <span
           aria-hidden
           className={cn(
@@ -176,7 +176,7 @@ export function KpiCard({
         {change !== null ? (
           <span
             className={cn(
-              'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold tnum',
+              'inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-meta font-bold tnum',
               good === null
                 ? 'bg-track text-muted-foreground'
                 : good
@@ -193,7 +193,7 @@ export function KpiCard({
       {/* Clamped: when a card has no value this line falls back to the full hint, and
           one long fallback used to stretch every card in the grid row to match it. The
           whole text is still a hover away in the tooltip below. */}
-      <p className="line-clamp-2 pt-1.5 text-[11.5px] text-muted-foreground">
+      <p className="line-clamp-2 pt-1.5 text-meta text-muted-foreground">
         {change === null
           ? kpi.value === null
             ? // The note comes first: when a card has no value the reason is the whole
@@ -219,12 +219,12 @@ export function KpiCard({
         >
           {sources.length ? (
             <>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              <p className="text-micro font-bold uppercase tracking-wide text-muted-foreground">
                 {sources.length > 1 ? 'Sources' : 'Source'}
               </p>
               <ul className="pt-1">
                 {sources.map((s) => (
-                  <li key={s.name} className="text-[11.5px]">
+                  <li key={s.name} className="text-meta">
                     <span className="font-semibold text-foreground">{s.name}</span>
                     <span className="text-muted-foreground"> — {s.hint}</span>
                   </li>
@@ -234,13 +234,13 @@ export function KpiCard({
           ) : null}
 
           {kpi.hint ? (
-            <p className={cn('text-[11.5px] text-muted-foreground', sources.length && 'pt-2')}>
+            <p className={cn('text-meta text-muted-foreground', sources.length && 'pt-2')}>
               {kpi.hint}
             </p>
           ) : null}
 
           {kpi.comparisonNote ? (
-            <p className="pt-2 text-[11.5px] text-muted-foreground">{kpi.comparisonNote}</p>
+            <p className="pt-2 text-meta text-muted-foreground">{kpi.comparisonNote}</p>
           ) : null}
         </div>
       ) : null}

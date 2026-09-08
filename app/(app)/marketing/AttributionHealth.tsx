@@ -25,7 +25,7 @@ function Stage({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+        <span className="text-meta uppercase tracking-wide text-muted-foreground">{label}</span>
         <span className="text-sm font-medium tabular-nums">
           {pct === null ? '—' : fmtPercent(pct)}
         </span>
@@ -40,7 +40,7 @@ function Stage({
           style={{ width: `${pct ?? 0}%` }}
         />
       </div>
-      <p className="text-[11px] tabular-nums text-muted-foreground">
+      <p className="text-meta tabular-nums text-muted-foreground">
         {pct === null
           ? 'Nothing in this period'
           : `${format(coverage.covered)} of ${format(coverage.total)}`}
@@ -65,7 +65,7 @@ export function AttributionHealth({ health }: { health: Health }) {
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <CardTitle>Attribution coverage</CardTitle>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             Threshold {health.threshold}% of revenue · set in Settings
           </span>
         </div>
@@ -82,7 +82,7 @@ export function AttributionHealth({ health }: { health: Health }) {
         </div>
 
         {health.sufficient === false ? (
-          <p className="text-[11px] text-amber-600 dark:text-amber-500">
+          <p className="text-meta text-amber-600 dark:text-amber-500">
             Below the threshold. The channel figures below are computed over the attributed
             part only — treat the ranking as a hint, not a basis for moving budget.
           </p>
@@ -95,7 +95,7 @@ export function AttributionHealth({ health }: { health: Health }) {
         {health.deals.percent !== null &&
         health.leads.percent !== null &&
         health.leads.percent - health.deals.percent > 20 ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             Leads carry a channel; deals mostly do not. Deals opened straight on an account,
             rather than converted from a lead, have no lead source to inherit — that is where
             the trail is lost.
