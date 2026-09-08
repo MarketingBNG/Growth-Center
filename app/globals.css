@@ -176,15 +176,22 @@
    *   title    drawer and sheet headings
    *   figure   the headline number inside a chart
    *   display  page titles
+   *
+   * Brought down a notch on 2026-09-08: at 13px for nav and table cells, 15px card
+   * titles and a 26px page title the whole app read large for something this dense. The
+   * small end did not move — 10px and 11px are the floor for text somebody has to read
+   * every morning, and shrinking those to make a page feel tighter trades legibility for
+   * a look. The upper end came down furthest, because size at the top is what makes a
+   * screen feel loud.
    */
   --text-micro: 10px;
   --text-meta: 11px;
-  --text-body: 12.5px;
-  --text-label: 13px;
-  --text-lead: 15px;
-  --text-title: 17px;
-  --text-figure: 30px;
-  --text-display: 26px;
+  --text-body: 12px;
+  --text-label: 12.5px;
+  --text-lead: 14px;
+  --text-title: 16px;
+  --text-figure: 25px;
+  --text-display: 22px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

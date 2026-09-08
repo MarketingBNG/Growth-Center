@@ -8,12 +8,12 @@ import { signIn } from './auth';
 const STEPS: [string, string][] = [
   ['text-micro', '10px'],
   ['text-meta', '11px'],
-  ['text-body', '12.5px'],
-  ['text-label', '13px'],
-  ['text-lead', '15px'],
-  ['text-title', '17px'],
-  ['text-figure', '30px'],
-  ['text-display', '26px'],
+  ['text-body', '12px'],
+  ['text-label', '12.5px'],
+  ['text-lead', '14px'],
+  ['text-title', '16px'],
+  ['text-figure', '25px'],
+  ['text-display', '22px'],
 ];
 
 const EXPECTED = new Map(STEPS);
@@ -95,9 +95,12 @@ test('elements that ask for a step actually get it', async ({ page, context, bas
 //
 // A stripped class leaves nothing to look for, so the test above skips exactly the
 // elements that are broken — it passed while every badge in the app rendered at 16px.
-// This works the other way round: the scale has no 16px step, so any text rendering at
-// the browser's default means a size was lost or never asked for. It reads what the page
-// renders, not what it claims.
+// This works the other way round: it reads what the page renders, not what it claims.
+// Text at the browser's default 16px means a size was lost or never asked for — with one
+// exception now that `title` is 16px, so an element actually asking for that step is
+// allowed to have it. Without the exception this test would start failing the first time
+// a drawer heading appeared inside main, which is a false alarm, and a test that cries
+// wolf gets deleted.
 test('nothing renders at the browser default size', async ({ page, context, baseURL }) => {
   test.setTimeout(600_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
@@ -118,7 +121,8 @@ test('nothing renders at the browser default size', async ({ page, context, base
           .map((n) => (n.textContent ?? '').trim())
           .join('');
         if (!own) continue;
-        if (getComputedStyle(el).fontSize === '16px') {
+        const asksFor16 = el.className.toString().split(/\s+/).includes('text-title');
+        if (getComputedStyle(el).fontSize === '16px' && !asksFor16) {
           out.push(`<${el.tagName.toLowerCase()} class="${el.className.toString().slice(0, 50)}"> "${own.slice(0, 30)}"`);
         }
       }

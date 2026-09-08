@@ -208,7 +208,7 @@ export function KpiCard({
             // figure like a total pipeline value ran past the edge of its card at the
             // narrower widths. It steps down instead of spilling, and is back at full
             // size wherever there is room for it.
-            compact ? 'text-[clamp(15px,1.5vw,20px)]' : 'text-[clamp(19px,1.8vw,27px)]',
+            compact ? 'text-[clamp(14px,1.3vw,18px)]' : 'text-[clamp(17px,1.6vw,23px)]',
           )}
         >
           {show(kpi)}

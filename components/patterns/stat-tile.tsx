@@ -35,7 +35,7 @@ export function StatTile({
       )}
     >
       <p className="text-body font-semibold text-muted-foreground">{label}</p>
-      <p className="pt-1.5 text-[clamp(19px,1.8vw,27px)] font-extrabold leading-none tracking-[-0.035em] tnum">
+      <p className="pt-1.5 text-[clamp(17px,1.6vw,23px)] font-extrabold leading-none tracking-[-0.035em] tnum">
         {value}
       </p>
       {sub ? <p className="pt-1.5 text-meta leading-snug text-muted-foreground">{sub}</p> : null}
