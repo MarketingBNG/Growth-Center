@@ -10,6 +10,10 @@ const STATE: Record<string, { label: string; tone: 'neutral' | 'info' | 'success
   // Not a stored state: cards() derives it when a run has held the sync lock past its
   // lease and is therefore dead rather than slow. The next sync will take the lock.
   sync_stalled: { label: 'Sync stalled', tone: 'warning' },
+  // Also derived: a paged backfill that still holds a cursor but has had nothing driving
+  // it for longer than a lease. Not an error — the nightly cron resumes from the cursor —
+  // but not finished either, which "Connected" would have claimed.
+  sync_paused: { label: 'Sync paused', tone: 'warning' },
   error: { label: 'Error', tone: 'danger' },
   demo_data: { label: 'Demo data', tone: 'warning' },
 };

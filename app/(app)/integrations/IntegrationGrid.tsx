@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, Plug, RefreshCw, Settings2, Unplug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,86 @@ const CATEGORY_LABEL: Record<string, string> = {
   work: 'Work tracking',
 };
 
+/** What the page polls for while something is syncing. Mirrors SyncStatus on the server. */
+type LiveStatus = {
+  provider: string;
+  state: string;
+  busy: boolean;
+  detail: string | null;
+  lastError: string | null;
+};
+
+/** How often the page asks whether a running sync is still running. */
+const POLL_MS = 4000;
+
+/**
+ * Follows the syncs that are running on the server.
+ *
+ * The sync itself no longer runs in this tab — the route hands it to `after()` and it
+ * chains through fresh invocations until it is done. So the page's job is to read that
+ * state, not to drive it, and it has to read it on arrival as well as after a click: open
+ * the page while a sync someone else started is running and the button must already say
+ * Syncing.
+ *
+ * Polling rather than a stream: one small query every four seconds while a sync is in
+ * flight and nothing at all when none is, which is not worth a socket. Background tabs
+ * throttle timers to about a minute, which is why the poll also fires the moment the tab
+ * becomes visible again — coming back to a stale idle button is the bug this fixes.
+ */
+function useLiveStatus(onSettled: () => void) {
+  const [live, setLive] = useState<Record<string, LiveStatus>>({});
+  const busyRef = useRef(false);
+  // Held in a ref so the polling effect does not restart every time the callback's
+  // identity changes, which would reset the interval on every render. Written in an
+  // effect rather than during the render, which is the rule for refs.
+  const settled = useRef(onSettled);
+  useEffect(() => {
+    settled.current = onSettled;
+  }, [onSettled]);
+
+  const poll = useCallback(async () => {
+    try {
+      const { providers } = await api<{ providers: LiveStatus[] }>('/api/integrations/sync-status');
+      const next: Record<string, LiveStatus> = {};
+      for (const p of providers) next[p.provider] = p;
+      setLive(next);
+      const anyBusy = providers.some((p) => p.busy);
+      // The transition out of busy is the moment the imported rows, the row count and the
+      // last-sync time are worth re-reading. Those come from the cached server render, so
+      // it takes a refresh — done once here rather than on every poll.
+      if (busyRef.current && !anyBusy) settled.current();
+      busyRef.current = anyBusy;
+    } catch {
+      // A failed poll is not worth showing anyone: the next one is four seconds away, and
+      // the card's own error line still carries whatever the sync itself reported.
+    }
+  }, []);
+
+  useEffect(() => {
+    // Off the render pass rather than in it: the first poll is a fetch that ends in a
+    // setState, and starting it synchronously inside the effect cascades a render.
+    const first = setTimeout(() => void poll(), 0);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void poll();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearTimeout(first);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [poll]);
+
+  // Polls only while something is actually syncing, so an idle page is idle.
+  const anyBusy = Object.values(live).some((s) => s.busy);
+  useEffect(() => {
+    if (!anyBusy) return;
+    const t = setInterval(() => void poll(), POLL_MS);
+    return () => clearInterval(t);
+  }, [anyBusy, poll]);
+
+  return { live, poll };
+}
+
 export function IntegrationGrid({
   cards,
   canManage,
@@ -29,6 +109,8 @@ export function IntegrationGrid({
   cards: IntegrationCard[];
   canManage: boolean;
 }) {
+  const router = useRouter();
+  const { live, poll } = useLiveStatus(() => router.refresh());
   // One grid across every provider rather than a section per category. Grouped, most
   // categories held a single provider, so each got a row to itself and the cards ran
   // down the left third of the page. The category still travels with the card as a
@@ -41,19 +123,47 @@ export function IntegrationGrid({
   return (
     <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))]">
       {ordered.map((c) => (
-        <ProviderCard key={c.id} card={c} canManage={canManage} />
+        <ProviderCard
+          key={c.id}
+          card={c}
+          canManage={canManage}
+          live={live[c.id] ?? null}
+          onStarted={poll}
+        />
       ))}
     </div>
   );
 }
 
-function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: boolean }) {
+function ProviderCard({
+  card,
+  canManage,
+  live,
+  onStarted,
+}: {
+  card: IntegrationCard;
+  canManage: boolean;
+  /** Polled sync state, once it has arrived. Null until the first poll answers. */
+  live: LiveStatus | null;
+  /** Asks the page to poll immediately, so a click shows its result without the interval. */
+  onStarted: () => void;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<null | 'connect' | 'sync' | 'disconnect' | 'settings'>(null);
   const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string | null>(null);
   const [keyModal, setKeyModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
+
+  // The server is the authority on whether this is syncing, so a reload, a second tab and
+  // a colleague's browser all show the same thing. `busy === 'sync'` covers only the
+  // moment between the click and the first poll answering.
+  const state = live?.state ?? card.state;
+  const syncing = live ? live.busy : card.state === 'syncing';
+  const spinning = syncing || busy === 'sync';
+  // The running provider's own progress line — "1,200 of 39,412 records" — which used to
+  // come back in the response the browser sat waiting on.
+  const progress = syncing ? (live?.detail ?? null) : null;
+  const lastError = live ? live.lastError : card.lastError;
 
   // A stored credential is what "connected" means, not the last sync's verdict. One
   // failed sync sets the row to `error`, and treating that as disconnected swapped the
@@ -66,11 +176,15 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   // whose last run died holding the lock. Offering Connect there would ask someone to
   // re-authorise a connection that is fine; what they need is Sync now, which will take
   // the abandoned lease.
+  //
+  // 'sync_paused' likewise: a backfill holding a cursor that nothing is driving is a
+  // connected provider with more to fetch, and Sync now is what picks it up.
   const connected =
-    card.state === 'connected' ||
-    card.state === 'syncing' ||
-    card.state === 'sync_stalled' ||
-    (card.state === 'error' && card.hasCredential);
+    state === 'connected' ||
+    state === 'syncing' ||
+    state === 'sync_stalled' ||
+    state === 'sync_paused' ||
+    (state === 'error' && card.hasCredential);
 
   async function connectOauth() {
     setBusy('connect');
@@ -135,39 +249,28 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
   }
 
   /**
-   * Drives a sync to completion.
+   * Starts a sync. Does not wait for it to finish.
    *
-   * A provider with tens of thousands of records cannot be pulled inside one request, so
-   * the server does a bounded slice and answers `done: false` with its place saved. This
-   * calls back until it says done, which is what lets a 39,000-record backfill finish
-   * without any single request being long enough to time out.
-   *
-   * Bounded so a provider that never reports done cannot spin the browser forever.
+   * The slices run on the server now — the route hands them to `after()`, which chains
+   * into fresh invocations for as long as the backfill needs. This tab used to be the
+   * engine, calling the endpoint back until it reported done, which meant a
+   * 39,000-record import survived only while the tab stayed open and in the foreground.
+   * What is left here is a start and a poll.
    */
-  async function syncToCompletion() {
-    for (let pass = 0; pass < 200; pass++) {
-      const res = await api<{ rows: number; detail: string; done: boolean }>(
-        `/api/integrations/${card.id}/sync`,
-        { method: 'POST', json: {} },
-      );
-      setProgress(res.detail);
-      if (res.done) return;
-      // Each pass writes what it fetched, so the tables fill as this runs.
-      router.refresh();
-    }
-    setError('The sync is taking an unusual number of passes. It will continue overnight.');
-  }
-
   async function run(action: 'sync' | 'disconnect') {
     setBusy(action);
     setError(null);
-    setProgress(null);
     try {
-      if (action === 'sync') await syncToCompletion();
-      else await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
-      router.refresh();
+      await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
+      // Reflects the start immediately instead of waiting out the poll interval.
+      onStarted();
+      if (action === 'disconnect') router.refresh();
     } catch (e) {
-      setError((e as Error).message);
+      const message = (e as Error).message;
+      // 409 is the server saying this provider is already syncing. Nothing went wrong and
+      // nothing needs saying — the poll is about to show it running.
+      if (action === 'sync' && /already syncing/i.test(message)) onStarted();
+      else setError(message);
     } finally {
       setBusy(null);
     }
@@ -183,7 +286,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
           <h3 className="text-lead font-bold tracking-tight">{card.name}</h3>
           <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{card.summary}</p>
         </div>
-        <StateBadge state={card.state} />
+        <StateBadge state={state} />
       </div>
 
       <div className="flex flex-wrap gap-1 pt-3">
@@ -202,7 +305,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         <Meta
           label="Last sync"
           value={
-            card.state === 'demo_data'
+            state === 'demo_data'
               ? 'Seeded, not synced'
               : card.lastSyncAt
                 ? `${fmtRelative(card.lastSyncAt)}${card.lastSyncRows !== null ? ` · ${fmtNumber(card.lastSyncRows)} ${card.lastSyncRows === 1 ? 'row' : 'rows'}` : ''}`
@@ -214,15 +317,15 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
         ) : null}
       </dl>
 
-      {card.state === 'demo_data' ? (
+      {state === 'demo_data' ? (
         <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-meta text-warning">
           Showing seeded demo figures. This is not a live connection.
         </p>
       ) : null}
 
-      {card.lastError ? (
+      {lastError ? (
         <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
-          {card.lastError}
+          {lastError}
           {card.lastErrorAt ? (
             <span className="block opacity-70">{fmtRelative(card.lastErrorAt)}</span>
           ) : null}
@@ -264,8 +367,10 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
       ) : null}
 
       {error ? <p className="mt-3 text-meta text-destructive">{error}</p> : null}
-      {progress && !error ? (
-        <p className="mt-3 text-meta text-muted-foreground">{progress}</p>
+      {spinning && !error ? (
+        <p className="mt-3 text-meta text-muted-foreground">
+          {progress ?? 'Syncing. This carries on if you close the tab.'}
+        </p>
       ) : null}
 
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
@@ -275,9 +380,14 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
           </p>
         ) : connected ? (
           <>
-            <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => run('sync')}>
-              <RefreshCw className={busy === 'sync' ? 'animate-spin' : undefined} />
-              {busy === 'sync' ? 'Syncing…' : 'Sync now'}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy !== null || spinning}
+              onClick={() => run('sync')}
+            >
+              <RefreshCw className={spinning ? 'animate-spin' : undefined} />
+              {spinning ? 'Syncing…' : state === 'sync_paused' ? 'Resume sync' : 'Sync now'}
             </Button>
             {card.configFields.length > 0 ? (
               <Button
@@ -310,7 +420,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
             >
               <Plug /> {busy === 'connect' ? 'Connecting…' : 'Connect'}
             </Button>
-            {card.state === 'demo_data' ? (
+            {state === 'demo_data' ? (
               <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => run('disconnect')}>
                 Clear demo state
               </Button>

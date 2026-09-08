@@ -82,6 +82,10 @@ async function readCards(): Promise<Card[]> {
       // For the stalled-sync test below. `state` alone cannot tell a run in progress from
       // one that died holding the lock.
       updatedAt: true,
+      // Non-null means a paged backfill has more to fetch. `state` cannot say so: it
+      // returns to `connected` between slices, so a sync that spans a dozen slices looks
+      // finished a dozen times over.
+      syncCursor: true,
       credential: { select: { id: true, expiresAt: true } },
     },
   });
@@ -107,6 +111,15 @@ async function readCards(): Promise<Card[]> {
       Date.now() - row.updatedAt.getTime() > SYNC_LEASE_MS
     ) {
       state = 'sync_stalled';
+    }
+    // A backfill between slices: the lock is free, the cursor is not. Whoever is driving
+    // it (the route's `after`, its chained continuation, or the nightly cron) is about to
+    // take the lock again, so the truthful badge is "Syncing", not "Connected" — a card
+    // reading Connected next to a half-imported CRM is how someone concludes the import
+    // finished. Gone quiet for longer than a lease means nothing is driving it any more.
+    if (state === 'connected' && row?.syncCursor != null) {
+      state =
+        Date.now() - row.updatedAt.getTime() > SYNC_LEASE_MS ? 'sync_paused' : 'syncing';
     }
 
     return {
@@ -2628,3 +2641,70 @@ export async function syncAll(days = 30, deadline: number | null = null): Promis
  * this, so it was the single most repeated query in the app.
  */
 export const cards = cached('integrations:cards', [TAGS.integrations], readCards);
+
+/**
+ * Live sync state, read straight from the database.
+ *
+ * Deliberately not wrapped in `cached()` like `cards()` is. The cards' 300-second TTL is
+ * fine for "is this connected" and wrong for "is this syncing right now" — it is the
+ * whole reason a sync that carried on after the tab was switched away came back showing
+ * an idle button. This is what the page polls while a sync is running, so it must be
+ * allowed to cost its round trip.
+ */
+export type SyncStatus = {
+  provider: string;
+  /** The same widened state `cards()` reports, derived the same way. */
+  state: string;
+  /** True while a sync is running or mid-backfill — what disables the button. */
+  busy: boolean;
+  /** The running provider's own progress line: "1,200 of 39,412 records". */
+  detail: string | null;
+  lastError: string | null;
+  lastSyncAt: Date | null;
+  lastSyncRows: number | null;
+};
+
+export async function syncStatus(): Promise<SyncStatus[]> {
+  const rows = await db().integration.findMany({
+    select: {
+      provider: true,
+      state: true,
+      updatedAt: true,
+      syncCursor: true,
+      lastError: true,
+      lastSyncAt: true,
+      lastSyncRows: true,
+    },
+  });
+
+  // One query for every provider's most recent run rather than one per provider. Only
+  // runs young enough to still be relevant are considered, which the (startedAt) index
+  // covers, and the newest per provider wins because the list arrives newest-first.
+  const recent = await db().syncRun.findMany({
+    where: { startedAt: { gt: new Date(Date.now() - SYNC_LEASE_MS) } },
+    orderBy: { startedAt: 'desc' },
+    select: { provider: true, detail: true },
+  });
+  const detailByProvider = new Map<string, string | null>();
+  for (const r of recent) {
+    if (!detailByProvider.has(r.provider)) detailByProvider.set(r.provider, r.detail);
+  }
+
+  return rows.map((row) => {
+    const stale = Date.now() - row.updatedAt.getTime() > SYNC_LEASE_MS;
+    let state: string = row.state;
+    if (state === 'syncing' && stale) state = 'sync_stalled';
+    else if (state === 'connected' && row.syncCursor != null) {
+      state = stale ? 'sync_paused' : 'syncing';
+    }
+    return {
+      provider: row.provider,
+      state,
+      busy: state === 'syncing',
+      detail: detailByProvider.get(row.provider) ?? null,
+      lastError: row.lastError,
+      lastSyncAt: row.lastSyncAt,
+      lastSyncRows: row.lastSyncRows,
+    };
+  });
+}
