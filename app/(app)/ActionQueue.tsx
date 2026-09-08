@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, ListChecks } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { db } from '@/lib/prisma';
 import { STATUS_LABELS, type InsightStatus } from '@/lib/insight-lifecycle';
@@ -93,12 +94,15 @@ export async function ActionQueue({ take = 6 }: { take?: number }) {
               : `${rows.length} open${unowned > 0 ? `, ${unowned} with no owner` : ''}. Worst first, then longest waiting.`}
           </p>
         </div>
-        <Link
-          href="/ai"
-          className="shrink-0 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          Work the queue <ArrowRight className="size-3" />
-        </Link>
+        {/* The most important thing on the morning screen is deciding what is in this
+            queue, so its control is the one filled button on the page. It had been an
+            11px text link — quieter than the outline buttons in the header above it, which
+            only change what the screen shows. Weight should follow what the action does. */}
+        <Button asChild size="sm" className="shrink-0">
+          <Link href="/ai">
+            Work the queue <ArrowRight className="size-3" />
+          </Link>
+        </Button>
       </CardHeader>
 
       {queue.length === 0 ? (

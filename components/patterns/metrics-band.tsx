@@ -104,6 +104,16 @@ export function MetricsBand({
   const [stored, setOpen] = usePersisted<boolean>(key, defaultOpen);
   const open = Boolean(stored);
 
+  // The second tier starts closed.
+  //
+  // The dashboard was opening on twelve figures at once, and twelve numbers presented
+  // with equal weight is not a scorecard — it is a page somebody has to read all of
+  // before knowing which part mattered. These are already the tier that was moved down
+  // for exactly that reason, so they start behind a line that says how many there are.
+  // Persisted like the band itself, so anyone who wants all twelve opens it once.
+  const [storedMore, setMore] = usePersisted<boolean>(`${key}.secondary`, false);
+  const showMore = Boolean(storedMore);
+
   // Which integration the reader is currently asking about. Highlights rather than
   // filters: every figure here has exactly one source, so filtering to one would empty
   // the row instead of comparing anything. Dimming the rest answers "which of these
@@ -182,27 +192,41 @@ export function MetricsBand({
 
           {secondary && secondary.length > 0 ? (
             <div>
-              {secondaryNote ? (
+              <button
+                type="button"
+                onClick={() => setMore(!showMore)}
+                aria-expanded={showMore}
+                className="inline-flex items-center gap-1 pb-2 text-meta font-semibold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {showMore
+                  ? 'Fewer figures'
+                  : `${secondary.length} more ${secondary.length === 1 ? 'figure' : 'figures'}`}
+                {showMore ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+              </button>
+
+              {showMore && secondaryNote ? (
                 <p className="pb-2 text-meta text-muted-foreground">{secondaryNote}</p>
               ) : null}
               {/* Narrower columns than the primary row, so the two are legible as
                   different tiers without a heading saying so. */}
-              <div
-                className={cn(
-                  'grid gap-3.5',
-                  columnsFor(secondary.length, '[grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]'),
-                )}
-              >
-                {secondary.map((k, i) => (
-                  <KpiCard
-                    key={k.key}
-                    kpi={k}
-                    index={i}
-                    compact
-                    dimmed={focus !== null && !(k.sources ?? []).includes(focus)}
-                  />
-                ))}
-              </div>
+              {showMore ? (
+                <div
+                  className={cn(
+                    'grid gap-3.5',
+                    columnsFor(secondary.length, '[grid-template-columns:repeat(auto-fit,minmax(150px,1fr))]'),
+                  )}
+                >
+                  {secondary.map((k, i) => (
+                    <KpiCard
+                      key={k.key}
+                      kpi={k}
+                      index={i}
+                      compact
+                      dimmed={focus !== null && !(k.sources ?? []).includes(focus)}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
