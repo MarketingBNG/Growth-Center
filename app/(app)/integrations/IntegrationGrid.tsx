@@ -9,7 +9,7 @@ import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { StateBadge } from '@/components/patterns/integration-state';
 import { api } from '@/lib/fetcher';
-import { fmtRelative } from '@/lib/format';
+import { fmtNumber, fmtRelative } from '@/lib/format';
 import type { Card as IntegrationCard } from '@/lib/integrations/service';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -205,7 +205,7 @@ function ProviderCard({ card, canManage }: { card: IntegrationCard; canManage: b
             card.state === 'demo_data'
               ? 'Seeded, not synced'
               : card.lastSyncAt
-                ? `${fmtRelative(card.lastSyncAt)}${card.lastSyncRows !== null ? ` · ${card.lastSyncRows} rows` : ''}`
+                ? `${fmtRelative(card.lastSyncAt)}${card.lastSyncRows !== null ? ` · ${fmtNumber(card.lastSyncRows)} ${card.lastSyncRows === 1 ? 'row' : 'rows'}` : ''}`
                 : 'Never'
           }
         />

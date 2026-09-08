@@ -114,14 +114,15 @@ export function CalendarGrid({ weeks }: { weeks: CalendarCell[][] }) {
                           <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
                             {/* The studio's own word for the asset where it gave one —
                                 "CAROUSEL - 5 slides" says more than "social". */}
-                            {/* max-w-full/truncate because the studio's shape strings run
-                                long — "CAROUSEL - 5 slides" is wider than a day cell, and
-                                a Badge is whitespace-nowrap by default, so it spilled out
-                                of the grid instead of being cut. */}
+                            {/* The studio's shape strings run wider than a day cell —
+                                "CAROUSEL - 5 slides", "TEXT + IMAGE (1 creative)". A Badge
+                                is whitespace-nowrap, so it first spilled out of the grid
+                                and then, once clamped, cut mid-word against the cell edge.
+                                Let it wrap onto a second line instead: the cell has the
+                                room, and a shape nobody can read is not worth showing. */}
                             <Badge
                               tone={FORMAT_TONE[piece.format] ?? 'neutral'}
-                              className="max-w-full truncate"
-                              title={piece.assetShape ?? piece.format.replaceAll('_', ' ')}
+                              className="max-w-full whitespace-normal text-left leading-tight"
                             >
                               {piece.assetShape ?? piece.format.replaceAll('_', ' ')}
                             </Badge>

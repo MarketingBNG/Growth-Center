@@ -99,6 +99,8 @@ export default async function AiPage({
   const now = new Date();
 
   const computed = ruleFindings(context);
+  /** Both lists here rendered in full, and a busy period ran the page to 10,000px. */
+  const FINDING_ROWS = 25;
 
   return (
     <>
@@ -156,7 +158,11 @@ export default async function AiPage({
         </Card>
       </div>
 
-      <div className="grid gap-4 pt-4 lg:grid-cols-2">
+      {/* Stacked, not side by side. Computed observations run to a few rows and saved
+          findings to a few dozen, so a two-column split put a 6,000px column next to
+          5,500px of nothing. Each gets the full width and lays its own cards out across
+          it. */}
+      <div className="grid gap-4 pt-4">
         <Card>
           <CardHeader>
             <CardTitle>Computed observations</CardTitle>
@@ -167,7 +173,7 @@ export default async function AiPage({
           <CardContent className="space-y-2">
             {computed.length === 0 ? (
               <p className="text-xs text-muted-foreground">Nothing notable in this period.</p>
-            ) : computed.map((f, i) => (
+            ) : computed.slice(0, FINDING_ROWS).map((f, i) => (
               <div key={i} className="rounded-md border border-border px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-xs font-medium leading-snug">{f.title}</p>
@@ -176,6 +182,11 @@ export default async function AiPage({
                 <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{f.body}</p>
               </div>
             ))}
+            {computed.length > FINDING_ROWS ? (
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Showing {FINDING_ROWS} of {computed.length}.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -199,7 +210,10 @@ export default async function AiPage({
                   ? 'None yet — generate a set from the numbers above.'
                   : 'None saved.'}
               </p>
-            ) : stored.map((i) => {
+            ) : null}
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {stored.slice(0, FINDING_ROWS).map((i) => {
               const age = ageLabel(i.firstSeenAt, now);
               const state = isInsightStatus(i.status) ? i.status : 'proposed';
               const ownerName = owners.find((o) => o.email === i.ownerEmail);
@@ -258,9 +272,15 @@ export default async function AiPage({
                       canApprove={canApprove}
                     />
                   )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
+            {stored.length > FINDING_ROWS ? (
+              <p className="text-[11px] text-muted-foreground">
+                Showing {FINDING_ROWS} of {stored.length}. Decide these and the rest follow.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

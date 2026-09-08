@@ -60,7 +60,7 @@ export async function SyncHealth() {
                   <>
                     {tone.label} · last succeeded {fmtRelative(row.lastSuccessAt)}
                     {row.medianRows !== null ? (
-                      <> · {fmtNumber(row.medianRows)} rows in a typical run</>
+                      <> · {fmtNumber(row.medianRows)} {row.medianRows === 1 ? 'row' : 'rows'} in a typical run</>
                     ) : null}
                   </>
                 ) : (

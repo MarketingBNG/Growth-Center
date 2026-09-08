@@ -164,7 +164,11 @@ export function KpiCard({
         <p
           className={cn(
             'font-extrabold leading-none tracking-[-0.035em] tnum',
-            compact ? 'text-[20px]' : 'text-[27px]',
+            // Clamped rather than fixed: a number cannot reflow, so an eleven-digit
+            // figure like a total pipeline value ran past the edge of its card at the
+            // narrower widths. It steps down instead of spilling, and is back at full
+            // size wherever there is room for it.
+            compact ? 'text-[clamp(15px,1.5vw,20px)]' : 'text-[clamp(19px,1.8vw,27px)]',
           )}
         >
           {show(kpi)}

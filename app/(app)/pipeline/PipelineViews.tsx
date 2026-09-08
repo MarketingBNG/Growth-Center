@@ -149,7 +149,11 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
         </p>
       ) : null}
 
-      <div className="grid items-start gap-3.5 pb-2 sm:grid-cols-2 lg:grid-cols-4">
+      {/* One row that scrolls sideways, not a wrapping grid. Six stages in a four-column
+          grid put Won and Lost on a second line underneath Open and Qualified, so the
+          board read as two unrelated groups instead of as one order deals move along.
+          A pipeline is a sequence; the columns have to stay in it. */}
+      <div className="flex items-start gap-3.5 overflow-x-auto pb-2">
         {local.map((col, colIndex) => {
           const sum = col.cards.reduce((t, d) => t + d.value, 0);
           return (
@@ -161,7 +165,7 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
               }}
               onDragLeave={() => setOver((s) => (s === col.stage.id ? null : s))}
               onDrop={() => drop(col.stage.id)}
-              className={`flex min-w-0 flex-col rounded-2xl border bg-card p-3.5 shadow-card transition-colors ${
+              className={`flex w-[276px] shrink-0 flex-col rounded-2xl border bg-card p-3.5 shadow-card transition-colors ${
                 over === col.stage.id ? 'border-primary bg-primary/5' : 'border-border'
               }`}
             >
@@ -173,7 +177,10 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
                     aria-hidden
                     className={`size-2 shrink-0 rounded-full ${STAGE_COLOR[colIndex % STAGE_COLOR.length]}`}
                   />
-                  <p className="truncate text-[13px] font-bold">{col.stage.name}</p>
+                  {/* Two lines rather than one. The firm's stage names share their
+                      opening words — "Project Initiated" and "Project Completed" both
+                      cut to "Project" — so a truncated heading named nothing. */}
+                  <p className="line-clamp-2 text-[13px] font-bold leading-tight">{col.stage.name}</p>
                   {col.stage.isWon ? <Badge tone="success">won</Badge> : null}
                   {col.stage.isLost ? <Badge tone="danger">lost</Badge> : null}
                 </div>

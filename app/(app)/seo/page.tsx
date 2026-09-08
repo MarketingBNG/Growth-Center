@@ -127,6 +127,15 @@ async function SeoBody({
   // Same reason as the keyword cap: 243 URLs in a half-width card is a scroll nobody
   // finishes. Ordered by clicks upstream, so the cap keeps the pages that earn.
   const PAGE_ROWS = 25;
+  const ISSUE_ROWS = 25;
+  const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
+  const shownIssues = [...issues]
+    .sort(
+      (a, b) =>
+        (SEVERITY_ORDER[a.severity as keyof typeof SEVERITY_ORDER] ?? 3) -
+        (SEVERITY_ORDER[b.severity as keyof typeof SEVERITY_ORDER] ?? 3),
+    )
+    .slice(0, ISSUE_ROWS);
   const shownPages = pages.slice(0, PAGE_ROWS);
 
   // Clicks and impressions come from two places that cover two different windows: the
@@ -343,11 +352,11 @@ async function SeoBody({
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Technical issues ({issues.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Technical issues ({fmtNumber(issues.length)})</CardTitle></CardHeader>
           <CardContent className="space-y-2">
             {issues.length === 0 ? (
               <p className="text-xs text-muted-foreground">No issues recorded.</p>
-            ) : issues.map((i, idx) => (
+            ) : shownIssues.map((i, idx) => (
               <div key={`${i.url}-${idx}`} className="rounded-md border border-border px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-mono text-xs">{i.url}</p>
@@ -359,6 +368,14 @@ async function SeoBody({
                 {i.message ? <p className="text-[11px] text-muted-foreground">{i.message}</p> : null}
               </div>
             ))}
+            {/* Every other list on this page is capped; this one was not, and a crawl of
+                any size rendered the whole of it — the page came out 41,000px tall. The
+                worst are first, and the count says what is not shown. */}
+            {issues.length > shownIssues.length ? (
+              <p className="pt-1 text-[11px] text-muted-foreground">
+                Showing the {ISSUE_ROWS} most severe of {fmtNumber(issues.length)}.
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

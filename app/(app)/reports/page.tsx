@@ -111,7 +111,14 @@ export default async function ReportsPage({
                     <div key={r.label}>
                       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{r.label}</p>
                       <p className="pt-0.5 text-xl font-semibold tnum">{r.value}</p>
-                      {r.hint ? <p className="text-[11px] text-muted-foreground">{r.hint}</p> : null}
+                      {/* Clamped: one figure's hint runs to a paragraph, and grid rows
+                          are as tall as their tallest cell — so a single long note left
+                          every other figure sitting on 200px of nothing. */}
+                      {r.hint ? (
+                        <p className="line-clamp-3 text-[11px] text-muted-foreground" title={r.hint}>
+                          {r.hint}
+                        </p>
+                      ) : null}
                     </div>
                   ))}
                 </CardContent>
