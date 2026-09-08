@@ -102,6 +102,40 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
  * showed. The source ids come from the rows themselves, so the card names the integration
  * that actually wrote its number rather than one assumed at build time.
  */
+/**
+ * A word for the direction, on the metrics where the arrow is not self-explanatory.
+ *
+ * The chip carries two encodings: the arrow says which way the number moved, and the
+ * colour says whether that was good. On a metric where a fall is the win — response
+ * time, CAC, cost per lead, cycle length, unassigned leads — the two look like they
+ * disagree. "16h 2m, down 57.7%" on a green chip invites exactly the question it should
+ * answer, so the chip says "faster".
+ *
+ * Only for those. Where a rise is the win, an up arrow on a green chip needs no gloss,
+ * and a word on every card would be noise on most of them.
+ *
+ * The vocabulary follows the unit rather than being one adjective for everything: a
+ * duration gets faster or slower, a cost lower or higher, a count fewer or more. "Better"
+ * would be true and useless — it names the judgement the colour already made instead of
+ * what actually changed.
+ */
+function deltaWord(kpi: Kpi, change: number | null): string | null {
+  if (kpi.higherIsBetter) return null;
+  if (change === null || Math.abs(change) < 0.05) return null;
+  const fell = change < 0;
+  switch (kpi.format) {
+    case 'duration':
+    case 'days':
+      return fell ? 'faster' : 'slower';
+    case 'number':
+      return fell ? 'fewer' : 'more';
+    default:
+      // money, percent, ratio — all costs and rates here, where the plain comparison is
+      // the clearest thing to say.
+      return fell ? 'lower' : 'higher';
+  }
+}
+
 export function KpiCard({
   kpi,
   index = 0,
@@ -127,7 +161,13 @@ export function KpiCard({
 }) {
   const change = kpiDelta(kpi);
   const good = change === null || change === 0 ? null : change > 0 === kpi.higherIsBetter;
-  const Arrow = change === null || Math.abs(change) < 0.05 ? Minus : change > 0 ? ArrowUp : ArrowDown;
+  // Under a twentieth of a percent is not a movement anybody acts on, so it reads as a
+  // dash rather than an arrow — and then it must not also print "0.0%", which invites
+  // being read as a change that happened to round to nothing. Median lead quality sat at
+  // 16 both periods and the card said "− 0.0%".
+  const flat = change !== null && Math.abs(change) < 0.05;
+  const Arrow = change === null || flat ? Minus : change > 0 ? ArrowUp : ArrowDown;
+  const word = deltaWord(kpi, change);
   const Icon = ICONS[kpi.key] ?? ChartLine;
 
   const sources = (kpi.sources ?? []).map(sourceMeta);
@@ -185,7 +225,11 @@ export function KpiCard({
             )}
           >
             <Arrow className="size-[11px]" />
-            {fmtPercent(Math.abs(change), 1)}
+            {flat ? 'no change' : fmtPercent(Math.abs(change), 1)}
+            {/* The word, where the arrow alone would mislead. A median response that fell
+                from 37h to 16h is a down arrow on a green chip, and the two read as
+                contradicting each other unless something says which way is good. */}
+            {word ? <span className="font-semibold">{word}</span> : null}
           </span>
         ) : null}
       </div>
