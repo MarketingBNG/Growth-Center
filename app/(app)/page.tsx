@@ -6,14 +6,13 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
-import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { currentUser } from '@/lib/auth';
 import { db, hasDb } from '@/lib/prisma';
-import { openPipeline, windowFor, trend, channelPerformance } from '@/lib/metrics';
+import { openPipeline, windowFor, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
@@ -65,11 +64,10 @@ export default async function DashboardPage({
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const { current } = windowFor(spec);
 
-  const [dash, pipeline, series, channels, segments, capacity, recentLeads] =
+  const [dash, pipeline, channels, segments, capacity, recentLeads] =
     await Promise.all([
       dashboardBand(spec, bucket),
       openPipeline(),
-      trend(current, bucket),
       channelPerformance(current),
       // §7.4: "Lead mix by segment renders on the dashboard."
       segmentMix(current),
@@ -185,31 +183,10 @@ export default async function DashboardPage({
           align-items:start so a short right column does not stretch its cards. */}
       <div className="grid items-start gap-3.5 lg:[grid-template-columns:minmax(0,1.75fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3.5">
-          {/* Revenue lives in the band above; none of these share a unit with it, or with
-              each other, so they each keep their own chart — never a second y-axis. Spend
-              is here rather than beside revenue for exactly that reason: against revenue
-              it was a flat line on the axis. */}
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <TrendChart
-              title="Visitors"
-              data={series}
-              series={[{ key: 'visitors', label: 'Sessions', kind: 'number' }]}
-              height={150}
-            />
-            <TrendChart
-              title="Leads"
-              data={series}
-              series={[{ key: 'leads', label: 'Leads', kind: 'number' }]}
-              height={150}
-            />
-            <TrendChart
-              title="Marketing spend"
-              data={series}
-              series={[{ key: 'spend', label: 'Spend', kind: 'money' }]}
-              currency={band.currency}
-              height={150}
-            />
-          </div>
+          {/* Three charts used to sit here — visitors, leads and marketing spend — and each
+              was already drawn somewhere it belonged: sessions and ad spend on Analytics,
+              leads created on Leads, all off the same series. The revenue trend in the
+              band above is this page's own, and stays. */}
 
           <TableCard>
             <CardHeader>

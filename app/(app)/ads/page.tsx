@@ -1,20 +1,22 @@
-import { Megaphone } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, Megaphone } from 'lucide-react';
 import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { costPer } from '@/lib/calc';
+import { costPer, rate } from '@/lib/calc';
 import { provenance, windowFor } from '@/lib/metrics';
 import { customRange, rangeParam } from '@/lib/range';
 import { cards } from '@/lib/integrations/service';
 import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/format';
 import { currencySettings } from '@/lib/settings';
-import { SourceBadge, SourceLine } from '@/components/patterns/source-badge';
+import { SourceLine } from '@/components/patterns/source-badge';
 
 export const metadata = { title: 'Paid Ads · Growth Center' };
 
@@ -74,6 +76,48 @@ export default async function AdsPage({
   // drops them on this test; Paid Ads kept them, and they pushed ROAS off the edge of
   // the card. Derived from the data, so they return the day something stamps a campaign.
   const attributed = active.some((r) => r.leads !== null || r.revenue !== null);
+
+  /**
+   * Rolled up by platform, which is what this page is for.
+   *
+   * The campaign rows that used to be here were the same rows Marketing shows, minus
+   * four of its columns — and Marketing has to keep them, because §6.4's hiring filter,
+   * its totals and its "show hiring" link are all built on that table. So the duplicate
+   * is this one, and deleting it outright would have left the page with nothing but its
+   * five tiles.
+   *
+   * A platform view is the thing neither page had. "Spend and return across ad
+   * platforms" is what the subtitle promises, and until now the only way to answer it was
+   * to read a campaign list and add up the rows in your head.
+   *
+   * Ratios are recomputed from each platform's totals rather than averaged down its
+   * campaigns, for the reason the footer already gives: an average of ratios disagrees
+   * with the ratio of the totals.
+   */
+  const platforms = [...
+    active
+      .reduce((acc, r) => {
+        const key = r.channelName ?? 'Unattributed';
+        const at = acc.get(key) ?? { name: key, campaigns: 0, spend: 0, impressions: 0, clicks: 0 };
+        at.campaigns += 1;
+        at.spend += r.spend ?? 0;
+        at.impressions += r.impressions ?? 0;
+        at.clicks += r.clicks ?? 0;
+        acc.set(key, at);
+        return acc;
+      }, new Map<string, { name: string; campaigns: number; spend: number; impressions: number; clicks: number }>())
+      .values(),
+  ]
+    .map((p) => ({
+      ...p,
+      // Through lib/calc's `rate`, not by hand: it returns percentage units, which is
+      // what fmtPercent here expects. Divided raw, Meta Ads read 0.00% CTR beside a
+      // total of 0.37% computed from the same two numbers.
+      ctr: rate(p.clicks, p.impressions),
+      cpc: p.clicks > 0 ? p.spend / p.clicks : null,
+      cpm: p.impressions > 0 ? (p.spend / p.impressions) * 1000 : null,
+    }))
+    .sort((a, b) => b.spend - a.spend);
 
   // What the platform does bill on, for the two tiles the outcome metrics cannot fill.
   const cpc = costPer(totals.spend, totals.clicks);
@@ -165,17 +209,24 @@ export default async function AdsPage({
       </div>
 
       <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>Campaigns</CardTitle>
-          <p className="text-meta text-muted-foreground">
-            Only campaigns with spend in this period.
-            {attributed
-              ? ' A dash means nothing has been attributed yet, not zero.'
-              : ' Delivery only: the CRM records which channel a lead came from but never which campaign, so leads, CPL and ROAS cannot be attributed to a campaign here.'}
-          </p>
+        <CardHeader className="flex-row items-start justify-between gap-3">
+          <div>
+            <CardTitle>Platforms</CardTitle>
+            <p className="text-meta text-muted-foreground">
+              Delivery per platform over this period. Cost per click and per thousand
+              impressions are computed from each platform&rsquo;s own totals.
+            </p>
+          </div>
+          {/* The campaign rows live on Marketing, which carries the hiring filter and the
+              attribution columns. Said out loud so nobody looks for them here. */}
+          <Button asChild variant="outline" size="sm" className="shrink-0">
+            <Link href="/marketing">
+              Campaign detail <ArrowRight className="size-3" />
+            </Link>
+          </Button>
         </CardHeader>
 
-        {active.length === 0 ? (
+        {platforms.length === 0 ? (
           <EmptyState
             icon={<Megaphone className="size-6" />}
             title="No paid spend in this period"
@@ -186,71 +237,52 @@ export default async function AdsPage({
             <Table>
               <THead>
                 <TR>
-                  <TH>Campaign</TH>
                   <TH>Platform</TH>
+                  <TH className="text-right">Campaigns</TH>
                   <TH className="text-right">Spend</TH>
                   <TH className="text-right">Impressions</TH>
                   <TH className="text-right">Clicks</TH>
                   <TH className="text-right">CTR</TH>
-                  {attributed ? (
-                    <>
-                      <TH className="text-right">Leads</TH>
-                      <TH className="text-right">CPL</TH>
-                      <TH className="text-right">ROAS</TH>
-                    </>
-                  ) : null}
+                  <TH className="text-right">CPC</TH>
+                  <TH className="text-right">CPM</TH>
                 </TR>
               </THead>
               <TBody>
-                {active.map((r) => (
-                  <TR key={r.id}>
-                    <TD className="font-medium">
-                      {r.name}
-                      <SourceBadge source={r.source} className="ml-1.5" />
-                    </TD>
-                    <TD className="text-muted-foreground">{r.channelName}</TD>
-                    <TD className="text-right tnum">{money(r.spend)}</TD>
+                {platforms.map((p) => (
+                  <TR key={p.name}>
+                    <TD className="font-medium">{p.name}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {fmtNumber(r.impressions)}
+                      {fmtNumber(p.campaigns)}
                     </TD>
-                    <TD className="text-right tnum text-muted-foreground">{fmtNumber(r.clicks)}</TD>
+                    <TD className="text-right tnum">{money(p.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {r.ctr === null ? '—' : fmtPercent(r.ctr, 2)}
+                      {fmtNumber(p.impressions)}
                     </TD>
-                    {attributed ? (
-                      <>
-                        <TD className="text-right tnum">{fmtNumber(r.leads)}</TD>
-                        <TD className="text-right tnum">
-                          {r.costPerLead === null ? '—' : money(r.costPerLead)}
-                        </TD>
-                        <TD className="text-right tnum">
-                          {r.roas === null ? '—' : fmtRatio(r.roas)}
-                        </TD>
-                      </>
-                    ) : null}
+                    <TD className="text-right tnum text-muted-foreground">{fmtNumber(p.clicks)}</TD>
+                    <TD className="text-right tnum text-muted-foreground">
+                      {p.ctr === null ? '—' : fmtPercent(p.ctr, 2)}
+                    </TD>
+                    <TD className="text-right tnum">
+                      {p.cpc === null ? '—' : fmtMoney(p.cpc, true, fx.reporting)}
+                    </TD>
+                    <TD className="text-right tnum">{p.cpm === null ? '—' : money(p.cpm)}</TD>
                   </TR>
                 ))}
                 {/* Ratios recomputed from the totals rather than averaged down the rows,
                     which is how a footer ends up disagreeing with its own columns. */}
                 <TR className="border-t-2 border-border font-semibold hover:bg-transparent">
-                  <TD colSpan={2}>Total</TD>
+                  <TD>Total</TD>
+                  <TD className="text-right tnum">{fmtNumber(active.length)}</TD>
                   <TD className="text-right tnum">{money(totals.spend)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.impressions)}</TD>
                   <TD className="text-right tnum">{fmtNumber(totals.clicks)}</TD>
                   <TD className="text-right tnum">
                     {totals.ctr === null ? '—' : fmtPercent(totals.ctr, 2)}
                   </TD>
-                  {attributed ? (
-                    <>
-                      <TD className="text-right tnum">{fmtNumber(totals.leads)}</TD>
-                      <TD className="text-right tnum">
-                        {totals.costPerLead === null ? '—' : money(totals.costPerLead)}
-                      </TD>
-                      <TD className="text-right tnum">
-                        {totals.roas === null ? '—' : fmtRatio(totals.roas)}
-                      </TD>
-                    </>
-                  ) : null}
+                  <TD className="text-right tnum">
+                    {cpc === null ? '—' : fmtMoney(cpc, true, fx.reporting)}
+                  </TD>
+                  <TD className="text-right tnum">{cpm === null ? '—' : money(cpm)}</TD>
                 </TR>
               </TBody>
             </Table>
