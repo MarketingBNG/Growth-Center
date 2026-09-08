@@ -214,7 +214,9 @@ function Figure({ label, value, strong }: { label: string; value: string; strong
   return (
     <div>
       <p className="text-meta text-muted-foreground">{label}</p>
-      <p className={`tnum ${strong ? 'text-base font-semibold' : 'text-sm'}`}>{value}</p>
+      {/* On the scale, like everything else. These were text-base and text-sm — the last
+          two figures in the app sized off it. */}
+      <p className={`tnum ${strong ? 'text-lead font-semibold' : 'text-body'}`}>{value}</p>
     </div>
   );
 }
