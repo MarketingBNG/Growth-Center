@@ -5,7 +5,7 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { AddWidgetDrawer } from '@/components/patterns/add-widget-drawer';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
-import { LeadStatusBadge, PriorityBadge } from '@/components/patterns/badges';
+import { LeadStatusBadge } from '@/components/patterns/badges';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { FunnelChart } from '@/components/charts/FunnelChart';
@@ -17,7 +17,6 @@ import { db, hasDb } from '@/lib/prisma';
 import { openPipeline, windowFor, trend, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
-import { campaignPerformance } from '@/lib/campaigns';
 import { bucketFor, customRange, rangeParam } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
@@ -62,13 +61,12 @@ export default async function DashboardPage({
   const bucket = picked ? bucketFor(picked.days) : presetBucket;
   const { current } = windowFor(spec);
 
-  const [dash, pipeline, series, channels, campaigns, segments, capacity, recentLeads, tasks] =
+  const [dash, pipeline, series, channels, segments, capacity, recentLeads] =
     await Promise.all([
       dashboardBand(spec, bucket),
       openPipeline(),
       trend(current, bucket),
       channelPerformance(current),
-      campaignPerformance(current),
       // §7.4: "Lead mix by segment renders on the dashboard."
       segmentMix(current),
       // §6.2: "Marketing must not create consultations the firm cannot serve. The ceiling
@@ -82,12 +80,6 @@ export default async function DashboardPage({
           createdAt: true, ownerEmail: true, channel: { select: { name: true } },
         },
       }),
-      db().task.findMany({
-        where: { status: { in: ['open', 'in_progress'] } },
-        orderBy: { dueDate: 'asc' },
-        take: 5,
-        select: { id: true, title: true, dueDate: true, priority: true, assigneeEmail: true, leadId: true },
-      }),
     ]);
 
   const { band, funnel: f, visitorsFrom } = dash;
@@ -97,7 +89,6 @@ export default async function DashboardPage({
   // print rupees with a dollar sign — the failure this whole change is about.
   const money = (n: number | null | undefined) => fmtMoney(n, false, band.currency);
   const ai = aiStatus();
-  const topCampaigns = campaigns.filter((c) => c.spend > 0 || (c.revenue ?? 0) > 0).slice(0, 6);
 
   // Leads, CPL, new revenue and ROAS all hang off a campaignId that no lead, deal or
   // revenue row carries — Zoho records which CHANNEL a lead came from but never which ad,
@@ -109,10 +100,6 @@ export default async function DashboardPage({
   // on every one of the 2,008 spend rows. So the table shows what is known instead of
   // ruling columns for what is not.
   //
-  // Tested rather than hard-coded, so the day anything stamps a campaign on a lead the
-  // outcome columns come back on their own.
-  const campaignsAttributed = topCampaigns.some((c) => (c.leads ?? 0) > 0 || (c.revenue ?? 0) > 0);
-
   // Semi-qualified is only its own step when something is actually sitting in it. The
   // stage counts leads that reached AT LEAST semi-qualified, so with no lead carrying
   // that status it equals Qualified exactly and the funnel draws the same number twice,
@@ -267,84 +254,6 @@ export default async function DashboardPage({
             </TableWrap>
           </TableCard>
 
-          <TableCard>
-            <CardHeader>
-              <CardTitle>Top campaigns</CardTitle>
-            </CardHeader>
-            {topCampaigns.length === 0 ? (
-              <p className="px-5 pb-5 text-xs text-muted-foreground">
-                No campaign activity in this period.
-              </p>
-            ) : (
-              <TableWrap>
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH>Campaign</TH>
-                      <TH className="text-right">Spend</TH>
-                      {campaignsAttributed ? (
-                        <>
-                          <TH className="text-right">Leads</TH>
-                          <TH className="text-right">CPL</TH>
-                          <TH className="text-right">New revenue</TH>
-                          <TH className="text-right">ROAS</TH>
-                        </>
-                      ) : (
-                        <>
-                          <TH className="text-right">Impressions</TH>
-                          <TH className="text-right">Clicks</TH>
-                          <TH className="text-right">CTR</TH>
-                        </>
-                      )}
-                    </TR>
-                  </THead>
-                  <TBody>
-                    {topCampaigns.map((c) => (
-                      <TR key={c.id}>
-                        <TD>
-                          <span className="font-medium">{c.name}</span>
-                          <p className="text-meta text-muted-foreground">{c.channelName}</p>
-                        </TD>
-                        <TD className="text-right tnum">{money(c.spend)}</TD>
-                        {campaignsAttributed ? (
-                          <>
-                            <TD className="text-right tnum">{fmtNumber(c.leads)}</TD>
-                            <TD className="text-right tnum text-muted-foreground">
-                              {c.costPerLead === null ? '—' : money(c.costPerLead)}
-                            </TD>
-                            <TD className="text-right tnum">{money(c.revenue)}</TD>
-                            <TD className="text-right tnum">
-                              {c.roas === null ? (
-                                <span className="text-muted-foreground">—</span>
-                              ) : (
-                                <span className={c.roas >= 1 ? 'text-success' : 'text-destructive'}>
-                                  {fmtRatio(c.roas)}
-                                </span>
-                              )}
-                            </TD>
-                          </>
-                        ) : (
-                          <>
-                            <TD className="text-right tnum">{fmtNumber(c.impressions)}</TD>
-                            <TD className="text-right tnum">{fmtNumber(c.clicks)}</TD>
-                            <TD className="text-right tnum text-muted-foreground">
-                              {c.ctr === null ? '—' : fmtPercent(c.ctr, 2)}
-                            </TD>
-                          </>
-                        )}
-                      </TR>
-                    ))}
-                  </TBody>
-                </Table>
-              </TableWrap>
-            )}
-            {!campaignsAttributed && topCampaigns.length > 0 ? (
-              <p className="px-5 pb-4 pt-1 text-meta text-muted-foreground">
-                Delivery only. No lead or deal records which campaign it came from, so
-                cost per lead and return cannot be attributed to a campaign yet.
-              </p>
-            ) : null}
-          </TableCard>
         </div>
 
         <div className="flex min-w-0 flex-col gap-3.5">
@@ -503,32 +412,6 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Tasks needing attention</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1.5">
-              {tasks.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nothing open. </p>
-              ) : (
-                tasks.map((t) => (
-                  <div key={t.id} className="flex items-start justify-between gap-2 py-1">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs">{t.title}</p>
-                      <p className="text-meta text-muted-foreground">
-                        {t.dueDate ? fmtRelative(t.dueDate) : 'No due date'}
-                        {/* §6.6. Hidden in partner view: the panel still says what is
-                            outstanding, which is performance, and stops naming who is
-                            carrying it, which is a staff scorecard. */}
-                        {!partnerView && t.assigneeEmail ? ` · ${t.assigneeEmail.split('@')[0]}` : ''}
-                      </p>
-                    </div>
-                    <PriorityBadge priority={t.priority} />
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
 
           <AiAssistantCard configured={ai.configured} />
         </div>
