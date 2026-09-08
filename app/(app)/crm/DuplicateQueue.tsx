@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Copy, Search } from 'lucide-react';
+import { Copy, Search, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/fetcher';
@@ -31,14 +31,24 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
   // so it cannot be a single button the way a merge can.
   const [dismissing, setDismissing] = useState<string | null>(null);
   const [reason, setReason] = useState('');
+  // The merge just made, offered back. A merge deletes a record, so it is the one action
+  // on this screen that doing the opposite cannot fix — and the mistake it guards against
+  // is the misread row, which is noticed immediately or not at all. So it is held here
+  // until the next action rather than parked in a history somewhere.
+  const [undoable, setUndoable] = useState<{ id: string; label: string } | null>(null);
 
-  async function act(id: string, body: { action: 'merge' } | { action: 'dismiss'; reason: string }) {
+  async function act(
+    id: string,
+    body: { action: 'merge' } | { action: 'dismiss'; reason: string } | { action: 'unmerge' },
+    label?: string,
+  ) {
     setBusy(id);
     setError(null);
     try {
       await api(`/api/duplicates/${id}`, { method: 'POST', json: body });
       setDismissing(null);
       setReason('');
+      setUndoable(body.action === 'merge' && label ? { id, label } : null);
       router.refresh();
     } catch (e) {
       setError((e as Error).message);
@@ -82,6 +92,32 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
       {error ? (
         <div className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {error}
+        </div>
+      ) : null}
+
+      {/* Sits where the merged row was, so the offer is where the eye already is. It says
+          what happened before it offers to reverse it: "Undo" alone leaves somebody
+          guessing which of two records went. */}
+      {undoable ? (
+        <div className="mx-4 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2">
+          <p className="text-xs">
+            Merged <span className="font-medium">{undoable.label}</span> away. The record was
+            deleted and its deals, notes and tasks moved across.
+          </p>
+          <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy !== null}
+              onClick={() => act(undoable.id, { action: 'unmerge' })}
+            >
+              <Undo2 className="size-3.5" />
+              {busy === undoable.id ? 'Putting it back…' : 'Undo'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setUndoable(null)}>
+              Dismiss
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -170,7 +206,13 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
                   ) : (
                     <div className="mt-2 flex items-center gap-2">
                       {stale ? null : (
-                        <Button size="sm" disabled={busy !== null} onClick={() => act(row.id, { action: 'merge' })}>
+                        <Button
+                          size="sm"
+                          disabled={busy !== null}
+                          onClick={() =>
+                            act(row.id, { action: 'merge' }, row.duplicate?.label ?? 'that record')
+                          }
+                        >
                           <Copy className="size-3.5" />
                           {busy === row.id ? 'Merging…' : 'Merge'}
                         </Button>

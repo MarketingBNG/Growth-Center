@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { MergeError, dismissDuplicate, mergeDuplicate } from '@/lib/duplicate-queue';
+import {
+  MergeError,
+  dismissDuplicate,
+  mergeDuplicate,
+  unmergeDuplicate,
+} from '@/lib/duplicate-queue';
 import { TAGS, invalidate } from '@/lib/cache';
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -16,6 +21,9 @@ type Ctx = { params: Promise<{ id: string }> };
 const body = z.discriminatedUnion('action', [
   z.object({ action: z.literal('merge') }),
   z.object({ action: z.literal('dismiss'), reason: z.string().trim().min(3) }),
+  // Takes the merge back. Needs no reason: undoing is the correction, not a judgement
+  // that has to be justified to the next person who reads the queue.
+  z.object({ action: z.literal('unmerge') }),
 ]);
 
 export const POST = route<unknown, Ctx>('crm:write', async (user, req, ctx) => {
@@ -27,6 +35,11 @@ export const POST = route<unknown, Ctx>('crm:write', async (user, req, ctx) => {
       const merged = await mergeDuplicate(id, user.email);
       await invalidate(TAGS.metrics);
       return merged;
+    }
+    if (input.action === 'unmerge') {
+      const restored = await unmergeDuplicate(id, user.email);
+      await invalidate(TAGS.metrics);
+      return restored;
     }
     await dismissDuplicate(id, input.reason, user.email);
     await invalidate(TAGS.metrics);

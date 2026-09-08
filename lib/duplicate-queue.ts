@@ -277,6 +277,31 @@ export class MergeError extends Error {}
  * revenue history survives. That is a business decision, not a data operation, and
  * guessing it would corrupt the revenue figures this feature exists to protect.
  */
+/** What `mergeDuplicate` writes down so the merge can be taken back. */
+type MergeUndo = {
+  /** Every scalar of the record that was deleted, including its id. */
+  record: Record<string, unknown>;
+  /** Only the children that actually moved, by id. */
+  moved: {
+    opportunities: string[];
+    activities: string[];
+    notes: string[];
+    tasks: string[];
+    leads: string[];
+  };
+};
+
+/**
+ * How long a merge stays reversible.
+ *
+ * Short on purpose. Undo here is for the click that was wrong — the wrong row, the wrong
+ * pair, a hand that moved before the eye read — and that is noticed in seconds. It is not
+ * a general history: an hour later somebody may have edited the surviving record, and
+ * putting the other one back would then be inventing a state that never existed. Past the
+ * window the answer is a restore from Zoho, which is the system of record.
+ */
+export const UNDO_WINDOW_MINUTES = 15;
+
 export async function mergeDuplicate(candidateId: string, actorEmail: string) {
   const candidate = await db().duplicateCandidate.findUnique({ where: { id: candidateId } });
   if (!candidate) throw new MergeError('That candidate no longer exists.');
@@ -291,16 +316,60 @@ export async function mergeDuplicate(candidateId: string, actorEmail: string) {
 
   const { entityType, primaryId, duplicateId } = candidate;
 
+  /** What it would take to put this back. See `unmergeDuplicate`. */
+  let undo: MergeUndo | null = null;
+
   await db().$transaction(async (tx) => {
     // Children first, in one transaction. See the note above: reversed, a failure halfway
     // through severs a deleted record's deals instead of failing.
     if (entityType === 'lead') {
+      // Read before writing. The record is about to be deleted and the children about to
+      // be reparented, so this is the only moment either can be described — and the ids
+      // have to be the ones that actually moved, not everything hanging off the primary
+      // afterwards, or an undo would drag across rows that were always the primary's.
+      const record = await tx.lead.findUnique({ where: { id: duplicateId } });
+      const [opportunities, activities, notes, tasks] = await Promise.all([
+        tx.opportunity.findMany({ where: { leadId: duplicateId }, select: { id: true } }),
+        tx.activity.findMany({ where: { leadId: duplicateId }, select: { id: true } }),
+        tx.note.findMany({ where: { leadId: duplicateId }, select: { id: true } }),
+        tx.task.findMany({ where: { leadId: duplicateId }, select: { id: true } }),
+      ]);
+      undo = {
+        record: record as Record<string, unknown>,
+        moved: {
+          opportunities: opportunities.map((r) => r.id),
+          activities: activities.map((r) => r.id),
+          notes: notes.map((r) => r.id),
+          tasks: tasks.map((r) => r.id),
+          leads: [],
+        },
+      };
+
       await tx.opportunity.updateMany({ where: { leadId: duplicateId }, data: { leadId: primaryId } });
       await tx.activity.updateMany({ where: { leadId: duplicateId }, data: { leadId: primaryId } });
       await tx.note.updateMany({ where: { leadId: duplicateId }, data: { leadId: primaryId } });
       await tx.task.updateMany({ where: { leadId: duplicateId }, data: { leadId: primaryId } });
       await tx.lead.delete({ where: { id: duplicateId } });
     } else {
+      const record = await tx.contact.findUnique({ where: { id: duplicateId } });
+      const [opportunities, activities, notes, tasks, leads] = await Promise.all([
+        tx.opportunity.findMany({ where: { contactId: duplicateId }, select: { id: true } }),
+        tx.activity.findMany({ where: { contactId: duplicateId }, select: { id: true } }),
+        tx.note.findMany({ where: { contactId: duplicateId }, select: { id: true } }),
+        tx.task.findMany({ where: { contactId: duplicateId }, select: { id: true } }),
+        tx.lead.findMany({ where: { contactId: duplicateId }, select: { id: true } }),
+      ]);
+      undo = {
+        record: record as Record<string, unknown>,
+        moved: {
+          opportunities: opportunities.map((r) => r.id),
+          activities: activities.map((r) => r.id),
+          notes: notes.map((r) => r.id),
+          tasks: tasks.map((r) => r.id),
+          leads: leads.map((r) => r.id),
+        },
+      };
+
       await tx.opportunity.updateMany({ where: { contactId: duplicateId }, data: { contactId: primaryId } });
       await tx.activity.updateMany({ where: { contactId: duplicateId }, data: { contactId: primaryId } });
       await tx.note.updateMany({ where: { contactId: duplicateId }, data: { contactId: primaryId } });
@@ -339,11 +408,123 @@ export async function mergeDuplicate(candidateId: string, actorEmail: string) {
       action: 'duplicate.merged',
       entityType,
       entityId: primaryId,
-      detail: { merged: duplicateId, into: primaryId, rule: candidate.rule, matchedOn: candidate.matchedOn },
+      detail: {
+        merged: duplicateId,
+        into: primaryId,
+        rule: candidate.rule,
+        matchedOn: candidate.matchedOn,
+        candidateId,
+        // The deleted record and the rows that moved, so the merge can be reversed. It
+        // lives on the audit row rather than in a table of its own because the audit row
+        // is already the thing that says this merge happened, and a snapshot that could
+        // drift out of step with it would be worse than none.
+        undo,
+      },
     },
   });
 
   return { primaryId, duplicateId, entityType };
+}
+
+/**
+ * Puts a merged pair back.
+ *
+ * A merge deletes a record, which is the one thing on this screen that cannot be undone
+ * by doing the opposite — so the merge writes down what it destroyed and this reads it
+ * back. The record is recreated with its original id, and only the children that moved
+ * are moved back, so a primary that always owned a deal keeps it.
+ *
+ * Three things make it refuse rather than guess: a pair that is not `merged`, a merge
+ * older than the undo window, and a record whose id is somehow occupied again. In each
+ * case the honest answer is that this is no longer a reversal, and pretending otherwise
+ * would write a state that never existed.
+ */
+export async function unmergeDuplicate(candidateId: string, actorEmail: string) {
+  const candidate = await db().duplicateCandidate.findUnique({ where: { id: candidateId } });
+  if (!candidate) throw new MergeError('That candidate no longer exists.');
+  if (candidate.status !== 'merged') {
+    throw new MergeError(`This pair is ${candidate.status}, so there is no merge to undo.`);
+  }
+
+  const since = new Date(Date.now() - UNDO_WINDOW_MINUTES * 60_000);
+  const recent = await db().auditEvent.findMany({
+    where: { action: 'duplicate.merged', createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+  });
+  const event = recent.find(
+    (e) => (e.detail as { candidateId?: string } | null)?.candidateId === candidateId,
+  );
+  if (!event) {
+    throw new MergeError(
+      `A merge can only be undone within ${UNDO_WINDOW_MINUTES} minutes of being made. Restore the record from Zoho instead — it is the system of record.`,
+    );
+  }
+
+  const undo = (event.detail as { undo?: MergeUndo } | null)?.undo;
+  if (!undo?.record) {
+    throw new MergeError(
+      'This merge was made before undo was recorded, so there is no snapshot to restore from.',
+    );
+  }
+
+  const { entityType, primaryId, duplicateId } = candidate;
+
+  await db().$transaction(async (tx) => {
+    if (entityType === 'lead') {
+      const taken = await tx.lead.findUnique({ where: { id: duplicateId }, select: { id: true } });
+      if (taken) throw new MergeError('That record exists again, so this merge has already been undone.');
+      await tx.lead.create({ data: undo.record as never });
+      await tx.opportunity.updateMany({
+        where: { id: { in: undo.moved.opportunities } },
+        data: { leadId: duplicateId },
+      });
+      await tx.activity.updateMany({ where: { id: { in: undo.moved.activities } }, data: { leadId: duplicateId } });
+      await tx.note.updateMany({ where: { id: { in: undo.moved.notes } }, data: { leadId: duplicateId } });
+      await tx.task.updateMany({ where: { id: { in: undo.moved.tasks } }, data: { leadId: duplicateId } });
+    } else {
+      const taken = await tx.contact.findUnique({ where: { id: duplicateId }, select: { id: true } });
+      if (taken) throw new MergeError('That record exists again, so this merge has already been undone.');
+      await tx.contact.create({ data: undo.record as never });
+      await tx.opportunity.updateMany({
+        where: { id: { in: undo.moved.opportunities } },
+        data: { contactId: duplicateId },
+      });
+      await tx.activity.updateMany({ where: { id: { in: undo.moved.activities } }, data: { contactId: duplicateId } });
+      await tx.note.updateMany({ where: { id: { in: undo.moved.notes } }, data: { contactId: duplicateId } });
+      await tx.task.updateMany({ where: { id: { in: undo.moved.tasks } }, data: { contactId: duplicateId } });
+      await tx.lead.updateMany({ where: { id: { in: undo.moved.leads } }, data: { contactId: duplicateId } });
+    }
+
+    await tx.duplicateCandidate.update({
+      where: { id: candidateId },
+      data: { status: 'pending', resolvedAt: null, resolvedBy: null },
+    });
+
+    // The pairs the merge closed on the grounds that one side had gone. It has not gone
+    // any more, so they are decisions waiting again rather than settled ones.
+    await tx.duplicateCandidate.updateMany({
+      where: {
+        status: 'dismissed',
+        entityType,
+        dismissReason: 'The other record in this pair was merged away.',
+        OR: [{ primaryId: duplicateId }, { duplicateId }],
+      },
+      data: { status: 'pending', resolvedAt: null, resolvedBy: null, dismissReason: null },
+    });
+  });
+
+  await db().auditEvent.create({
+    data: {
+      actorEmail,
+      action: 'duplicate.merge_undone',
+      entityType,
+      entityId: primaryId,
+      detail: { restored: duplicateId, from: primaryId, candidateId, mergedAt: event.createdAt },
+    },
+  });
+
+  return { restored: duplicateId, primaryId, entityType };
 }
 
 /**
