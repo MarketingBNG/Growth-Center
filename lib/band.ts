@@ -3,7 +3,6 @@ import {
   analyticsKpis,
   crmKpis,
   kpis,
-  leadsByWeekday,
   leadsKpis,
   marketingKpis,
   pipelineKpis,
@@ -41,7 +40,16 @@ export type BandData = {
     data: { date: string; [key: string]: string | number }[];
     series: BandSeries[];
   };
-  weekday: { data: { label: string; value: number }[] };
+  /**
+   * When leads arrive. Only the Leads band carries it.
+   *
+   * Every band used to, so the identical chart rendered on six screens — dashboard, CRM,
+   * pipeline, marketing, analytics and leads — all reading the same figures. Repeating one
+   * answer six times is what made every page feel like it held everything: not the amount
+   * shown, but the same thing shown over and over. It answers a question about leads, so it
+   * lives on the page about leads.
+   */
+  weekday?: { data: { label: string; value: number }[] };
   gauge: { title: string; value: number | null; note?: string; target?: number | null };
 };
 
@@ -106,7 +114,7 @@ export async function leadsBand(spec: number | Range, bucket: 'day' | 'month'): 
 
 export async function crmBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
   const { current } = windowFor(spec);
-  const [{ cards, customerShare: share, weekday }, series] = await Promise.all([
+  const [{ cards, customerShare: share }, series] = await Promise.all([
     crmKpis(spec),
     accountsTrend(current, bucket),
   ]);
@@ -126,7 +134,6 @@ export async function crmBand(spec: number | Range, bucket: 'day' | 'month'): Pr
       data: series,
       series: [{ key: 'accounts', label: 'Accounts', kind: 'number' }],
     },
-    weekday: { data: weekday },
     gauge: {
       title: 'Customer share',
       value: share,
@@ -138,7 +145,7 @@ export async function crmBand(spec: number | Range, bucket: 'day' | 'month'): Pr
 
 export async function pipelineBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
   const { current } = windowFor(spec);
-  const [{ cards, open, winRate: wr, weekday }, series] = await Promise.all([
+  const [{ cards, open, winRate: wr }, series] = await Promise.all([
     pipelineKpis(spec),
     pipelineTrend(current, bucket),
   ]);
@@ -159,7 +166,6 @@ export async function pipelineBand(spec: number | Range, bucket: 'day' | 'month'
       data: series,
       series: [{ key: 'created', label: 'Pipeline created', kind: 'money' }],
     },
-    weekday: { data: weekday },
     gauge: {
       title: 'Win rate',
       value: wr,
@@ -175,7 +181,7 @@ async function readMarketingBand(
   channelId?: string,
 ): Promise<BandData> {
   const { current } = windowFor(spec);
-  const [{ cards, current: f, budgetPacing: pacing, weekday }, series] = await Promise.all([
+  const [{ cards, current: f, budgetPacing: pacing }, series] = await Promise.all([
     marketingKpis(spec, channelId),
     trend(current, bucket, channelId),
   ]);
@@ -197,7 +203,6 @@ async function readMarketingBand(
       data: series,
       series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
     },
-    weekday: { data: weekday },
     gauge: {
       title: 'Budget pacing',
       value: pacing,
@@ -214,7 +219,7 @@ async function readMarketingBand(
 
 async function readAnalyticsBand(spec: number | Range, bucket: 'day' | 'month'): Promise<BandData> {
   const { current } = windowFor(spec);
-  const [{ cards, current: f, weekday }, series, repeat] = await Promise.all([
+  const [{ cards, current: f }, series, repeat] = await Promise.all([
     analyticsKpis(spec),
     trend(current, bucket),
     repeatCustomerRate(),
@@ -238,7 +243,6 @@ async function readAnalyticsBand(spec: number | Range, bucket: 'day' | 'month'):
       data: series,
       series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
     },
-    weekday: { data: weekday },
     gauge: {
       title: 'Repeat customer rate',
       value: repeat,
@@ -257,10 +261,9 @@ export async function dashboardBand(
   bucket: 'day' | 'month',
 ): Promise<{ band: BandData; funnel: Funnel; visitorsFrom: Date | null }> {
   const { current } = windowFor(spec);
-  const [{ cards, current: f }, series, weekday, repeat, sessionsFrom, spendFrom] = await Promise.all([
+  const [{ cards, current: f }, series, repeat, sessionsFrom, spendFrom] = await Promise.all([
     kpis(spec),
     trend(current, bucket),
-    leadsByWeekday(current),
     repeatCustomerRate(),
     sessionsStart(),
     spendStart(),
@@ -338,7 +341,6 @@ export async function dashboardBand(
         data: series,
         series: [{ key: 'revenue', label: 'Revenue', kind: 'money' }],
       },
-      weekday: { data: weekday },
       gauge: {
         title: 'Repeat customer rate',
         value: repeat,
