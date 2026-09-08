@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Share2, TriangleAlert } from 'lucide-react';
 import { Suspense } from 'react';
+import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -113,15 +114,15 @@ async function SocialBody() {
       ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Followers" value={fmtCompact(totals.followers)} />
+        <StatTile label="Followers" value={fmtCompact(totals.followers)} />
         {/* A dash, not a zero: with no posts synced there is nothing that could have
             reached anyone, and 0 claims the posts flopped. */}
-        <Stat
+        <StatTile
           label="Reach"
           value={reported ? fmtCompact(totals.reach) : '—'}
           sub={reported ? `across ${fmtNumber(totals.posts)} posts` : 'no posts synced yet'}
         />
-        <Stat
+        <StatTile
           label="Engagements"
           value={reported ? fmtCompact(totals.engagements) : '—'}
           sub={
@@ -130,7 +131,7 @@ async function SocialBody() {
               : `${fmtPercent(totals.engagementRate, 2)} of reach`
           }
         />
-        <Stat label="Link clicks" value={reported ? fmtCompact(totals.clicks) : '—'} />
+        <StatTile label="Link clicks" value={reported ? fmtCompact(totals.clicks) : '—'} />
       </div>
 
       <div className={`grid gap-4 pb-4 ${reported ? 'lg:grid-cols-2' : ''}`}>
@@ -254,12 +255,3 @@ async function SocialBody() {
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
-      {sub ? <p className="text-[11px] text-muted-foreground">{sub}</p> : null}
-    </div>
-  );
-}

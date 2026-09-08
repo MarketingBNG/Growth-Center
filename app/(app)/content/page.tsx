@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, Columns3, FileText } from 'lucide-react';
+import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
@@ -135,10 +136,10 @@ export default async function ContentPage({
       ) : (
         <>
           <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Published" value={fmtNumber(totals.published)} />
-            <Stat label="Views" value={fmtCompact(totals.views)} />
-            <Stat label="Leads generated" value={fmtNumber(totals.leads)} />
-            <Stat
+            <StatTile label="Published" value={fmtNumber(totals.published)} />
+            <StatTile label="Views" value={fmtCompact(totals.views)} />
+            <StatTile label="Leads generated" value={fmtNumber(totals.leads)} />
+            <StatTile
               label="Leads per 1k views"
               value={totals.leadsPerThousandViews === null ? '—' : totals.leadsPerThousandViews.toFixed(1)}
             />
@@ -341,11 +342,3 @@ function ViewTab({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
-    </div>
-  );
-}

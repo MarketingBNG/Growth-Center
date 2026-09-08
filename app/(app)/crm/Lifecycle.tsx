@@ -39,10 +39,10 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
             </p>
           </CardHeader>
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 pb-3 text-xs sm:grid-cols-4">
-            <Stat label="Median" value={money(value.median)} strong />
-            <Stat label="Mean" value={money(value.mean)} />
-            <Stat label="Lower quartile" value={money(value.p25)} />
-            <Stat label="Upper quartile" value={money(value.p75)} />
+            <Figure label="Median" value={money(value.median)} strong />
+            <Figure label="Mean" value={money(value.mean)} />
+            <Figure label="Lower quartile" value={money(value.p25)} />
+            <Figure label="Upper quartile" value={money(value.p75)} />
           </div>
           {value.meanOverMedian && value.meanOverMedian > 1.5 ? (
             <p className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
@@ -210,7 +210,7 @@ export async function Lifecycle({ canManage }: { canManage: boolean }) {
   );
 }
 
-function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+function Figure({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
     <div>
       <p className="text-[11px] text-muted-foreground">{label}</p>

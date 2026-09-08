@@ -1,4 +1,5 @@
 import { Megaphone } from 'lucide-react';
+import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -132,9 +133,9 @@ export default async function AdsPage({
       ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Spend" value={money(totals.spend)} />
-        <Stat label="Impressions" value={fmtNumber(totals.impressions)} />
-        <Stat
+        <StatTile label="Spend" value={money(totals.spend)} />
+        <StatTile label="Impressions" value={fmtNumber(totals.impressions)} />
+        <StatTile
           label="Clicks"
           value={fmtNumber(totals.clicks)}
           sub={totals.ctr === null ? undefined : `${fmtPercent(totals.ctr, 2)} CTR`}
@@ -145,20 +146,20 @@ export default async function AdsPage({
             cost per click and per thousand impressions — and swap back on their own. */}
         {attributed ? (
           <>
-            <Stat
+            <StatTile
               label="Cost per lead"
               value={totals.costPerLead === null ? '—' : money(totals.costPerLead)}
               sub={`${fmtNumber(totals.leads)} leads`}
             />
-            <Stat label="ROAS" value={totals.roas === null ? '—' : fmtRatio(totals.roas)} />
+            <StatTile label="ROAS" value={totals.roas === null ? '—' : fmtRatio(totals.roas)} />
           </>
         ) : (
           <>
-            <Stat
+            <StatTile
               label="Cost per click"
               value={cpc === null ? '—' : fmtMoney(cpc, true, fx.reporting)}
             />
-            <Stat label="Cost per 1,000 impr." value={cpm === null ? '—' : money(cpm)} />
+            <StatTile label="Cost per 1,000 impr." value={cpm === null ? '—' : money(cpm)} />
           </>
         )}
       </div>
@@ -260,14 +261,3 @@ export default async function AdsPage({
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4">
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="pt-1 text-xl font-bold tracking-tight tnum">{value}</p>
-      {sub ? <p className="text-[11px] text-muted-foreground">{sub}</p> : null}
-    </div>
-  );
-}

@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { Search, TriangleAlert } from 'lucide-react';
+import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { PageSkeleton } from '@/components/patterns/page-skeleton';
 import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
@@ -174,11 +175,11 @@ async function SeoBody({
       ) : null}
 
       <div className="grid gap-3 pb-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Top 3" value={fmtNumber(totals.inTop3)} sub={`of ${fmtNumber(totals.keywords)} tracked`} />
-        <Stat label="Top 10" value={fmtNumber(totals.inTop10)} />
-        <Stat label="Clicks" value={fmtNumber(period.clicks)} sub={`${fmtPercent(period.ctr, 2)} CTR · ${period.note}`} />
-        <Stat label="Impressions" value={fmtNumber(period.impressions)} sub={period.note} />
-        <Stat
+        <StatTile label="Top 3" value={fmtNumber(totals.inTop3)} sub={`of ${fmtNumber(totals.keywords)} tracked`} />
+        <StatTile label="Top 10" value={fmtNumber(totals.inTop10)} />
+        <StatTile label="Clicks" value={fmtNumber(period.clicks)} sub={`${fmtPercent(period.ctr, 2)} CTR · ${period.note}`} />
+        <StatTile label="Impressions" value={fmtNumber(period.impressions)} sub={period.note} />
+        <StatTile
           label="Movement"
           value={`${totals.improved} up`}
           sub={`${totals.declined} down of ${fmtNumber(totals.compared)} with a prior reading`}
@@ -383,15 +384,6 @@ async function SeoBody({
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-xl border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="pt-1 text-2xl font-semibold tracking-tight tnum">{value}</p>
-      {sub ? <p className="text-[11px] text-muted-foreground">{sub}</p> : null}
-    </div>
-  );
-}
 
 
 /**
