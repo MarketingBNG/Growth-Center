@@ -1,12 +1,13 @@
 import { db } from './prisma.ts';
 import { OPEN_DEAL } from './pipeline.ts';
 import { convert, symbolOf, type CurrencySettings } from './currency.ts';
+import { fmtRatio } from './format.ts';
 import { currencySettings } from './settings.ts';
 import { channelPerformance, funnel, openPipeline, windowFor, type Range } from './metrics.ts';
 import { WEB_LEAD_BASIS } from './web-leads.ts';
 import { campaignPerformance, campaignTotals } from './campaigns.ts';
 import { leadSourceLabel } from './integrations/crm-mapping.ts';
-import { fairShare } from './calc.ts';
+import { fairShare, rate } from './calc.ts';
 import { insightHealth } from './insight-health.ts';
 import { speedToLead } from './speed-to-lead.ts';
 import { thresholds } from './settings.ts';
@@ -77,8 +78,15 @@ export type Report = { id: ReportId; name: string; range: Range; sections: Secti
 const moneyIn = (settings: CurrencySettings) => (n: number | null) =>
   n === null ? '—' : `${symbolOf(settings.reporting)}${Math.round(n).toLocaleString('en-US')}`;
 const int = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
+// Not fmtPercent from lib/format.ts: that picks its own precision (2 places under 1%,
+// otherwise 1), and every call site here already names the precision it wants — a report
+// is printed once and read cold, without the adaptive rounding a live screen benefits
+// from. int and moneyIn diverge from fmtNumber/fmtMoney the same way, for the same
+// reporting-currency and no-decimals reasons documented where they are used.
 const pct = (n: number | null, d = 1) => (n === null ? '—' : `${n.toFixed(d)}%`);
-const ratio = (n: number | null) => (n === null ? '—' : `${n.toFixed(2)}×`);
+// fmtRatio from lib/format.ts is the same rendering — "n.toFixed(2)×", "—" for null — so
+// this reuses it rather than keeping a second copy.
+const ratio = fmtRatio;
 
 /** Worst first. Shared with the digest so the pack and the email agree about order. */
 const SEVERITY_RANK = ['critical', 'high', 'medium', 'info'];
@@ -180,7 +188,7 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
 
     const prospectTotal = prospects.reduce((n, r) => n + r._count._all, 0);
     const byStatus = (name: string) => prospects.find((r) => r.status === name)?._count._all ?? 0;
-    const rateOf = (n: number) => (prospectTotal === 0 ? null : (n / prospectTotal) * 100);
+    const rateOf = (n: number) => rate(n, prospectTotal);
 
     const age = (h: number) => (h < 48 ? `${Math.round(h)}h` : `${Math.round(h / 24)}d`);
 

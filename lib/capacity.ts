@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { z } from 'zod';
 import { Prisma } from './generated/prisma/client.ts';
+import { rate } from './calc.ts';
 
 // §6.2: "Add a Delivery capacity card: open consultations against capacity, fed by Zoho
 // Projects or a monthly manual input from Simran/Kanishka."
@@ -132,7 +133,9 @@ export async function deliveryCapacity(now = new Date()): Promise<Capacity> {
     booked,
     openDeliveryTasks: openTasks,
     deliveryPeople: people,
-    utilisation: ceiling === null || ceiling === 0 ? null : (booked / ceiling) * 100,
+    // rate() already returns null for a zero ceiling; the null check here is only for
+    // "nobody has set one" — a ceiling that is a number, including zero, is a real answer.
+    utilisation: ceiling === null ? null : rate(booked, ceiling),
     over: ceiling !== null && ceiling > 0 && booked > ceiling,
     month: { from, to },
   };

@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { CONTACT_TYPES } from './metrics.ts';
 import { thresholds } from './settings.ts';
+import { rate } from './calc.ts';
 import type { Range } from './metrics.ts';
 
 // §7.5: "Owner scorecard: leads received, touched within SLA, semi-qualified rate,
@@ -35,8 +36,6 @@ export type OwnerRow = {
    *  cannot be settled without both on the same row. */
   medianScore: number | null;
 };
-
-const rate = (n: number, d: number): number | null => (d === 0 ? null : (n / d) * 100);
 
 /**
  * One row per owner over the period.

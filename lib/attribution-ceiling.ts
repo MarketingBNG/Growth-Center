@@ -1,7 +1,7 @@
 import { db } from './prisma.ts';
 import { convert } from './currency.ts';
 import { currencySettings } from './settings.ts';
-import { num } from './calc.ts';
+import { num, rate } from './calc.ts';
 import { TAGS, cached } from './cache.ts';
 
 /**
@@ -138,7 +138,7 @@ async function readCeiling(from: Date, to: Date): Promise<AttributionCeiling> {
     attributed,
     inferable,
     unreachable: total - attributed - inferable,
-    ceilingPercent: total === 0 ? null : ((attributed + inferable) / total) * 100,
+    ceilingPercent: rate(attributed + inferable, total),
     currency: fx.reporting,
   };
 }
