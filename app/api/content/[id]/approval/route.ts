@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { ApprovalError, approveContent, returnContent } from '@/lib/content';
+import { approveContent, returnContent } from '@/lib/content';
 
 // Approving a content piece, or sending it back. §21.2.
 //
@@ -27,15 +27,12 @@ export const POST = route<unknown, Ctx>('approve', async (user, req, ctx) => {
     ]),
   );
 
-  try {
-    const result =
-      input.decision === 'approve'
-        ? await approveContent(id, user.email)
-        : await returnContent(id, input.note, user.email);
-    if (!result) throw new HttpError(404, 'Content piece not found');
-    return result;
-  } catch (e) {
-    if (e instanceof ApprovalError) throw new HttpError(422, e.message);
-    throw e;
-  }
+  // ApprovalError becomes a 422 in lib/api.ts's route(): approving or returning a piece
+  // that is not awaiting approval is a refusal, not a server fault.
+  const result =
+    input.decision === 'approve'
+      ? await approveContent(id, user.email)
+      : await returnContent(id, input.note, user.email);
+  if (!result) throw new HttpError(404, 'Content piece not found');
+  return result;
 });

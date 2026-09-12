@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { APPROVAL_STATE, INSIGHT_STATUSES } from '@/lib/insight-lifecycle';
-import { TransitionError, setInsightStatus } from '@/lib/insight-actions';
+import { setInsightStatus } from '@/lib/insight-actions';
 import { can } from '@/lib/roles';
 
 // Moving a finding through its lifecycle: proposed → reviewed → approved → assigned →
@@ -34,18 +34,14 @@ export const PATCH = route<unknown, Ctx>('ai:run', async (user, req, ctx) => {
     throw new HttpError(403, 'Only the approver can sign a finding off.');
   }
 
-  try {
-    const result = await setInsightStatus(
-      id,
-      { to: input.status, ownerEmail: input.ownerEmail, reviewNote: input.reviewNote },
-      user.email,
-    );
-    if (!result) throw new HttpError(404, 'No such insight.');
-    return result;
-  } catch (e) {
-    // 422, not 500: a refused transition is the domain working. The message is the one
-    // the rule wrote, because it says which requirement was missed.
-    if (e instanceof TransitionError) throw new HttpError(422, e.message);
-    throw e;
-  }
+  // TransitionError becomes a 422 in lib/api.ts's route(): a refused transition is the
+  // domain working, and the message is the one the rule wrote — it says which
+  // requirement was missed.
+  const result = await setInsightStatus(
+    id,
+    { to: input.status, ownerEmail: input.ownerEmail, reviewNote: input.reviewNote },
+    user.email,
+  );
+  if (!result) throw new HttpError(404, 'No such insight.');
+  return result;
 });

@@ -2,7 +2,25 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { HttpError, requirePermission, requireUser, type CurrentUser } from './auth.ts';
 import { IntegrationError } from './integrations/types.ts';
+import { BudgetError } from './budget.ts';
+import { ApprovalError, WorkflowError } from './content.ts';
+import { MergeError } from './duplicate-queue.ts';
+import { TransitionError } from './insight-actions.ts';
+import { IneligibleError } from './outreach.ts';
 import type { Permission } from './roles.ts';
+
+/**
+ * Domain rules that reject a write are a 422 wherever they are thrown — the caller asked
+ * for something the business rules refuse, not something the server failed at. Registered
+ * here so a route does not need a try/catch that exists only to restate that; six routes
+ * used to.
+ *
+ * IntegrationError is deliberately not here: it maps to 502 below, because there the
+ * vendor is refusing us rather than us refusing the caller. Four integration routes remap
+ * it to 422 locally instead, because there the vendor is rejecting the caller's own input
+ * — see the comment in each of those routes.
+ */
+const DOMAIN_422 = [BudgetError, ApprovalError, WorkflowError, MergeError, TransitionError, IneligibleError];
 
 // The pure list/pagination contract lives in list-query.ts so it can be unit-tested
 // without next/server. Re-exported here because 22 route handlers import it from
@@ -38,6 +56,9 @@ export function route<T, C = unknown>(
     } catch (e) {
       if (e instanceof HttpError) return fail(e.status, e.message);
       if (e instanceof z.ZodError) return fail(422, 'Invalid input', z.treeifyError(e));
+      for (const Domain of DOMAIN_422) {
+        if (e instanceof Domain) return fail(422, e.message);
+      }
       // A vendor refusing a write is not our bug, and its message is the only thing that
       // tells the person what to do about it — "Unexpected error" would hide the one
       // sentence that matters, which is usually "reconnect the integration".

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { IneligibleError, signOffSequence } from '@/lib/outreach';
+import { signOffSequence } from '@/lib/outreach';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -24,14 +24,9 @@ export const POST = route<unknown, Ctx>('approve', async (user, req, ctx) => {
   const { id } = await ctx.params;
   const { kind, granted } = await body(req, input);
 
-  try {
-    const result = await signOffSequence(id, kind, granted, user.email);
-    if (!result) throw new HttpError(404, 'Sequence not found');
-    return result;
-  } catch (e) {
-    // A refusal to sign a template that still has placeholders in it is a message for the
-    // person, not a server fault.
-    if (e instanceof IneligibleError) throw new HttpError(422, e.message);
-    throw e;
-  }
+  // IneligibleError becomes a 422 in lib/api.ts's route(): a refusal to sign a template
+  // that still has placeholders in it is a message for the person, not a server fault.
+  const result = await signOffSequence(id, kind, granted, user.email);
+  if (!result) throw new HttpError(404, 'Sequence not found');
+  return result;
 });
