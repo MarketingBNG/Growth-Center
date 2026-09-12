@@ -13,6 +13,7 @@ import {
   rateAgeHours,
   type CurrencySettings as Settings,
 } from '@/lib/currency';
+import { ErrorText } from '@/components/patterns/state';
 import { useApiAction } from '@/lib/use-api-action';
 
 /**
@@ -170,7 +171,7 @@ export function CurrencySettings({ initial }: { initial: Settings }) {
         </p>
       ) : null}
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       {saved && !error ? (
         <p className="text-xs text-success">Saved. Figures across the app now use it.</p>
       ) : null}

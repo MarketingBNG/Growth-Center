@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 // Each run replaces the whole saved set, so the label says "Regenerate" once there is
@@ -64,11 +65,7 @@ export function GenerateInsightsButton({
         </p>
       ) : null}
 
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { hasEncryptionKey } from '@/lib/crypto';
 import { cards } from '@/lib/integrations/service';
 import { can } from '@/lib/roles';
 import { currentUser } from '@/lib/auth';
+import { ErrorBanner } from '@/components/patterns/state';
 import { IntegrationGrid } from './IntegrationGrid';
 import { SyncHealth } from './SyncHealth';
 
@@ -52,18 +53,17 @@ export default async function IntegrationsPage({
       />
 
       {!hasEncryptionKey() ? (
-        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+        <ErrorBanner className="mb-4 rounded-lg py-2.5">
           <span className="font-mono">APP_ENCRYPTION_KEY</span> is not set, so credentials cannot be
           stored safely. Nothing can be connected until it is — generate one with{' '}
           <span className="font-mono">openssl rand -hex 32</span>.
-        </div>
+        </ErrorBanner>
       ) : null}
 
-      {typeof params.error === 'string' ? (
-        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
-          {params.error}
-        </div>
-      ) : null}
+      <ErrorBanner
+        error={typeof params.error === 'string' ? params.error : null}
+        className="mb-4 rounded-lg py-2.5"
+      />
       {typeof params.connected === 'string' ? (
         <div className="mb-4 rounded-lg border border-success/30 bg-success/10 px-3 py-2.5 text-xs text-success">
           {params.connected} connected. Run a sync to pull its data in.

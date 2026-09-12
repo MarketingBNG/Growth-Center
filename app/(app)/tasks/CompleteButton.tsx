@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Check, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 /**
@@ -39,9 +40,12 @@ export function CompleteButton({ taskId, done = false }: { taskId: string; done?
           <Check /> {busy ? 'Saving…' : 'Done'}
         </Button>
       )}
-      {error ? (
-        <span className="max-w-56 text-right text-meta leading-snug text-destructive">{error}</span>
-      ) : null}
+      <ErrorText
+        error={error}
+        as="span"
+        size="meta"
+        className="max-w-56 text-right leading-snug"
+      />
     </span>
   );
 }

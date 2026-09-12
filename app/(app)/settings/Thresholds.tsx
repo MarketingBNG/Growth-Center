@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { THRESHOLDS, type ThresholdKey, type Thresholds as Values } from '@/lib/thresholds';
 
 /**
@@ -91,7 +92,7 @@ export function Thresholds({ initial }: { initial: Values }) {
         );
       })}
 
-      {error ? <p className="text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" />
     </div>
   );
 }

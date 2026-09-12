@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { CONTENT_STATUSES } from '@/lib/enums';
 import { safeUrl } from '@/lib/format';
 
@@ -177,7 +178,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
           </a>
         ) : null}
       </div>
-      {error ? <p className="mt-1 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-1" />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 
 /**
  * Who the Growth Center's queue is for.
@@ -113,11 +114,7 @@ export function MarketingRoster({ initial }: { initial: string[] }) {
       </div>
 
       {note ? <p className="text-meta text-muted-foreground">{note}</p> : null}
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

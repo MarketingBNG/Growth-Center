@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insight-owners';
 
 /**
@@ -67,11 +68,7 @@ export function InsightOwners({
           </select>
         </div>
       ))}
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

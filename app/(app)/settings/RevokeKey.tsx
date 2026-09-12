@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 /**
@@ -38,7 +39,7 @@ export function RevokeKey({ id, name }: { id: string; name: string }) {
         description="Any form still using this key stops submitting immediately. This cannot be undone — issue a new key instead."
       >
         <div className="space-y-3">
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
               Cancel

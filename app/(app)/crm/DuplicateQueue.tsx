@@ -6,6 +6,7 @@ import { Copy, Search, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 import { fmtRelative } from '@/lib/format';
 import type { QueueRow } from '@/lib/duplicate-queue';
 import { useApiAction } from '@/lib/use-api-action';
@@ -77,11 +78,7 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
         ) : null}
       </CardHeader>
 
-      {error ? (
-        <div className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <ErrorBanner error={error} className="mx-4 mb-3 rounded-lg" />
 
       {/* Sits where the merged row was, so the offer is where the eye already is. It says
           what happened before it offers to reverse it: "Undo" alone leaves somebody

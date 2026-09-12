@@ -15,6 +15,7 @@ import { api } from '@/lib/fetcher';
 import { fmtDate, fmtMoney, fmtNumber } from '@/lib/format';
 import { DEMO_SOURCE } from '@/lib/sources';
 import { ProgressLink } from '@/components/NavProgress';
+import { ErrorBanner, ErrorText } from '@/components/patterns/state';
 
 /** Assigned by column position rather than by stage name, so a renamed or added stage
  *  still gets a colour instead of falling back to nothing. */
@@ -144,11 +145,10 @@ function Board({ columns, currency }: { columns: Column[]; currency?: string }) 
 
   return (
     <>
-      {error ? (
-        <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Could not move that deal: {error}
-        </p>
-      ) : null}
+      <ErrorBanner
+        error={error ? `Could not move that deal: ${error}` : null}
+        className="mb-3"
+      />
 
       {/* One row that scrolls sideways, not a wrapping grid. Six stages in a four-column
           grid put Won and Lost on a second line underneath Open and Qualified, so the
@@ -321,7 +321,7 @@ function StageSelect({
           </option>
         ))}
       </Select>
-      {error ? <span className="text-meta text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" size="meta" />
     </span>
   );
 }

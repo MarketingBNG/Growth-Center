@@ -17,6 +17,7 @@ import {
   slotToInput,
 } from '@/lib/content-fields';
 import { COMPANY_SEGMENTS } from '@/lib/company-facts';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export type EditablePiece = {
@@ -226,7 +227,7 @@ export function EditPieceModal({
           <Input name="tags" defaultValue={piece.tags.join(', ')} />
         </Field>
 
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <ErrorText error={error} />
 
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>

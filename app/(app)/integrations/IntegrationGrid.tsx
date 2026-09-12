@@ -11,6 +11,7 @@ import { StateBadge } from '@/components/patterns/integration-state';
 import { api } from '@/lib/fetcher';
 import { fmtNumber, fmtRelative } from '@/lib/format';
 import type { Card as IntegrationCard } from '@/lib/integrations/service';
+import { ErrorBanner, ErrorText } from '@/components/patterns/state';
 import { useApiAction } from '@/lib/use-api-action';
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -319,12 +320,12 @@ function ProviderCard({
       ) : null}
 
       {lastError ? (
-        <p className="mt-3 rounded-md border border-destructive/30 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
+        <ErrorBanner tone="compact" className="mt-3 rounded-md py-1.5">
           {lastError}
           {card.lastErrorAt ? (
             <span className="block opacity-70">{fmtRelative(card.lastErrorAt)}</span>
           ) : null}
-        </p>
+        </ErrorBanner>
       ) : null}
 
       {card.hasCredential && card.credentialExpiresInDays !== null
@@ -361,7 +362,7 @@ function ProviderCard({
         </div>
       ) : null}
 
-      {error ? <p className="mt-3 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-3" />
       {spinning && !error ? (
         <p className="mt-3 text-meta text-muted-foreground">
           {progress ?? 'Syncing. This carries on if you close the tab.'}
@@ -450,7 +451,7 @@ function ProviderCard({
               <Input name={f.name} required={f.required} placeholder={f.placeholder} />
             </Field>
           ))}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setKeyModal(false)}>
               Cancel
@@ -479,7 +480,7 @@ function ProviderCard({
               />
             </Field>
           ))}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setSettingsModal(false)}>
               Cancel

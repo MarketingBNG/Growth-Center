@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 import { AnswerText } from '@/components/patterns/answer-text';
 import { AI_KEY_ENV, SUGGESTED_QUESTIONS } from '@/lib/enums';
 
@@ -90,11 +91,7 @@ export function AskBox({ configured }: { configured: boolean }) {
           ))}
         </div>
 
-        {error ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        ) : null}
+        <ErrorBanner error={error} />
 
         {answer ? (
           <div className="rounded-md border border-border bg-secondary/30 px-3 py-2.5">

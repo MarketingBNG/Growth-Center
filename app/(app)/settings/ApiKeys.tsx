@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function ApiKeys() {
@@ -84,7 +85,7 @@ export function ApiKeys() {
             <Field label="Name" required>
               <Input name="name" required autoFocus maxLength={80} placeholder="usaindiacfo.com contact form" />
             </Field>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            <ErrorText error={error} />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={close}>Cancel</Button>
               <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create key'}</Button>

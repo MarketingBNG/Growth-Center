@@ -4,6 +4,7 @@ import { signIn } from 'next-auth/react';
 import { TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ErrorBanner } from '@/components/patterns/state';
 import { ALLOWED_DOMAINS } from '@/lib/roles';
 
 /** AccessDenied is what the roster check returns for a valid Google account that is
@@ -42,11 +43,7 @@ export function SignInCard({
             </div>
           </div>
 
-          {msg ? (
-            <p className="mb-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {msg}
-            </p>
-          ) : null}
+          <ErrorBanner error={msg} className="mb-4" />
 
           {configured ? (
             <Button className="w-full" onClick={() => signIn('google', { callbackUrl: returnTo })}>

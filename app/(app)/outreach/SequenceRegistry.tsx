@@ -9,6 +9,7 @@ import { Select } from '@/components/ui/select';
 import { api } from '@/lib/fetcher';
 import { PURPOSE_LABELS, SEQUENCE_PURPOSES } from '@/lib/outreach-approval';
 import { fmtDate } from '@/lib/format';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 type SignOffView =
@@ -153,7 +154,7 @@ export function SequenceRegistry({
         />
       </div>
 
-      {error ? <p className="mt-2 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-2" />
     </div>
   );
 }

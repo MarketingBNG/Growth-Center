@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NoteBox(parent: {
@@ -35,7 +36,7 @@ export function NoteBox(parent: {
         placeholder="Add a note…"
         rows={2}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       <div className="flex justify-end">
         <Button type="submit" size="sm" variant="secondary" disabled={busy || !body.trim()}>
           {busy ? 'Saving…' : 'Add note'}

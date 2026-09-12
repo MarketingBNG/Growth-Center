@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 type Summary = {
@@ -103,7 +104,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
             </label>
           ) : null}
 
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
 
           {summary ? (
             <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-2.5 text-meta">

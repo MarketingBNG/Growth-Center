@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
@@ -106,11 +107,7 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
             </>
           )}
 
-          {error ? (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
+          <ErrorBanner error={error} />
 
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>

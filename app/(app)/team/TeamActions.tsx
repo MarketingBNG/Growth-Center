@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function TeamActions({
@@ -67,14 +68,14 @@ export function TeamActions({
         >
           Cancel
         </Button>
-        {error ? <span className="text-xs text-destructive">{error}</span> : null}
+        <ErrorText error={error} as="span" />
       </form>
     );
   }
 
   return (
     <span className="inline-flex items-center justify-end gap-2">
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
 
       {/* A shared mailbox has its name pinned in lib/roles.ts. A person does not. */}
       {namePinned ? null : (

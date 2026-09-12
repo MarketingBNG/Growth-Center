@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
 import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content-fields';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NewContentButton() {
@@ -63,7 +64,7 @@ export function NewContentButton() {
           <Field label="Brief">
             <Textarea name="brief" rows={3} maxLength={MAX_BRIEF} />
           </Field>
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create'}</Button>

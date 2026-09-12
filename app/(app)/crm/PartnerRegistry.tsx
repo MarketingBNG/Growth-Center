@@ -6,7 +6,7 @@ import { Handshake, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { EmptyState } from '@/components/patterns/state';
+import { EmptyState, ErrorBanner } from '@/components/patterns/state';
 import { api } from '@/lib/fetcher';
 import { fmtNumber, fmtRelative } from '@/lib/format';
 // From referral-types, not referrals: the latter imports lib/prisma, and a value read
@@ -67,11 +67,7 @@ export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[
         ) : null}
       </CardHeader>
 
-      {error ? (
-        <div className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <ErrorBanner error={error} className="mx-4 mb-3 rounded-lg" />
 
       {adding ? (
         <div className="flex flex-wrap items-end gap-2 border-t border-border px-4 py-3">

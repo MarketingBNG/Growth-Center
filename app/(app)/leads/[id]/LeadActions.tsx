@@ -7,6 +7,7 @@ import { Input, Select } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { LEAD_STATUSES } from '@/lib/enums';
 
 export function LeadActions({
@@ -72,7 +73,7 @@ export function LeadActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
 
       {/* Options come from the page, not from the workspace roster alone. Built from the
           roster the dropdown offered only the two people with accounts here, so for

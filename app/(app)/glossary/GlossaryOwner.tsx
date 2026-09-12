@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 
 /**
  * The owner of one definition.
@@ -64,7 +65,7 @@ export function GlossaryOwner({
         className="h-7 w-40 text-xs"
       />
       {error ? (
-        <span className="text-meta text-destructive">{error}</span>
+        <ErrorText error={error} as="span" size="meta" />
       ) : isDefault ? (
         <span className="text-meta text-muted-foreground/70">from the manual</span>
       ) : null}

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Select } from '@/components/ui/select';
 import { api } from '@/lib/fetcher';
 import { ROLES, canAdminister, type Role } from '@/lib/roles';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 /**
@@ -65,7 +66,7 @@ export function RoleSelect({
           </option>
         ))}
       </Select>
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
     </span>
   );
 }

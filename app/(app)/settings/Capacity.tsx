@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
 import type { CapacitySetting } from '@/lib/capacity';
+import { ErrorText } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 
 // §6.2's monthly manual input.
@@ -69,7 +70,7 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
         </Button>
       </div>
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       {saved ? <p className="text-xs text-success">Saved and recorded in the activity log.</p> : null}
 
       <p className="text-meta text-muted-foreground">

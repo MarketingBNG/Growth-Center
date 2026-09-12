@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import {
   APPROVAL_STATE,
   STATUS_LABELS,
@@ -145,7 +146,7 @@ export function InsightAction({
         </>
       )}
 
-      {error ? <p className="basis-full text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="basis-full" />
     </div>
   );
 }

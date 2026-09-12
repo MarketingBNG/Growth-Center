@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 import { cn } from '@/lib/utils';
 
 /**
@@ -81,7 +82,7 @@ export function AiAssistantCard({ configured }: { configured: boolean }) {
           {answer}
         </p>
       ) : null}
-      {error ? <p className="mt-3 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-3" />
 
       <form
         onSubmit={(e) => {

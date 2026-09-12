@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 
 /**
  * §22's budget envelope: what the firm decided to spend on each channel this quarter,
@@ -166,7 +167,7 @@ export function BudgetEnvelopes({
           ))}
         </div>
 
-        {error ? <p className="text-meta text-destructive">{error}</p> : null}
+        <ErrorText error={error} size="meta" />
       </CardHeader>
     </Card>
   );
