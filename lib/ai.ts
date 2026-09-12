@@ -6,7 +6,6 @@ import { AI_KEY_ENV } from './enums.ts';
 import { MAX_TOOL_ROUNDS, READ_TOOLS, TABLES, canRead, runReadTool } from './ai-tools.ts';
 import { channelPerformance, funnel, openPipeline, rangeFor } from './metrics.ts';
 import { campaignPerformance } from './campaigns.ts';
-import { num } from './calc.ts';
 import { ownerWorkload } from './allocation.ts';
 import { symbolOf } from './currency.ts';
 import { createHash } from 'node:crypto';
@@ -444,8 +443,6 @@ export function ruleFindings(ctx: GrowthContext) {
 
   return findings;
 }
-
-export const asNumber = num;
 
 // ── generated insights ────────────────────────────────────────────────────────
 //

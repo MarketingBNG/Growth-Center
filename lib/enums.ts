@@ -15,7 +15,6 @@ export const SOURCE_TYPES = [
 ] as const;
 
 export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as const;
-export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 /**
  * §15.3, in order: "Idea -> Brief -> Draft -> Technical check -> Proofread and brand ->
  * Partner approval -> Scheduled -> Published -> Repurposed."

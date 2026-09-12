@@ -321,30 +321,6 @@ export async function logDelivery(entry: {
 }
 
 /**
- * The recent delivery history. §17.
- *
- * **Not proof of reading.** SMTP reports that a server accepted the message and a webhook
- * reports that Cliq accepted it. Open tracking needs an ESP that reports opens, which
- * neither of these is — so there is no `openedAt` here to be permanently null.
- */
-export async function deliveryHistory(take = 30) {
-  return db().reportDelivery.findMany({
-    orderBy: { sentAt: 'desc' },
-    take,
-    select: {
-      id: true,
-      report: true,
-      channel: true,
-      recipient: true,
-      status: true,
-      error: true,
-      itemCount: true,
-      sentAt: true,
-    },
-  });
-}
-
-/**
  * Builds and sends. One message per recipient rather than one with everybody on it, so a
  * bounce for one address does not take the others with it.
  */

@@ -105,15 +105,6 @@ export const symbolOf = (code: string): string =>
   CURRENCIES.find((c) => c.code === code)?.symbol ?? `${code} `;
 
 /**
- * The rate the other way round, for display.
- *
- * Rates are stored as units-per-reporting-unit because that is what the arithmetic wants,
- * but "0.0105 dollars per rupee" is not how anyone says it. The settings form shows both.
- */
-export const inverseRate = (rate: number): number | null =>
-  Number.isFinite(rate) && rate > 0 ? 1 / rate : null;
-
-/**
  * An amount in `from`, expressed in the reporting currency.
  *
  * Returns null rather than a guess when the currency has no rate: a figure the workspace

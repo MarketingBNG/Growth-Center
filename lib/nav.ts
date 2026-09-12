@@ -59,7 +59,3 @@ export const NAV: NavSection[] = [
     items: [{ label: 'Tasks', href: '/tasks', icon: 'CircleCheck' }],
   },
 ];
-
-/** Everything reachable, including the account menu — so a future search or command
- *  palette can still find Settings even though the sidebar no longer lists it. */
-export const ALL_NAV_ITEMS = [...NAV.flatMap((s) => s.items), ...ACCOUNT_NAV];

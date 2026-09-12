@@ -95,18 +95,6 @@ export const CONTENT_TYPES = [
 ] as const;
 export type ContentType = (typeof CONTENT_TYPES)[number];
 
-export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
-  blog: 'Blog',
-  post: 'Post',
-  carousel: 'Carousel',
-  short: 'Short',
-  long_video: 'Long video',
-  avatar_video: 'Avatar video',
-  webinar: 'Webinar',
-  newsletter: 'Newsletter',
-  partner_kit: 'Partner kit',
-};
-
 /**
  * The service lines the firm sells, read off the source strings its own CRM records.
  *
@@ -126,16 +114,6 @@ export const SERVICE_LINES = [
 ] as const;
 export type ServiceLine = (typeof SERVICE_LINES)[number];
 
-export const SERVICE_LINE_LABELS: Record<ServiceLine, string> = {
-  incorporation: 'US incorporation',
-  virtual_cfo: 'Virtual CFO',
-  compliance: 'Compliance and tax',
-  trademark: 'Trademark',
-  canada_setup: 'Canada setup',
-  bookkeeping: 'Bookkeeping',
-  other: 'Other',
-};
-
 /**
  * Topic clusters, which are an SEO structure rather than a commercial one.
  *
@@ -154,16 +132,6 @@ export const TOPIC_CLUSTERS = [
   'firm_and_people',
 ] as const;
 export type TopicCluster = (typeof TOPIC_CLUSTERS)[number];
-
-export const TOPIC_CLUSTER_LABELS: Record<TopicCluster, string> = {
-  us_entity_formation: 'US entity formation',
-  us_tax_compliance: 'US tax and compliance',
-  banking_and_payments: 'Banking and payments',
-  fundraising: 'Fundraising',
-  cross_border_operations: 'Cross-border operations',
-  india_compliance: 'India compliance',
-  firm_and_people: 'The firm and its people',
-};
 
 /**
  * Systems that create content items on their own. §15.4.

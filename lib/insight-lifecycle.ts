@@ -84,13 +84,6 @@ export function isOpen(status: InsightStatus): boolean {
   return status !== 'done' && status !== 'dismissed';
 }
 
-/** Waiting on a person to sign it: reviewed by the first-line reviewer and not yet
- *  approved. The queue §12.1 puts in front of Shweta each morning. */
-export function awaitingApproval(status: InsightStatus): boolean {
-  return status === 'reviewed';
-}
-
-
 /**
  * What a move to this state additionally requires.
  *

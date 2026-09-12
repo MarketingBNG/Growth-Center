@@ -18,13 +18,6 @@ import { suppressionCheck } from './suppression.ts';
 
 export type Decision = 'approve' | 'return' | 'escalate' | 'hold';
 
-export const DECISION_LABELS: Record<Decision, string> = {
-  approve: 'Approve',
-  return: 'Return',
-  escalate: 'Escalate to the CA/CPA reviewer',
-  hold: 'Hold',
-};
-
 export type CardSection = {
   /** §21.2's reading order, 1 to 5. Kept as a number because the order is the point: the
    *  first section can end the review, so nothing below it is worth reading yet. */

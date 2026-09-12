@@ -102,12 +102,6 @@ export function parseDealName(rawName: string | null | undefined): ParsedDealNam
   };
 }
 
-export const ORIGIN_LABELS: Record<DealOrigin, string> = {
-  new: 'New business',
-  repeat: 'Repeat business',
-  unknown: 'Unclassified',
-};
-
 export const ENGAGEMENT_LABELS: Record<EngagementType, string> = {
   one_time: 'One-off',
   retainer: 'Retainer',

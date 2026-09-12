@@ -106,12 +106,6 @@ export function fmtDaysAgo(d: Date | string | null | undefined): string {
   return fmtDate(date);
 }
 
-/** Percentage change, or null when there is no baseline to compare against. */
-export function delta(current: number, previous: number): number | null {
-  if (!previous) return null;
-  return ((current - previous) / previous) * 100;
-}
-
 /** A span of hours as "3h 12m" — the shape an operations number wants. Sub-hour spans
  *  drop to minutes so a 12-minute median does not render as "0h 12m". */
 export function fmtDuration(hours: number | null | undefined): string {

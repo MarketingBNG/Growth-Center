@@ -62,13 +62,6 @@ export function resolveAttribution(
   return { slug, confidence: reported ? 'reported' : 'inferred' };
 }
 
-/** The confidences a channel ranking may be built on without qualification. */
-export const TRUSTED_ATTRIBUTION: readonly AttributionConfidence[] = ['reported'];
-
-export function isReported(confidence: string | null | undefined): boolean {
-  return confidence === 'reported';
-}
-
 /**
  * A deal's confidence, which is not a deal's own property.
  *

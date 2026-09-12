@@ -174,7 +174,3 @@ export async function applyHistoryOrigins(
   return verdicts.length;
 }
 
-export const ORIGIN_SOURCE_LABELS: Record<OriginSource, string> = {
-  name: 'from the deal name',
-  'account-history': 'inferred from account history',
-};
