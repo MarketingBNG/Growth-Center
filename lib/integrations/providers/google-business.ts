@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
 // Google Business Profile — the listing, what people did with it, and what they said.
 //
@@ -23,7 +24,6 @@ import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoi
 // Reviews live on a fourth, older host that needs its own approval, so they are not read
 // here — see the note on `provides`.
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const ACCOUNTS_API = 'https://mybusinessaccountmanagement.googleapis.com/v1';
 const INFO_API = 'https://mybusinessbusinessinformation.googleapis.com/v1';
 const PERFORMANCE_API = 'https://businessprofileperformance.googleapis.com/v1';
@@ -50,26 +50,6 @@ const METRICS: Record<string, string> = {
 
 type Stored = { refreshToken: string };
 type Json = Record<string, unknown>;
-
-async function accessToken(refreshToken: string): Promise<string> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-    signal: httpTimeout(),
-  });
-  if (!res.ok) {
-    throw new IntegrationError(`Google rejected the refresh token (${res.status}). Reconnect the integration.`);
-  }
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new IntegrationError('Google returned no access token.');
-  return json.access_token;
-}
 
 /**
  * A 403 from these APIs almost never means the OAuth is wrong.
@@ -196,55 +176,28 @@ export const googleBusiness: IntegrationProvider = {
   },
 
   getAuthUrl(redirectUri, state) {
-    const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPE,
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    return googleAuthUrl(SCOPE, redirectUri, state);
   },
 
   async connect(input) {
     if (input.kind !== 'oauth2') throw new IntegrationError('Google Business Profile uses OAuth.');
-
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        code: input.code,
-        redirect_uri: input.redirectUri,
-        grant_type: 'authorization_code',
-      }),
-      signal: httpTimeout(),
-    });
-    if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
-
-    const json = (await res.json()) as { refresh_token?: string };
-    if (!json.refresh_token) {
-      throw new IntegrationError('Google returned no refresh token. Revoke access and reconnect.');
-    }
+    const refreshToken = await googleExchangeCode(input.code, input.redirectUri);
 
     // Resolved once, at connect. This is also where the API-approval 403 surfaces, which
     // is the right moment for it: the person is sitting in front of the screen having
     // just pressed Connect, rather than reading a cron log next week.
-    const token = await accessToken(json.refresh_token);
+    const token = await googleAccessToken(refreshToken);
     const location = await firstLocation(token);
 
     return {
-      secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored),
+      secret: JSON.stringify({ refreshToken } satisfies Stored),
       config: { locationId: location.name, locationTitle: location.title },
     };
   },
 
   async sync(credential, config, range) {
     const { refreshToken } = JSON.parse(credential) as Stored;
-    const token = await accessToken(refreshToken);
+    const token = await googleAccessToken(refreshToken);
 
     const configured = str(config.locationId);
     const location = configured ? locationName(configured) : (await firstLocation(token)).name;

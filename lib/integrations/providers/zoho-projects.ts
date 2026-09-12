@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
 // Zoho Projects — where the firm's work is actually tracked.
 //
@@ -19,12 +20,7 @@ import {
 // and stops the nightly sync. Hence ZOHO_PROJECTS_CLIENT_ID rather than ZOHO_CLIENT_ID.
 // The two connections are independent and neither can break the other.
 
-/** The data centre. Shared with the CRM because it is a property of the Zoho account, not
- *  of the product: this org lives on `.in`, and `.com` cannot see it at all. */
-const DC = (process.env.ZOHO_DC ?? 'in').replace(/[^a-z.]/gi, '').toLowerCase() || 'in';
-
-const ACCOUNTS = `https://accounts.zoho.${DC}`;
-const API = `https://projectsapi.zoho.${DC}/api/v3`;
+const API = `https://projectsapi.zoho.${ZOHO_DC}/api/v3`;
 
 /**
  * Read-only, and only the three things this provider reads.
@@ -45,21 +41,17 @@ const MAX_PAGES = 200;
 type Stored = { refreshToken: string };
 type Json = Record<string, unknown>;
 
-async function accessToken(refreshToken: string): Promise<string> {
-  const params = new URLSearchParams({
-    refresh_token: refreshToken,
-    client_id: process.env.ZOHO_PROJECTS_CLIENT_ID ?? '',
-    client_secret: process.env.ZOHO_PROJECTS_CLIENT_SECRET ?? '',
-    grant_type: 'refresh_token',
+/** This provider's own label for zohoAccessToken's shared retry logic — see
+ *  lib/integrations/providers/oauth.ts. Projects gains the retry the CRM already had:
+ *  both mint a token from the same kind of endpoint, and a blip there is just as
+ *  recoverable here as it is for the CRM. */
+const accessToken = (refreshToken: string) =>
+  zohoAccessToken({
+    refreshToken,
+    clientId: process.env.ZOHO_PROJECTS_CLIENT_ID,
+    clientSecret: process.env.ZOHO_PROJECTS_CLIENT_SECRET,
+    label: 'Zoho Projects',
   });
-  const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
-  if (!res.ok) throw new IntegrationError(`Zoho Projects token refresh failed (${res.status}).`);
-
-  const json = (await res.json()) as { access_token?: string; error?: string };
-  if (json.error) throw new IntegrationError(`Zoho Projects: ${json.error}`);
-  if (!json.access_token) throw new IntegrationError('Zoho Projects returned no access token.');
-  return json.access_token;
-}
 
 /**
  * Zoho Projects v3 answers in two different shapes and this is the trap in the whole file.
@@ -255,7 +247,7 @@ export const zohoProjects: IntegrationProvider = {
       redirect_uri: redirectUri,
       state,
     });
-    return `${ACCOUNTS}/oauth/v2/auth?${params}`;
+    return `${ZOHO_ACCOUNTS}/oauth/v2/auth?${params}`;
   },
 
   async connect(input) {
@@ -268,7 +260,7 @@ export const zohoProjects: IntegrationProvider = {
       redirect_uri: input.redirectUri,
       code: input.code,
     });
-    const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
+    const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
     const json = (await res.json()) as { refresh_token?: string; error?: string };

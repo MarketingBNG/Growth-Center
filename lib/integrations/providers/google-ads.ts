@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
 // Google Ads — the second paid channel, and the reason CAC and CPL stop being blended.
 //
@@ -21,8 +22,6 @@ import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoi
 // form Google reviews by hand. That failure is named below rather than reported as a
 // generic 403, because it is the single most likely reason this does not work on the
 // first try.
-
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 /**
  * Pinned rather than floating.
@@ -65,26 +64,6 @@ const QUERY = `
   FROM campaign
   WHERE segments.date BETWEEN '{from}' AND '{to}'
 `;
-
-async function accessToken(refreshToken: string): Promise<string> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-    signal: httpTimeout(),
-  });
-  if (!res.ok) {
-    throw new IntegrationError(`Google rejected the refresh token (${res.status}). Reconnect the integration.`);
-  }
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new IntegrationError('Google returned no access token.');
-  return json.access_token;
-}
 
 /** Digits only. Google prints customer ids as 123-456-7890 and the API refuses the dashes. */
 export function customerId(raw: string): string {
@@ -193,43 +172,16 @@ export const googleAds: IntegrationProvider = {
   },
 
   getAuthUrl(redirectUri, state) {
-    const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPE,
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    return googleAuthUrl(SCOPE, redirectUri, state);
   },
 
   async connect(input) {
     if (input.kind !== 'oauth2') throw new IntegrationError('Google Ads uses OAuth.');
-
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        code: input.code,
-        redirect_uri: input.redirectUri,
-        grant_type: 'authorization_code',
-      }),
-      signal: httpTimeout(),
-    });
-    if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
-
-    const json = (await res.json()) as { refresh_token?: string };
-    if (!json.refresh_token) {
-      throw new IntegrationError('Google returned no refresh token. Revoke access and reconnect.');
-    }
     // Not validated against a customer here: the customer id is a config field, and an
     // OAuth ConnectInput carries no config. The first sync is where a wrong id surfaces,
     // with describeError naming it.
-    return { secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored) };
+    const refreshToken = await googleExchangeCode(input.code, input.redirectUri);
+    return { secret: JSON.stringify({ refreshToken } satisfies Stored) };
   },
 
   async sync(credential, config, range) {
@@ -239,7 +191,7 @@ export const googleAds: IntegrationProvider = {
     if (!customer) throw new IntegrationError('Set the Google Ads customer ID on this integration.');
     const manager = customerId(str(config.loginCustomerId) ?? '');
 
-    const token = await accessToken(refreshToken);
+    const token = await googleAccessToken(refreshToken);
 
     const query = QUERY.replace('{from}', range.from.toISOString().slice(0, 10)).replace(
       '{to}',

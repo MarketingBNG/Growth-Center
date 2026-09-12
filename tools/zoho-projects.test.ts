@@ -99,3 +99,51 @@ test('the provider is registered and asks for no write scope', () => {
   // §20.1: the agent cannot act on the world. Enforced at the grant, not in app code.
   assert.equal(zohoProjects.updateTaskStatus, undefined, 'reading only — writing back needs its own consent');
 });
+
+// Projects and the CRM share lib/integrations/providers/oauth.ts's zohoAccessToken, and
+// the CRM's own retry (tools/zoho-token-retry.test.ts) was written after a one-off bad
+// answer from Zoho cost a day of CRM syncing. Projects used to have no retry of its own;
+// this is the same coverage, through Projects' own entry point (it has no
+// updateTaskStatus to call, so syncPaged is what actually mints a token).
+test('a one-off bad answer from the token endpoint does not fail a Projects sync', async () => {
+  const real = globalThis.fetch;
+  const seen: string[] = [];
+  let tokenCalls = 0;
+
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input);
+    seen.push(url);
+
+    if (url.includes('/oauth/v2/token')) {
+      tokenCalls++;
+      if (tokenCalls === 1) {
+        return new Response(JSON.stringify({ error: 'invalid_code' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ access_token: 'test-access' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    // The one portal task page this test needs, empty and already complete.
+    return new Response(JSON.stringify({ tasks: [], page_info: { has_next_page: false } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await zohoProjects.syncPaged!(
+      JSON.stringify({ refreshToken: 'test-refresh' }),
+      { portalId: '60037687374' },
+      { cursor: null, since: null, deadline: Date.now() + 30_000, range: { from: new Date(), to: new Date() } },
+    );
+    assert.deepEqual(result.points, []);
+    assert.equal(tokenCalls, 2, 'the second attempt is the whole point');
+  } finally {
+    globalThis.fetch = real;
+  }
+});
