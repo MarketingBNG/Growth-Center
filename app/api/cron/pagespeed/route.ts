@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { sync } from '@/lib/integrations/service';
-import { hasDb } from '@/lib/prisma';
+import { cronGuard } from '@/lib/cron-auth';
 import { TAGS, invalidate } from '@/lib/cache';
 
 /**
@@ -17,23 +17,15 @@ import { TAGS, invalidate } from '@/lib/cache';
  * CrUX, which is a 28-day rolling average, so measuring it daily would mostly re-record
  * the same numbers at a minute of API time per page.
  *
- * Authenticated exactly as the nightly cron is, and refuses to run when CRON_SECRET is
- * unset for the same reason: running openly when the variable is missing turns one
- * forgotten env var into an endpoint anyone can use to spend the API quota.
+ * Authenticated exactly as the nightly cron is — see cronGuard — for the same reason:
+ * running openly when the variable is missing turns one forgotten env var into an
+ * endpoint anyone can use to spend the API quota.
  */
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not set' }, { status: 503 });
-  }
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-  }
-  if (!hasDb()) {
-    return NextResponse.json({ error: 'No database configured' }, { status: 503 });
-  }
+  const refusal = cronGuard(req);
+  if (refusal) return refusal;
 
   const started = Date.now();
 
