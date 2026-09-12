@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { intAtLeast, num, startOfDay } from '../coerce.ts';
 
 // Smartlead — the cold-email platform the outreach runs on.
 //
@@ -123,11 +124,6 @@ const text = (value: unknown): string | null => {
   return s === '' ? null : s;
 };
 
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
 /** First of several field names to carry a value. Smartlead is inconsistent about
  *  `open_count` vs `unique_open_count` and similar across endpoints. */
 function pick(row: Json, ...names: string[]): unknown {
@@ -188,15 +184,13 @@ export function readCursor(raw: unknown): Cursor | null {
   if (!Array.isArray(c.ids)) return null;
 
   const ids = c.ids.map(Number).filter((n) => Number.isFinite(n));
-  const index = Number(c.index);
-  const offset = Number(c.offset);
   const stage = STAGES.find((s) => s === c.stage);
 
   return {
     ids,
-    index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0,
+    index: intAtLeast(c.index),
     stage: stage ?? 'sequences',
-    offset: Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0,
+    offset: intAtLeast(c.offset),
   };
 }
 
@@ -456,12 +450,3 @@ export const smartlead: IntegrationProvider = {
   },
 };
 
-/** Midnight UTC for the day a record belongs to. Stable across syncs, which is what keeps
- *  a metric point's unique key stable and makes a re-sync an update rather than a row. */
-function startOfDay(value: unknown): Date {
-  const raw = value == null ? '' : String(value);
-  const d = raw ? new Date(raw) : new Date();
-  if (Number.isNaN(d.getTime())) return new Date(new Date().setUTCHours(0, 0, 0, 0));
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}

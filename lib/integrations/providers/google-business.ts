@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { num, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
 // Google Business Profile — the listing, what people did with it, and what they said.
@@ -82,16 +83,6 @@ async function get(url: string, token: string): Promise<Json> {
   }
   return (await res.json()) as Json;
 }
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
 
 /**
  * Google returns a performance series as `{date: {year, month, day}, value}` with the

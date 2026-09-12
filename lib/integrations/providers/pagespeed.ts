@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { intAtLeast, str } from '../coerce.ts';
 
 // Google PageSpeed Insights — Core Web Vitals for the pages Search Console already found.
 //
@@ -138,11 +139,6 @@ const LAB_AUDITS: Record<string, string> = {
 const num = (value: unknown): number | null => {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
 };
 
 /**
@@ -331,8 +327,7 @@ export function readCursor(raw: unknown): Cursor | null {
   const urls = c.urls.map(String).filter(Boolean);
   if (!urls.length) return null;
 
-  const index = Number(c.index);
-  return { urls, index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0 };
+  return { urls, index: intAtLeast(c.index) };
 }
 
 export const pagespeed: IntegrationProvider = {

@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { num, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
 // Google Ads — the second paid channel, and the reason CAC and CPL stop being blended.
@@ -78,16 +79,6 @@ export function fromMicros(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n / 1_000_000 : 0;
 }
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
 
 /**
  * What went wrong, in the words most likely to be true.

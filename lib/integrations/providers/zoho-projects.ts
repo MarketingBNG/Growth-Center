@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { intAtLeast, str } from '../coerce.ts';
 import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
 // Zoho Projects — where the firm's work is actually tracked.
@@ -114,11 +115,6 @@ async function get(path: string, token: string, params: Record<string, string> =
   return (await res.json()) as Json;
 }
 
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
-
 /** Zoho returns ISO instants for these. An unparseable one is absent, never epoch zero. */
 function date(value: unknown): Date | null {
   const raw = str(value);
@@ -192,8 +188,7 @@ export function readCursor(raw: unknown): Cursor | null {
   const portalId = str(c.portalId);
   if (!portalId) return null;
 
-  const page = Number(c.page);
-  return { portalId, page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1 };
+  return { portalId, page: intAtLeast(c.page, 1) };
 }
 
 export const zohoProjects: IntegrationProvider = {

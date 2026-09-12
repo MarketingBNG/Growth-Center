@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type Entity, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { intAtLeast } from '../coerce.ts';
 import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
 // Zoho CRM. BNG already runs Zoho, and bng-command-center's lib/zoho.ts is the working
@@ -265,10 +266,9 @@ export function readCursor(raw: unknown): Cursor {
   const moduleName = MODULES.find((m) => m === c.module);
   if (!moduleName) return fresh;
 
-  const page = Number(c.page);
   return {
     module: moduleName,
-    page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+    page: intAtLeast(c.page, 1),
     pageToken: typeof c.pageToken === 'string' && c.pageToken !== '' ? c.pageToken : null,
   };
 }

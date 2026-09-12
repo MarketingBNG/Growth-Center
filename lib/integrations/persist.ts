@@ -1,4 +1,5 @@
 import { db } from '../prisma.ts';
+import { str } from './coerce.ts';
 import type { MetricPoint } from './types.ts';
 
 // The generic persistence plumbing every writer in lib/integrations/writers/ shares:
@@ -153,12 +154,11 @@ export async function bulkUpsert(
 }
 
 /** A point's provider payload, and a trimmed string from it — every materialiser reads
- *  entityMeta the same defensive way, so they read it through these. */
+ *  entityMeta the same defensive way, so they read it through these. `str` is the same
+ *  one the provider adapters read vendor JSON with; it lives in coerce.ts so importing it
+ *  does not pull this module's Prisma client along with it. */
 export const meta = (p: MetricPoint) => (p.entityMeta ?? {}) as Record<string, unknown>;
-export const str = (v: unknown): string | null => {
-  const t = v == null ? '' : String(v).trim();
-  return t === '' ? null : t;
-};
+export { str };
 
 /**
  * An imported address, lower-cased.

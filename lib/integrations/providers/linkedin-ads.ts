@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { num, str } from '../coerce.ts';
 
 // LinkedIn Ads — the third paid channel.
 //
@@ -41,16 +42,6 @@ function headers(token: string): Record<string, string> {
     accept: 'application/json',
   };
 }
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
 
 /**
  * `urn:li:sponsoredCampaign:123456` → `123456`.

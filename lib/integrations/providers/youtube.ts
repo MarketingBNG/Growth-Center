@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint, type SyncCursor } from '../types.ts';
+import { intAtLeast, num, startOfDay, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
 // YouTube — the channel and its videos, into the same SocialAccount and SocialPost tables
@@ -60,16 +61,6 @@ async function get(url: string, token: string): Promise<Json> {
   return (await res.json()) as Json;
 }
 
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
-
 /**
  * The channel's handle, for SocialAccount's `(network, handle)` natural key.
  *
@@ -94,13 +85,12 @@ export function readCursor(raw: unknown): Cursor | null {
   const uploads = str(c.uploads);
   if (!channelId || !handle || !uploads) return null;
 
-  const seen = Number(c.seen);
   return {
     channelId,
     handle,
     uploads,
     pageToken: str(c.pageToken),
-    seen: Number.isFinite(seen) && seen >= 0 ? Math.floor(seen) : 0,
+    seen: intAtLeast(c.seen),
   };
 }
 
@@ -316,11 +306,3 @@ export const youtube: IntegrationProvider = {
   },
 };
 
-/** Midnight UTC, which keeps a metric point's unique key stable across syncs. */
-function startOfDay(value: unknown): Date {
-  const raw = value == null ? '' : String(value);
-  const d = raw ? new Date(raw) : new Date();
-  if (Number.isNaN(d.getTime())) return new Date(new Date().setUTCHours(0, 0, 0, 0));
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}
