@@ -82,6 +82,12 @@ export type ResolvedRange = {
 };
 
 /**
+ * The search params a page receives, already awaited. Written out inline in a dozen page
+ * signatures and never named, so a change to the shape meant finding all twelve.
+ */
+export type PageParams = Record<string, string | string[] | undefined>;
+
+/**
  * Every dashboard-shaped page's range in one call: which preset or custom window is
  * asked for, what a metric function should be given, and what bucket and label to show.
  *
@@ -90,7 +96,7 @@ export type ResolvedRange = {
  * (RangePicker clears one when the other is chosen) and this only has to say which it
  * prefers when both somehow appear in a URL.
  */
-export function resolveRange(params: Record<string, string | string[] | undefined>): ResolvedRange {
+export function resolveRange(params: PageParams): ResolvedRange {
   const { value, days, bucket: presetBucket } = rangeParam(params);
   const picked = customRange(params);
   const spec = picked ?? days;

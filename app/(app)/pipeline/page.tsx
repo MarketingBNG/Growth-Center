@@ -2,11 +2,11 @@ import { Kanban } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { hasDb } from '@/lib/prisma';
 import { pipelineBand } from '@/lib/band';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { board, BOARD_LIMIT } from '@/lib/pipeline';
 import { fmtMoney, fmtNumber } from '@/lib/format';
 import { convert } from '@/lib/currency';
@@ -18,17 +18,10 @@ export const metadata = { title: 'Pipeline · Growth Center' };
 export default async function PipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Pipeline" subtitle="Opportunities from first conversation to won." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Pipeline', 'Opportunities from first conversation to won.');
   }
 
   const params = await searchParams;

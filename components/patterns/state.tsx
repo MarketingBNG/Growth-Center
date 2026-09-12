@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { PageHeader } from '@/components/patterns/page-header';
 
 export function EmptyState({
   icon,
@@ -126,5 +128,24 @@ export function NoDatabaseState() {
         </>
       }
     />
+  );
+}
+
+/**
+ * The whole screen a page returns when there is no database to read.
+ *
+ * Seven pages spelled this out identically — header, card, NoDatabaseState — and differed
+ * only in their own two strings, so the header had to be repeated above the guard as well
+ * as below it. Passing the strings in keeps each page saying who it is while the shape
+ * lives in one place.
+ */
+export function noDatabasePage(title: string, subtitle?: React.ReactNode) {
+  return (
+    <>
+      <PageHeader title={title} subtitle={subtitle} />
+      <Card>
+        <NoDatabaseState />
+      </Card>
+    </>
   );
 }

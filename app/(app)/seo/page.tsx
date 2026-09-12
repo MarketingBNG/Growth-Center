@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
+import type { PageParams } from '@/lib/range';
 import { searchTrend, seoOverview, webVitals } from '@/lib/seo';
 import { currencySettings } from '@/lib/settings';
 import { cards } from '@/lib/integrations/service';
@@ -37,7 +38,7 @@ const SUBTITLE = 'Keywords, rankings and the pages that earn them.';
 export default function SeoPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   return (
     <>
@@ -81,7 +82,7 @@ async function SeoState() {
 async function SeoBody({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
     return <Card><NoDatabaseState /></Card>;

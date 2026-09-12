@@ -1,13 +1,12 @@
 import { PageHeader } from '@/components/patterns/page-header';
-import { NoDatabaseState } from '@/components/patterns/state';
-import { Card } from '@/components/ui/card';
 import { redirect } from 'next/navigation';
 import { hasDb } from '@/lib/prisma';
+import type { PageParams } from '@/lib/range';
 import { hasEncryptionKey } from '@/lib/crypto';
 import { cards } from '@/lib/integrations/service';
 import { can } from '@/lib/roles';
 import { currentUser } from '@/lib/auth';
-import { ErrorBanner } from '@/components/patterns/state';
+import { ErrorBanner, noDatabasePage } from '@/components/patterns/state';
 import { IntegrationGrid } from './IntegrationGrid';
 import { SyncHealth } from './SyncHealth';
 
@@ -16,17 +15,10 @@ export const metadata = { title: 'Integrations · Growth Center' };
 export default async function IntegrationsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Integrations" subtitle="Connect the platforms Growth Center reads from." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Integrations', 'Connect the platforms Growth Center reads from.');
   }
 
   // currentUser + redirect, never requireUser: requireUser throws HttpError, which is

@@ -9,7 +9,7 @@ import { Lifecycle } from './Lifecycle';
 import { duplicateCounts, duplicateQueue } from '@/lib/duplicate-queue';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { SortHeader } from '@/components/patterns/sort-header';
 import { Card } from '@/components/ui/card';
@@ -19,7 +19,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
 import { ProgressLink } from '@/components/NavProgress';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm';
 import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
@@ -60,7 +60,7 @@ const filtersFor = (tab: 'companies' | 'contacts', people: AppUser[], owners: st
 export default async function CrmPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
   // §8.2's client lifecycle is a third tab rather than a panel: it is about the accounts
@@ -69,16 +69,7 @@ export default async function CrmPage({
   const tab =
     params.tab === 'contacts' ? 'contacts' : params.tab === 'lifecycle' ? 'lifecycle' : 'companies';
 
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="CRM" subtitle="Contacts and companies." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
-  }
+  if (!hasDb()) return noDatabasePage('CRM', 'Contacts and companies.');
 
   // Switching tab keeps the rest of the URL. These were plain links to /crm and
   // /crm?tab=contacts, so moving between Companies and Contacts silently discarded the

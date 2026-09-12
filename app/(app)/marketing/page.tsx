@@ -2,7 +2,7 @@ import { Megaphone } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { BarChart } from '@/components/charts/BarChart';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
 import { channelPerformance, windowFor } from '@/lib/metrics';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
@@ -28,17 +28,10 @@ export const metadata = { title: 'Marketing · Growth Center' };
 export default async function MarketingPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Marketing" subtitle="Campaigns and channels, spend against return." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Marketing', 'Campaigns and channels, spend against return.');
   }
 
   const params = await searchParams;

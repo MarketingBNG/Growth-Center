@@ -5,7 +5,7 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge } from '@/components/patterns/badges';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,7 +15,7 @@ import { db, hasDb } from '@/lib/prisma';
 import { openPipeline, windowFor, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
 import { segmentMix } from '@/lib/leads';
@@ -35,19 +35,15 @@ export const metadata = { title: 'Dashboard · Growth Center' };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const user = await currentUser();
   const first = user?.name.split(' ')[0] ?? 'there';
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title={`Good to see you, ${first}`} subtitle="The command centre for BNG's growth engine." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
+    return noDatabasePage(
+      `Good to see you, ${first}`,
+      "The command centre for BNG's growth engine.",
     );
   }
 

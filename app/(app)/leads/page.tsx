@@ -8,7 +8,7 @@ import { Pager } from '@/components/patterns/pager';
 import { SortHeader } from '@/components/patterns/sort-header';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
@@ -17,7 +17,7 @@ import { ProgressLink } from '@/components/NavProgress';
 import { leadsBand } from '@/lib/band';
 import { speedToLead } from '@/lib/speed-to-lead';
 import { SpeedToLead } from './SpeedToLead';
-import { resolveRange, type CustomRange } from '@/lib/range';
+import { resolveRange, type CustomRange, type PageParams } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
 import { pageQuery, pick } from '@/lib/query';
 import { leadCampaignOptions, leadFilters, leadSourceOptions, listLeads } from '@/lib/leads';
@@ -111,19 +111,12 @@ const filtersFor = (
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Leads" subtitle="Every hand-raise, with the source that produced it." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Leads', 'Every hand-raise, with the source that produced it.');
   }
 
   const q = pageQuery(params);

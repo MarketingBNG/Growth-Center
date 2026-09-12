@@ -5,7 +5,7 @@ import { SyncRuns } from './SyncRuns';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import { db, hasDb } from '@/lib/prisma';
 import { TAGS, cached } from '@/lib/cache';
 import { channelPerformance, windowFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { analyticsBand } from '@/lib/band';
 import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/format';
 
@@ -58,17 +58,10 @@ const scopeLabel = (t: string) => SCOPES[t] ?? t.replaceAll('_', ' ');
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Analytics" subtitle="One metrics layer across every connected source." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Analytics', 'One metrics layer across every connected source.');
   }
 
   const params = await searchParams;

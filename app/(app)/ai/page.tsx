@@ -11,7 +11,7 @@ import { TABLES } from '@/lib/ai-tools';
 import { ageLabel } from '@/lib/insight-identity';
 import { STATUS_LABELS, isInsightStatus } from '@/lib/insight-lifecycle';
 import { assignableOwners } from '@/lib/insight-actions';
-import { rangeParam } from '@/lib/range';
+import { rangeParam, type PageParams } from '@/lib/range';
 import { currentUser } from '@/lib/auth';
 import { can } from '@/lib/roles';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
@@ -53,7 +53,7 @@ const KIND_TONE = {
 export default async function AiPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
     return (

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/prisma';
 import { buildReport, isReportId, REPORTS } from '@/lib/reports';
-import { resolveRange } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/range';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -16,7 +16,7 @@ export const metadata = { title: 'Reports · Growth Center' };
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
     return (

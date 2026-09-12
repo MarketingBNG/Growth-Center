@@ -7,6 +7,7 @@ import { Pager } from '@/components/patterns/pager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { hasDb } from '@/lib/prisma';
+import type { PageParams } from '@/lib/range';
 import { SEQUENCE_STATUSES, sequenceFilters, sequences } from '@/lib/outreach';
 import { pageQuery, pick } from '@/lib/query';
 import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
@@ -33,7 +34,7 @@ const FILTERS = [
 export default async function OutreachPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 

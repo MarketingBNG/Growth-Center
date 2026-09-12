@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { hasDb } from '@/lib/prisma';
+import type { PageParams } from '@/lib/range';
 import { currentUser } from '@/lib/auth';
 import { can } from '@/lib/roles';
 import { contentBoard } from '@/lib/content';
@@ -57,7 +58,7 @@ const STATUS_TONE = {
 export default async function ContentPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 

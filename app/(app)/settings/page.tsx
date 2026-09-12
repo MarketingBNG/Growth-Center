@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Check, X, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Capacity } from './Capacity';
 import { capacitySetting } from '@/lib/capacity';
@@ -47,14 +47,7 @@ export default async function SettingsPage() {
   const user = await currentUser();
   if (!user) redirect('/signin');
 
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Settings" subtitle="Workspace configuration." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
-  }
+  if (!hasDb()) return noDatabasePage('Settings', 'Workspace configuration.');
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');
