@@ -10,23 +10,21 @@ import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
 import { CONTENT_STATUSES } from '@/lib/enums';
 import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content-fields';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NewContentButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
     const form = new FormData(e.currentTarget);
     const value = (k: string) => {
       const v = (form.get(k) as string | null)?.trim();
       return v ? v : undefined;
     };
-    try {
+    await run(async () => {
       await api('/api/content', {
         method: 'POST',
         json: {
@@ -39,11 +37,7 @@ export function NewContentButton() {
       });
       setOpen(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (

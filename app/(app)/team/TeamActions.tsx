@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function TeamActions({
   email,
@@ -22,23 +23,16 @@ export function TeamActions({
   namePinned: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run, setError } = useBooleanApiAction();
 
   async function send(json: Record<string, unknown>) {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/settings/users', { method: 'PATCH', json: { email, ...json } });
       setEditing(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   if (editing) {

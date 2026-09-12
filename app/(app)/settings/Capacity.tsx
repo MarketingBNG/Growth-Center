@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
 import type { CapacitySetting } from '@/lib/capacity';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 // §6.2's monthly manual input.
 //
@@ -19,15 +20,12 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
     initial.monthlyConsultations === null ? '' : String(initial.monthlyConsultations),
   );
   const [note, setNote] = useState(initial.note ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function save() {
-    setBusy(true);
-    setError(null);
     setSaved(false);
-    try {
+    await run(async () => {
       await api('/api/settings/capacity', {
         method: 'PUT',
         json: {
@@ -40,11 +38,7 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
       });
       setSaved(true);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (

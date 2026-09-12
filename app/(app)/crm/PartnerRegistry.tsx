@@ -12,6 +12,7 @@ import { fmtNumber, fmtRelative } from '@/lib/format';
 // From referral-types, not referrals: the latter imports lib/prisma, and a value read
 // from there pulls the `pg` driver into the browser bundle.
 import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/referral-types';
+import { useApiAction } from '@/lib/use-api-action';
 
 // §8.5's registry. "What is not recorded is not followed up."
 //
@@ -22,36 +23,23 @@ import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from
 export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[]; canManage: boolean }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useApiAction<string | null>(null);
   const [form, setForm] = useState({ name: '', partnerType: 'ca_firm', company: '', email: '' });
 
   async function save() {
-    setBusy('new');
-    setError(null);
-    try {
+    await run('new', async () => {
       await api('/api/referrals', { method: 'POST', json: form });
       setForm({ name: '', partnerType: 'ca_firm', company: '', email: '' });
       setAdding(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function record(id: string, event: 'touch' | 'acknowledgement') {
-    setBusy(id);
-    setError(null);
-    try {
+    await run(id, async () => {
       await api(`/api/referrals/${id}`, { method: 'POST', json: { event } });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   const silent = partners.filter((p) => p.silent).length;

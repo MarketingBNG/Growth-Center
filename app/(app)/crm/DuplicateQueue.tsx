@@ -8,6 +8,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/fetcher';
 import { fmtRelative } from '@/lib/format';
 import type { QueueRow } from '@/lib/duplicate-queue';
+import { useApiAction } from '@/lib/use-api-action';
 
 // §8.1's front end. The engine proposes; this is where a person decides.
 //
@@ -25,8 +26,7 @@ type Props = {
 
 export function DuplicateQueue({ rows, counts, canManage }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useApiAction<string | null>(null);
   // Which row is being dismissed, and the reason typed so far. A dismissal needs a note,
   // so it cannot be a single button the way a merge can.
   const [dismissing, setDismissing] = useState<string | null>(null);
@@ -42,32 +42,20 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
     body: { action: 'merge' } | { action: 'dismiss'; reason: string } | { action: 'unmerge' },
     label?: string,
   ) {
-    setBusy(id);
-    setError(null);
-    try {
+    await run(id, async () => {
       await api(`/api/duplicates/${id}`, { method: 'POST', json: body });
       setDismissing(null);
       setReason('');
       setUndoable(body.action === 'merge' && label ? { id, label } : null);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function scan() {
-    setBusy('scan');
-    setError(null);
-    try {
+    await run('scan', async () => {
       await api('/api/duplicates', { method: 'POST' });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   return (

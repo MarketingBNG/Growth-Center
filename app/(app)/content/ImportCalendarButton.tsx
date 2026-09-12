@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 type Summary = {
   rowsRead: number;
@@ -38,9 +39,8 @@ type Summary = {
 export function ImportCalendarButton({ month, replaceable }: { month: string; replaceable: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const { busy, error, run, setError } = useBooleanApiAction();
 
   function close() {
     setOpen(false);
@@ -50,12 +50,10 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
     setSummary(null);
 
     const form = new FormData(e.currentTarget);
-    try {
+    await run(async () => {
       const res = await fetch('/api/content/calendar/import', { method: 'POST', body: form });
       const text = await res.text();
       const parsed = (text ? JSON.parse(text) : {}) as Record<string, unknown>;
@@ -64,11 +62,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
       // The calendar behind the dialog is now wrong. Refreshed while the dialog is still
       // open, so closing it reveals the month that was just imported.
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (

@@ -11,6 +11,7 @@ import { StateBadge } from '@/components/patterns/integration-state';
 import { api } from '@/lib/fetcher';
 import { fmtNumber, fmtRelative } from '@/lib/format';
 import type { Card as IntegrationCard } from '@/lib/integrations/service';
+import { useApiAction } from '@/lib/use-api-action';
 
 const CATEGORY_LABEL: Record<string, string> = {
   analytics: 'Analytics',
@@ -149,8 +150,13 @@ function ProviderCard({
   onStarted: () => void;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<null | 'connect' | 'sync' | 'disconnect' | 'settings'>(null);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    busy,
+    error,
+    run: runAction,
+    setBusy,
+    setError,
+  } = useApiAction<null | 'connect' | 'sync' | 'disconnect' | 'settings'>(null);
   const [keyModal, setKeyModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
 
@@ -187,6 +193,9 @@ function ProviderCard({
     (state === 'error' && card.hasCredential);
 
   async function connectOauth() {
+    // Not run(): on success this navigates away, and busy must stay 'connect' through
+    // that navigation rather than being reset to idle by a finally the instant before
+    // the browser actually leaves, which would flash the button re-enabled.
     setBusy('connect');
     setError(null);
     try {
@@ -203,10 +212,8 @@ function ProviderCard({
 
   async function connectApiKey(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy('connect');
-    setError(null);
     const form = new FormData(e.currentTarget);
-    try {
+    await runAction('connect', async () => {
       await api(`/api/integrations/${card.id}/connect`, {
         method: 'POST',
         json: {
@@ -218,19 +225,13 @@ function ProviderCard({
       });
       setKeyModal(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function saveSettings(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy('settings');
-    setError(null);
     const form = new FormData(e.currentTarget);
-    try {
+    await runAction('settings', async () => {
       await api(`/api/integrations/${card.id}/config`, {
         method: 'PATCH',
         json: {
@@ -241,11 +242,7 @@ function ProviderCard({
       });
       setSettingsModal(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   /**
@@ -258,22 +255,20 @@ function ProviderCard({
    * What is left here is a start and a poll.
    */
   async function run(action: 'sync' | 'disconnect') {
-    setBusy(action);
-    setError(null);
-    try {
-      await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
-      // Reflects the start immediately instead of waiting out the poll interval.
-      onStarted();
-      if (action === 'disconnect') router.refresh();
-    } catch (e) {
-      const message = (e as Error).message;
-      // 409 is the server saying this provider is already syncing. Nothing went wrong and
-      // nothing needs saying — the poll is about to show it running.
-      if (action === 'sync' && /already syncing/i.test(message)) onStarted();
-      else setError(message);
-    } finally {
-      setBusy(null);
-    }
+    await runAction(action, async () => {
+      try {
+        await api(`/api/integrations/${card.id}/${action}`, { method: 'POST', json: {} });
+        // Reflects the start immediately instead of waiting out the poll interval.
+        onStarted();
+        if (action === 'disconnect') router.refresh();
+      } catch (e) {
+        const message = (e as Error).message;
+        // 409 is the server saying this provider is already syncing. Nothing went wrong
+        // and nothing needs saying — the poll is about to show it running.
+        if (action === 'sync' && /already syncing/i.test(message)) onStarted();
+        else throw e;
+      }
+    });
   }
 
   return (

@@ -1,10 +1,10 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/fetcher';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 /**
  * Completing was one-way: a task ticked off by mistake stayed done for good, because
@@ -16,20 +16,13 @@ import { api } from '@/lib/fetcher';
  */
 export function CompleteButton({ taskId, done = false }: { taskId: string; done?: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function set(status: 'open' | 'done') {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/tasks/${taskId}`, { method: 'PATCH', json: { status } });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   // The error sits beside the button rather than replacing it. A refusal from the CRM is

@@ -8,17 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { api } from '@/lib/fetcher';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
 
     const form = new FormData(e.currentTarget);
     const value = (k: string) => {
@@ -46,14 +44,11 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
             tags: [],
           };
 
-    try {
+    await run(async () => {
       const result = await api<{ created: boolean; id: string }>(path, { method: 'POST', json });
       setOpen(false);
       router.push(kind === 'company' ? `/crm/companies/${result.id}` : `/crm/contacts/${result.id}`);
-    } catch (e) {
-      setError((e as Error).message);
-      setBusy(false);
-    }
+    });
   }
 
   return (

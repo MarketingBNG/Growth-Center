@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 
 export function NoteBox(parent: {
   leadId?: string;
@@ -14,23 +15,16 @@ export function NoteBox(parent: {
 }) {
   const router = useRouter();
   const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/notes', { method: 'POST', json: { ...parent, body: body.trim() } });
       setBody('');
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
