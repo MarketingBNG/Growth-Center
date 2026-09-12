@@ -10,7 +10,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { db, hasDb } from '@/lib/prisma';
 import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
 import { channelPerformance, windowFor } from '@/lib/metrics';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
+import { resolveRange } from '@/lib/range';
 import { marketingBand } from '@/lib/band';
 import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
@@ -42,13 +42,7 @@ export default async function MarketingPage({
   }
 
   const params = await searchParams;
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const { current } = windowFor(spec);
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';

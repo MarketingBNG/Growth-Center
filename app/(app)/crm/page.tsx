@@ -1,7 +1,6 @@
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { DateRangePicker } from '@/components/patterns/date-range-picker';
-import { RANGE_OPTIONS } from '@/lib/enums';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { currentUser } from '@/lib/auth';
 import { can } from '@/lib/roles';
@@ -20,7 +19,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { hasDb } from '@/lib/prisma';
 import { crmBand } from '@/lib/band';
 import { ProgressLink } from '@/components/NavProgress';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
+import { resolveRange } from '@/lib/range';
 import { pageQuery, pick } from '@/lib/query';
 import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm';
 import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
@@ -101,21 +100,11 @@ export default async function CrmPage({
   };
 
   const q = pageQuery(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
+  const { value, days, picked, bucket, label: rangeLabel } = resolveRange(params);
 
   // A hand-picked window wins over the preset when both are in the URL; the picker clears
   // the other, so having both means someone edited the link.
-  const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
-  // The preset's own label rather than `Last ${days} days`, which read "Last 180 days"
-  // for the six-month window and "Last 365 days" for the year.
-  const rangeLabel = picked
-    ? picked.label
-    : value === 'today'
-      ? 'Last 1 day'
-      : (RANGE_OPTIONS.find((o) => o.value === value)?.label ?? `Last ${days} days`);
-  // The chart buckets by the window actually being drawn, not by the preset behind it.
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   const { ownerEmail, status } = pick<{ ownerEmail?: string; status?: string }>(params, [
     'ownerEmail',

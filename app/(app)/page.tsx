@@ -15,7 +15,7 @@ import { db, hasDb } from '@/lib/prisma';
 import { openPipeline, windowFor, channelPerformance } from '@/lib/metrics';
 import { dashboardBand } from '@/lib/band';
 import { aiStatus } from '@/lib/ai';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
+import { resolveRange } from '@/lib/range';
 import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
 import { WEB_LEAD_BASIS } from '@/lib/web-leads';
 import { segmentMix } from '@/lib/leads';
@@ -55,13 +55,7 @@ export default async function DashboardPage({
   // §6.6's preset, read from the URL so the screen a partner sees is a link somebody can
   // send rather than a setting somebody has to remember to switch back.
   const partnerView = isPartnerView(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const { current } = windowFor(spec);
 
   const [dash, pipeline, channels, segments, capacity, recentLeads] =

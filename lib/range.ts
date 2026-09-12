@@ -65,6 +65,46 @@ export function customRange(params: Record<string, string | string[] | undefined
   return { from: start, to, label: `${iso(start)} – ${iso(end)}`, days: spanDays };
 }
 
+export type ResolvedRange = {
+  /** The preset's own value ('7', '30', 'today', ...), for RangePicker. */
+  value: string;
+  /** The preset's day count, even when a custom range wins — some pages still need it
+   *  (an export link, a fallback windowFor call). */
+  days: number;
+  /** picked ?? days: what a metric function taking `number | Range` wants. */
+  spec: number | CustomRange;
+  /** The picked window if one was given, otherwise null — for pages that branch on it. */
+  picked: CustomRange | null;
+  bucket: 'day' | 'month';
+  /** The preset's own label ("Last 6 months") or the picked window's date span, never
+   *  the generic "Last N days" that reads oddly for a preset already named otherwise. */
+  label: string;
+};
+
+/**
+ * Every dashboard-shaped page's range in one call: which preset or custom window is
+ * asked for, what a metric function should be given, and what bucket and label to show.
+ *
+ * Was six lines and a repeated comment, copied into eight pages, because a hand-picked
+ * window from the calendar wins over the preset — the two are the same setting
+ * (RangePicker clears one when the other is chosen) and this only has to say which it
+ * prefers when both somehow appear in a URL.
+ */
+export function resolveRange(params: Record<string, string | string[] | undefined>): ResolvedRange {
+  const { value, days, bucket: presetBucket } = rangeParam(params);
+  const picked = customRange(params);
+  const spec = picked ?? days;
+  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  // The preset's own label rather than `Last ${days} days`, which read "Last 180 days"
+  // for the six-month window and "Last 365 days" for the year.
+  const label = picked
+    ? picked.label
+    : value === 'today'
+      ? 'Last 1 day'
+      : (RANGE_OPTIONS.find((o) => o.value === value)?.label ?? `Last ${days} days`);
+  return { value, days, spec, picked, bucket, label };
+}
+
 /**
  * A period, as every metric function takes one.
  *

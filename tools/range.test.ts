@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { customRange, rangeParam } from '../lib/range.ts';
+import { customRange, rangeParam, resolveRange } from '../lib/range.ts';
 import { RANGE_OPTIONS } from '../lib/enums.ts';
 
 // rangeParam reads ?range= straight off the URL, so it is an input-validation boundary:
@@ -111,4 +111,39 @@ test("the CRM screen's `today` still resolves to a one-day window", () => {
   // Kept accepted so existing links work, even though '1' now says the same thing.
   assert.equal(rangeParam({ range: 'today' }).days, 1);
   assert.equal(rangeParam({ range: 'today' }).value, 'today');
+});
+
+// resolveRange composes rangeParam, customRange and bucketFor the way eight pages used
+// to, by hand, each with its own copy of the "hand-picked wins over preset" comment.
+
+test('with no custom range, spec is the preset day count and picked is null', () => {
+  const r = resolveRange({ range: '90' });
+  assert.equal(r.value, '90');
+  assert.equal(r.days, 90);
+  assert.equal(r.spec, 90);
+  assert.equal(r.picked, null);
+  assert.equal(r.bucket, 'day');
+});
+
+test('a custom range wins over the preset, and buckets by its own length', () => {
+  const r = resolveRange({ range: '7', from: '2025-01-01', to: '2026-08-31' });
+  assert.ok(r.picked);
+  assert.equal(r.spec, r.picked);
+  // 608 days: past the 120-day threshold even though the preset beside it was 7.
+  assert.equal(r.bucket, 'month');
+  assert.equal(r.label, r.picked!.label);
+});
+
+test('the label is the preset\'s own name, not "Last N days", for every preset', () => {
+  for (const { value, label } of RANGE_OPTIONS) {
+    assert.equal(resolveRange({ range: value }).label, label);
+  }
+});
+
+test('today\'s label reads as a single day', () => {
+  assert.equal(resolveRange({ range: 'today' }).label, 'Last 1 day');
+});
+
+test('an off-list range still gets a label, from the 30-day fallback', () => {
+  assert.equal(resolveRange({ range: 'nonsense' }).label, RANGE_OPTIONS.find((o) => o.value === '30')!.label);
 });

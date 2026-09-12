@@ -17,7 +17,7 @@ import { ProgressLink } from '@/components/NavProgress';
 import { leadsBand } from '@/lib/band';
 import { speedToLead } from '@/lib/speed-to-lead';
 import { SpeedToLead } from './SpeedToLead';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
+import { resolveRange, type CustomRange } from '@/lib/range';
 import { rangeFor } from '@/lib/metrics';
 import { pageQuery, pick } from '@/lib/query';
 import { leadCampaignOptions, leadFilters, leadSourceOptions, listLeads } from '@/lib/leads';
@@ -127,14 +127,12 @@ export default async function LeadsPage({
   }
 
   const q = pageQuery(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
+  const { value, days, picked, spec, bucket } = resolveRange(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'leadSource', 'leadCampaign', 'ownerEmail', 'campaignId', 'channelId', 'segment', 'band', 'lostReason', 'from', 'to']));
   // The window the picker resolved, handed to the list as well as the band so the table
   // and the cards above it describe the same period. A hand-picked ?from=&to= wins, which
   // is what the CRM page's owner links carry.
-  const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   // Nothing is awaited before the header goes out. Leads reads live data on every view —
   // a stale lead list would be a bug, not an invisible delay, so it cannot be cached the
@@ -162,7 +160,7 @@ export default async function LeadsPage({
       <Suspense fallback={<BandSkeleton />}>
         {/* Arriving from a CRM owner link carries ?from=&to=; the band has to honour it,
             or the cards describe the last thirty days over a table that does not. */}
-        <Band spec={picked ?? days} bucket={bucket} />
+        <Band spec={spec} bucket={bucket} />
       </Suspense>
 
       {/* Its own boundary, below the band and above the filters. It is two queries over
@@ -205,7 +203,7 @@ function BandSkeleton() {
   );
 }
 
-async function Band({ spec, bucket }: { spec: number | ReturnType<typeof customRange>; bucket: 'day' | 'month' }) {
+async function Band({ spec, bucket }: { spec: number | CustomRange; bucket: 'day' | 'month' }) {
   return <MetricsBand {...(await leadsBand(spec as Parameters<typeof leadsBand>[0], bucket))} />;
 }
 
