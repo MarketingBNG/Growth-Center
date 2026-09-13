@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackLink, Detail, DetailHeader, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
@@ -10,9 +10,8 @@ import { TaskList } from '@/components/patterns/task-list';
 import { getLead } from '@/lib/leads';
 import { hasDb } from '@/lib/prisma';
 import { listAssignable, peopleOn, personOptions } from '@/lib/users';
-import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
+import { fmtDate, fmtMoney } from '@/lib/format';
 import { LeadActions } from './LeadActions';
-import { NoteBox } from './NoteBox';
 
 export const metadata = { title: 'Lead · Growth Center' };
 
@@ -40,31 +39,26 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <Link
-        href="/leads"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> All leads
-      </Link>
+      <BackLink href="/leads" label="All leads" />
 
-      <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{name}</h1>
-            <LeadStatusBadge status={lead.status} />
-          </div>
+      <DetailHeader
+        title={name}
+        badge={<LeadStatusBadge status={lead.status} />}
+        subtitle={
           <p className="mt-1 text-label text-muted-foreground">
             {[lead.title, lead.companyName].filter(Boolean).join(' · ') || 'No company recorded'}
           </p>
-        </div>
-        <LeadActions
-          leadId={lead.id}
-          status={lead.status}
-          ownerEmail={lead.ownerEmail}
-          convertedOpportunityId={lead.opportunities[0]?.id ?? null}
-          owners={owners}
-        />
-      </div>
+        }
+        actions={
+          <LeadActions
+            leadId={lead.id}
+            status={lead.status}
+            ownerEmail={lead.ownerEmail}
+            convertedOpportunityId={lead.opportunities[0]?.id ?? null}
+            owners={owners}
+          />
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -147,22 +141,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <NoteBox leadId={lead.id} />
-              {lead.noteEntries.map((n) => (
-                <div key={n.id} className="rounded-md border border-border px-3 py-2">
-                  <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-meta text-muted-foreground">
-                    {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <NotesCard parent={{ leadId: lead.id }} notes={lead.noteEntries} />
         </div>
 
         <div className="space-y-4">
@@ -177,22 +156,5 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
     </>
-  );
-}
-
-function Detail({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={className}>
-      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
-    </div>
   );
 }

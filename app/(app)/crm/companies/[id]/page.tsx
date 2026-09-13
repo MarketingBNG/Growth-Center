@@ -1,12 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackLink, Detail, DetailHeader, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
-import { NoteBox } from '../../../leads/[id]/NoteBox';
 import { getCompany } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
 import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
@@ -38,39 +37,34 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <Link
-        href="/crm"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> CRM
-      </Link>
+      <BackLink href="/crm" label="CRM" />
 
-      <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
-            {company.customer ? <Badge tone="success">customer</Badge> : null}
-          </div>
-          {/* Domain, industry and country are empty on all 2,953 imported companies —
-              Zoho holds none of the three — so this line read "No details recorded"
-              under every name on the site while the phone number and owner sat unread
-              in the same row. */}
+      <DetailHeader
+        title={company.name}
+        badge={company.customer ? <Badge tone="success">customer</Badge> : null}
+        subtitle={
+          /* Domain, industry and country are empty on all 2,953 imported companies —
+             Zoho holds none of the three — so this line read "No details recorded"
+             under every name on the site while the phone number and owner sat unread
+             in the same row. */
           <p className="mt-1 text-label text-muted-foreground">
             {[company.domain, company.industry, company.country, company.phone]
               .filter(Boolean)
               .join(' · ') || 'No details recorded'}
           </p>
-        </div>
-        {revenue > 0 ? (
-          <div className="text-right">
-            <p className="text-meta uppercase tracking-wide text-muted-foreground">Revenue</p>
-            <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
-            {converted ? (
-              <p className="text-meta text-muted-foreground">Converted to {fx.reporting}</p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+        }
+        actions={
+          revenue > 0 ? (
+            <div className="text-right">
+              <p className="text-meta uppercase tracking-wide text-muted-foreground">Revenue</p>
+              <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
+              {converted ? (
+                <p className="text-meta text-muted-foreground">Converted to {fx.reporting}</p>
+              ) : null}
+            </div>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">
@@ -201,22 +195,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <NoteBox companyId={company.id} />
-              {company.noteEntries.map((n) => (
-                <div key={n.id} className="rounded-md border border-border px-3 py-2">
-                  <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-meta text-muted-foreground">
-                    {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <NotesCard parent={{ companyId: company.id }} notes={company.noteEntries} />
         </div>
 
         <div className="min-w-0 space-y-4">
@@ -251,14 +230,5 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
     </>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
-    </div>
   );
 }
