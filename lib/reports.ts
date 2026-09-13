@@ -1,4 +1,4 @@
-import { convert } from './currency.ts';
+import { convertOrDrop, warnUnconverted } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { windowFor, type Range } from './metrics.ts';
 import { moneyIn, type ReportContext, type Section } from './reports/shared.ts';
@@ -94,9 +94,14 @@ export async function buildReport(id: ReportId, spec: number | Range): Promise<R
   // converts before it adds. Summed flat, 143 rupee deals were counted as dollars.
   const fx = await currencySettings();
   const money = moneyIn(fx);
+  // One set across every figure in the report: a currency with no rate is named once at
+  // the end rather than per section, and an exported pack can never be short by an amount
+  // nothing in the log mentions.
+  const dropped = new Set<string>();
   const inFx = (amount: unknown, currency: string | null) =>
-    convert(Number(amount ?? 0), currency, fx) ?? 0;
+    convertOrDrop(Number(amount ?? 0), currency, fx, dropped);
 
   const sections = await BUILDERS[id]({ current, previous, fx, money, inFx });
+  warnUnconverted(`report ${id}`, dropped, 'those amounts are missing from its figures');
   return { id, name, range: current, sections };
 }

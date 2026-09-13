@@ -9,7 +9,7 @@ import { TaskList } from '@/components/patterns/task-list';
 import { getCompany } from '@/lib/crm';
 import { hasDb } from '@/lib/prisma';
 import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
-import { convert } from '@/lib/currency';
+import { convertOrDrop, warnUnconverted } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
 import {
   COMPANY_SEGMENT_LABELS,
@@ -29,7 +29,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   // total adds them up, so it has to convert first or it is rupees plus dollars.
   const fx = await currencySettings();
   const entries = company.customer?.revenue ?? [];
-  const revenue = entries.reduce((t, r) => t + (convert(Number(r.amount), r.currency, fx) ?? 0), 0);
+  const dropped = new Set<string>();
+  const revenue = entries.reduce(
+    (t, r) => t + convertOrDrop(Number(r.amount), r.currency, fx, dropped),
+    0,
+  );
+  warnUnconverted('company revenue total', dropped, 'that revenue is missing from the header total');
   // The header total is in the reporting currency and the entries below it are each in
   // the one they were billed in, so a company billed in dollars showed a rupee total
   // above a column of dollar amounts with nothing to explain the jump.

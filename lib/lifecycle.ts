@@ -1,5 +1,5 @@
 import { db } from './prisma.ts';
-import { convert, sumInReporting } from './currency.ts';
+import { sumInReporting, warnUnconverted } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { num } from './calc.ts';
 
@@ -214,17 +214,25 @@ export async function accountValueDistribution() {
     currencySettings(),
   ]);
 
+  // Each account is summed with the canonical helper so an unpriced currency is counted
+  // out loud rather than folded in as nothing — an account whose whole book is in one
+  // would otherwise total 0 and be filtered out below as though it had never billed.
+  const dropped = new Set<string>();
   const values = customers
-    .map((c) => ({
-      id: c.id,
-      name: c.company.name,
-      value: c.revenue.reduce((sum, r) => sum + (convert(num(r.amount), r.currency, money) ?? 0), 0),
-    }))
+    .map((c) => {
+      const { total, unconverted } = sumInReporting(
+        c.revenue.map((r) => ({ amount: num(r.amount), currency: r.currency })),
+        money,
+      );
+      for (const u of unconverted) dropped.add(u.currency);
+      return { id: c.id, name: c.company.name, value: total };
+    })
     // Accounts with no revenue recorded are excluded from the distribution, not counted
     // as zero. A won deal whose money has not been booked yet is unmeasured, and folding
     // it in as £0 drags the median toward a value no client was ever charged.
     .filter((c) => c.value > 0)
     .sort((a, b) => a.value - b.value);
+  warnUnconverted('account value distribution', dropped, 'those accounts are understated or dropped from the distribution');
 
   if (values.length === 0) {
     return { currency: money.reporting, count: 0, mean: null, median: null, p25: null, p75: null, outliers: [] };

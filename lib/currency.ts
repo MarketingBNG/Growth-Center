@@ -153,3 +153,52 @@ export function sumInReporting(
     unconverted: [...missed].map(([currency, amount]) => ({ currency, amount })),
   };
 }
+
+/**
+ * Names the currencies a figure had to leave out.
+ *
+ * The counterpart to `convertOrDrop` below. Together they replace the `?? 0` that was
+ * written at nine call sites: `convert()` returns null precisely when the workspace has
+ * no rate for a currency, and `?? 0` turned that into "this money is worth nothing" —
+ * a total that is quietly short by however much was booked in it, presented with no hint
+ * that anything is missing. A figure that is wrong and silent is the failure this whole
+ * file exists to fix; the trend builders already logged instead, and this is that habit
+ * made shared so the next money sum inherits it rather than re-deciding it.
+ *
+ * A warning rather than a thrown error, and never a substituted figure: the rest of the
+ * total is still the best answer available, and taking a dashboard down over one
+ * unpriced currency helps nobody.
+ */
+export function warnUnconverted(
+  context: string,
+  currencies: Iterable<string>,
+  effect = 'those amounts are missing from the total',
+): void {
+  const codes = [...currencies];
+  if (codes.length === 0) return;
+  console.warn(`[currency] ${context}: no exchange rate for ${codes.join(', ')}; ${effect}.`);
+}
+
+/**
+ * An amount in the reporting currency, or 0 with the currency recorded in `dropped`.
+ *
+ * Callers pass one `Set` through a whole sum and hand it to `warnUnconverted` afterwards,
+ * so a run of a thousand rows in an unpriced currency logs once and names it once.
+ *
+ * The 0 is deliberate and is NOT a claim the money is worthless — it is what "contributes
+ * nothing to this sum" has to be in arithmetic. What makes it honest rather than silent is
+ * that `dropped` leaves the call site unable to forget it happened. Prefer
+ * `sumInReporting` where the shape allows it; this exists for the sums that accumulate
+ * into a Map or a reduce and cannot be expressed as one flat list of rows.
+ */
+export function convertOrDrop(
+  amount: number,
+  currency: string | null | undefined,
+  settings: CurrencySettings,
+  dropped: Set<string>,
+): number {
+  const converted = convert(amount, currency, settings);
+  if (converted !== null) return converted;
+  dropped.add((currency ?? '').toUpperCase() || 'unknown');
+  return 0;
+}

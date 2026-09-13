@@ -17,7 +17,7 @@ import { db } from '../prisma.ts';
 import { cac, costPer, num, rate, roas } from '../calc.ts';
 import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from '../kpi.ts';
 import { DEMO_SOURCE, INTERNAL_SOURCE } from '../sources.ts';
-import { convert, sumInReporting } from '../currency.ts';
+import { convert, convertOrDrop, sumInReporting, warnUnconverted } from '../currency.ts';
 import { fmtMoney } from '../format.ts';
 import { currencySettings } from '../settings.ts';
 import { DUPLICATE_MERGED_SUMMARY } from '../leads.ts';
@@ -1002,9 +1002,7 @@ async function readTrend(range: Range, bucket: 'day' | 'month', channelId?: stri
   addMoney(revenueRows, 'revenue');
   addMoney(spendRows, 'spend');
 
-  if (unconverted.size) {
-    console.warn(`[metrics] trend: no exchange rate for ${[...unconverted].join(', ')}; those amounts are missing from the chart.`);
-  }
+  warnUnconverted('trend', unconverted, 'those amounts are missing from the chart');
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -1096,10 +1094,12 @@ async function readChannelPerformance(range: Range) {
 
   const leadCount = new Map(leadsByChannel.map((r) => [r.channelId ?? '', r._count._all]));
   const revenueSum = new Map<string, number>();
+  const dropped = new Set<string>();
   for (const r of revenueByChannel) {
     const key = r.channelId ?? '';
-    revenueSum.set(key, (revenueSum.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, money) ?? 0));
+    revenueSum.set(key, (revenueSum.get(key) ?? 0) + convertOrDrop(num(r._sum.amount), r.currency, money, dropped));
   }
+  warnUnconverted('channel table', dropped, 'that revenue is missing, so ROAS and CAC read worse than they are');
 
   const rows = channels
     .map((ch) => {
@@ -1658,9 +1658,7 @@ export async function pipelineTrend(range: Range, bucket: 'day' | 'month') {
     row.created += converted;
     buckets.set(k, row);
   }
-  if (unconverted.size) {
-    console.warn(`[metrics] pipelineTrend: no exchange rate for ${[...unconverted].join(', ')}; those deals are missing from the chart.`);
-  }
+  warnUnconverted('pipelineTrend', unconverted, 'those deals are missing from the chart');
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }

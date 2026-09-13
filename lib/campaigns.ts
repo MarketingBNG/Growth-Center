@@ -1,7 +1,7 @@
 import { db } from './prisma.ts';
 import { cac, costPer, num, rate, roas } from './calc.ts';
 import { isAcquisition } from './campaign-objective.ts';
-import { convert } from './currency.ts';
+import { convertOrDrop, warnUnconverted } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import type { Range } from './metrics.ts';
 import { TAGS, cached } from './cache.ts';
@@ -97,10 +97,11 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
 
   // Folded back per campaign once every amount is in the reporting currency. A campaign
   // billed in two currencies would otherwise appear twice.
+  const dropped = new Set<string>();
   const spendBy = new Map<string, { amount: number; clicks: number; impressions: number }>();
   for (const r of spend) {
     const acc = spendBy.get(r.campaignId) ?? { amount: 0, clicks: 0, impressions: 0 };
-    acc.amount += convert(num(r._sum.amount), r.currency, fx) ?? 0;
+    acc.amount += convertOrDrop(num(r._sum.amount), r.currency, fx, dropped);
     acc.clicks += r._sum.clicks ?? 0;
     acc.impressions += r._sum.impressions ?? 0;
     spendBy.set(r.campaignId, acc);
@@ -112,10 +113,13 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
   const revenueBy = new Map<string, number>();
   for (const r of revenue) {
     const key = r.campaignId ?? '';
-    revenueBy.set(key, (revenueBy.get(key) ?? 0) + (convert(num(r._sum.amount), r.currency, fx) ?? 0));
+    revenueBy.set(key, (revenueBy.get(key) ?? 0) + convertOrDrop(num(r._sum.amount), r.currency, fx, dropped));
   }
 
   const customerBy = new Map(customers.map((r) => [r.campaignId ?? '', r._count._all]));
+  // Spend and revenue both feed CAC and ROAS, so a dropped currency moves a ratio, not
+  // just a total.
+  warnUnconverted('campaign performance', dropped, 'that spend and revenue are missing from every campaign figure derived from them');
 
   return campaigns
     .map((c) => {

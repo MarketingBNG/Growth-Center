@@ -1,5 +1,5 @@
 import { db } from './prisma.ts';
-import { convert } from './currency.ts';
+import { convert, convertOrDrop, warnUnconverted } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { num, rate } from './calc.ts';
 import { recordAudit } from './audit.ts';
@@ -126,12 +126,16 @@ export async function envelopesFor(periodStart: string, periodEnd: string): Prom
   });
 
   const spentBy = new Map<string, number>();
+  const dropped = new Set<string>();
   for (const row of perChannel) {
     const channelId = row.campaign?.channelId;
     if (!channelId) continue;
-    const converted = convert(num(row.amount), row.currency, fx) ?? 0;
+    const converted = convertOrDrop(num(row.amount), row.currency, fx, dropped);
     spentBy.set(channelId, (spentBy.get(channelId) ?? 0) + converted);
   }
+  // Understated spend reads as headroom under an envelope that has in fact been breached,
+  // which is the one direction this figure must not be wrong in.
+  warnUnconverted('budget envelopes', dropped, 'that spend is missing, so the remaining budget reads high');
 
   return rows.map((r) => {
     const amount = num(r.amount);

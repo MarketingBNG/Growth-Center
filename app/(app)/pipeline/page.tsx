@@ -9,7 +9,7 @@ import { pipelineBand } from '@/lib/band';
 import { resolveRange, type PageParams } from '@/lib/range';
 import { board, BOARD_LIMIT } from '@/lib/pipeline';
 import { fmtMoney, fmtNumber } from '@/lib/format';
-import { convert } from '@/lib/currency';
+import { convertOrDrop, warnUnconverted } from '@/lib/currency';
 import { currencySettings } from '@/lib/settings';
 import { PipelineViews } from './PipelineViews';
 
@@ -65,6 +65,7 @@ export default async function PipelinePage({
   const total = kpi('totalValue');
   const weighted = kpi('weighted');
 
+  const dropped = new Set<string>();
   const columns = data.columns.map((c) => ({
     total: c.total,
     stage: {
@@ -79,7 +80,7 @@ export default async function PipelinePage({
       name: o.name,
       // Converted here rather than shown as written: the board sums each column, and a
       // column adding rupees to dollars is the figure people act on.
-      value: convert(Number(o.value), o.currency, fx) ?? 0,
+      value: convertOrDrop(Number(o.value), o.currency, fx, dropped),
       probability: o.probability,
       ownerEmail: o.ownerEmail,
       source: o.source,
@@ -90,6 +91,7 @@ export default async function PipelinePage({
         : null,
     })),
   }));
+  warnUnconverted('pipeline board', dropped, 'those deals show as zero on their cards and in their column total');
 
   return (
     <>

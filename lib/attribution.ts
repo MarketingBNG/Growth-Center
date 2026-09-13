@@ -1,5 +1,5 @@
 import { db } from './prisma.ts';
-import { convert } from './currency.ts';
+import { convertOrDrop, warnUnconverted } from './currency.ts';
 import { currencySettings, thresholds } from './settings.ts';
 import { THRESHOLDS, parseThresholdValue } from './thresholds.ts';
 import { num, rate } from './calc.ts';
@@ -122,12 +122,14 @@ async function readCoverage(from: Date, to: Date) {
   // Amounts a currency has no rate for are dropped from BOTH sides rather than counted as
   // zero on one. Counting them only in the denominator would report a coverage shortfall
   // that is really a missing exchange rate.
+  const dropped = new Set<string>();
   const sum = (rows: { currency: string | null; _sum: { amount: unknown } }[]) =>
-    rows.reduce((total, r) => total + (convert(num(r._sum.amount), r.currency, fx) ?? 0), 0);
+    rows.reduce((total, r) => total + convertOrDrop(num(r._sum.amount), r.currency, fx, dropped), 0);
 
   const revenueTotal = sum(revenueRows);
   const revenueCovered = sum(attributedRows);
   const revenue = coverage(revenueCovered, revenueTotal);
+  warnUnconverted('attribution coverage', dropped, 'that revenue is outside the ratio on both sides');
 
   return {
     leads: coverage(leadCovered, leadTotal),
