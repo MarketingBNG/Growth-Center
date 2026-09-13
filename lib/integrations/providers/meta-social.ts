@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { requestFailed } from '../messages.ts';
 import { metaExchangeForLongLived } from './oauth.ts';
 
 // Facebook Page and Instagram Business organic performance — the Social page's numbers.
@@ -23,7 +24,7 @@ const POST_LIMIT = 50;
 
 async function failed(res: Response): Promise<never> {
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  throw new IntegrationError(body?.error?.message ?? `Meta request failed (${res.status}).`);
+  throw new IntegrationError(body?.error?.message ?? requestFailed('Meta', res.status));
 }
 
 async function graph<T>(path: string, params: Record<string, string>): Promise<T> {

@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
 import { num, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
@@ -98,9 +99,9 @@ export function describeError(status: number, body: string): string {
   if (/USER_PERMISSION_DENIED/i.test(body)) {
     return 'The connected Google account has no access to that Ads customer. Connect the account that does, or set the manager account ID.';
   }
-  if (status === 401) return 'Google rejected the token. Reconnect the integration.';
-  if (status === 429) return 'Google Ads is rate-limiting requests. It will resume on the next run.';
-  return `Google Ads request failed (${status}).`;
+  if (status === 401) return tokenRejected('Google');
+  if (status === 429) return rateLimited('Google Ads');
+  return requestFailed('Google Ads', status);
 }
 
 export const googleAds: IntegrationProvider = {

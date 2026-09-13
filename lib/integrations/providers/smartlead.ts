@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { requestFailed } from '../messages.ts';
 import { intAtLeast, num, startOfDay } from '../coerce.ts';
 
 // Smartlead — the cold-email platform the outreach runs on.
@@ -103,7 +104,7 @@ async function get(path: string, apiKey: string, params?: Record<string, string>
       continue;
     }
 
-    if (!res.ok) throw new IntegrationError(`Smartlead request failed (${res.status}).`);
+    if (!res.ok) throw new IntegrationError(requestFailed('Smartlead', res.status));
 
     return res.json();
   }

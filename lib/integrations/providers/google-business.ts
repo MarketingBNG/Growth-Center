@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
 import { num, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
@@ -67,9 +68,9 @@ function describeFailure(status: number, message: string | null): string {
       (message ?? '')
     ).trim();
   }
-  if (status === 401) return 'Google rejected the token. Reconnect the integration.';
-  if (status === 429) return 'Google is rate-limiting Business Profile requests. It will resume on the next run.';
-  return message ?? `Business Profile request failed (${status}).`;
+  if (status === 401) return tokenRejected('Google');
+  if (status === 429) return rateLimited('Google', 'Business Profile');
+  return message ?? requestFailed('Business Profile', status);
 }
 
 async function get(url: string, token: string): Promise<Json> {

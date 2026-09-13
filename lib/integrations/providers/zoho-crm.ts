@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type Entity, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { requestFailed } from '../messages.ts';
 import { intAtLeast } from '../coerce.ts';
 import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
@@ -59,7 +60,7 @@ async function zohoUserIds(token: string): Promise<Map<string, string>> {
       'Zoho has not granted this app permission to read its user list. Reconnect Zoho CRM on the Integrations page.',
     );
   }
-  if (!res.ok) throw new IntegrationError(`Zoho user list request failed (${res.status}).`);
+  if (!res.ok) throw new IntegrationError(requestFailed('Zoho user list', res.status));
 
   const json = (await res.json()) as { users?: { id?: unknown; email?: unknown }[] };
   const byEmail = new Map<string, string>();
@@ -136,7 +137,7 @@ async function readPage(
   // 204 is "nothing here" — an empty module, or nothing modified since. Both are a
   // successful, complete answer, not a failure.
   if (res.status === 204) return { rows: [], nextPageToken: null, more: false };
-  if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
+  if (!res.ok) throw new IntegrationError(requestFailed(`Zoho ${moduleName}`, res.status));
 
   const json = (await res.json()) as {
     data?: Row[];
@@ -688,7 +689,7 @@ export const zohoCrm: IntegrationProvider = {
       headers: { authorization: `Zoho-oauthtoken ${token}` },
       signal: httpTimeout(),
     });
-    if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
+    if (!res.ok) throw new IntegrationError(requestFailed(`Zoho ${moduleName}`, res.status));
 
     const json = (await res.json()) as { data?: Record<string, unknown>[] };
     return (json.data ?? []).map<Entity>((raw) => ({

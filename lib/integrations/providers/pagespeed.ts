@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { rateLimited } from '../messages.ts';
 import { intAtLeast, str } from '../coerce.ts';
 
 // Google PageSpeed Insights — Core Web Vitals for the pages Search Console already found.
@@ -198,7 +199,7 @@ async function measure(url: string, strategy: Strategy, apiKey: string): Promise
     // About the quota, equally run-wide. The cursor is kept, so the pass resumes tomorrow
     // from where it stopped rather than starting over.
     if (res.status === 429) {
-      throw new IntegrationError('Google is rate-limiting PageSpeed requests. It will resume on the next run.');
+      throw new IntegrationError(rateLimited('Google', 'PageSpeed'));
     }
 
     // Google refuses a URL it cannot fetch — a page since removed, or one behind a login.

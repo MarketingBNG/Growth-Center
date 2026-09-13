@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint, type SyncCursor } from '../types.ts';
+import { requestFailed } from '../messages.ts';
 import { intAtLeast, num, startOfDay, str } from '../coerce.ts';
 import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
 
@@ -56,7 +57,7 @@ async function get(url: string, token: string): Promise<Json> {
   });
   if (!res.ok) {
     const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(detail?.error?.message ?? `YouTube request failed (${res.status}).`);
+    throw new IntegrationError(detail?.error?.message ?? requestFailed('YouTube', res.status));
   }
   return (await res.json()) as Json;
 }

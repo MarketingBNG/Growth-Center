@@ -5,6 +5,7 @@ import {
   type MetricPoint,
   type SyncCursor,
 } from '../types.ts';
+import { requestFailed, tokenRejected } from '../messages.ts';
 import { intAtLeast, str } from '../coerce.ts';
 import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
@@ -101,7 +102,7 @@ async function get(path: string, token: string, params: Record<string, string> =
   });
 
   if (res.status === 401) {
-    throw new IntegrationError('Zoho Projects rejected the token. Reconnect the integration.');
+    throw new IntegrationError(tokenRejected('Zoho Projects'));
   }
   // Zoho's own word for "authorised, but not for this". Reconnecting is the fix, so the
   // message says so rather than reporting a bare 403.
@@ -110,7 +111,7 @@ async function get(path: string, token: string, params: Record<string, string> =
       'Zoho Projects refused the request for lack of scope. Reconnect the integration to grant it.',
     );
   }
-  if (!res.ok) throw new IntegrationError(`Zoho Projects request failed (${res.status}).`);
+  if (!res.ok) throw new IntegrationError(requestFailed('Zoho Projects', res.status));
 
   return (await res.json()) as Json;
 }
