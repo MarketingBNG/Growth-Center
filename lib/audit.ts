@@ -20,42 +20,97 @@ export type AuditRow = {
 };
 
 /**
- * How each action reads in a sentence, in the past tense, with the subject supplied by
- * the actor column beside it.
+ * How each action the app WRITES reads in a sentence, in the past tense, with the subject
+ * supplied by the actor column beside it.
  *
- * An action with no entry here falls back to its own string rather than being hidden or
- * relabelled — an unrecognised action is exactly the row someone is most likely to be
- * looking for, and a log that quietly drops what it does not understand is worse than no
- * log at all.
+ * Typed as a total map over `AuditAction`, so adding an action to that union without a
+ * sentence here is a compile error rather than a row that renders as `duplicate.merged`
+ * in a column of English. That is what the union was introduced for; for a while the two
+ * were only related by intention, and ten actions had drifted out of this map by the time
+ * anyone counted.
  */
-const PHRASING: Record<string, string> = {
+const WRITTEN_PHRASING: Record<AuditAction, string> = {
   'apikey.create': 'issued an API key',
   'apikey.revoke': 'revoked an API key',
   'budget.envelope': 'set a budget envelope',
+  'capacity.set': 'set the delivery capacity',
   'content.approve': 'approved a content piece',
+  'content.calendar_import': 'imported a content calendar',
+  'content.calendar_replace': 'replaced the content calendar',
   'content.create': 'added a content piece',
   'content.return': 'returned a content piece to its author',
   'content.status': 'moved a content piece',
-  'insight.dismiss': 'dismissed a finding',
-  'insight.restore': 'restored a finding',
+  'content.update': 'edited a content piece',
+  'duplicate.dismissed': 'dismissed a suspected duplicate',
+  'duplicate.merge_undone': 'undid a merge',
+  'duplicate.merged': 'merged two records',
   'insight.status': 'moved a finding',
   'integration.configure': 'reconfigured an integration',
+  'integration.connect': 'connected an integration',
+  'integration.disconnect': 'disconnected an integration',
   'leads.rebalance': 'rebalanced the lead queue',
+  // The registry is the descriptive half of a sequence — owner, service line, sending
+  // domain. Named as such rather than as "edited a sequence", which is what a change to
+  // the steps would be and is a different thing to go looking for.
+  'sequence.registry': 'edited a sequence’s details',
+  // Two sign-offs, each of which can be given and taken back. Spelled out one per row
+  // rather than built from the kind: the log is read to answer "who approved this copy",
+  // and the sentence is the thing being searched.
+  'sequence.copy_signed': 'signed off a sequence’s copy',
+  'sequence.copy_withdrawn': 'withdrew sign-off on a sequence’s copy',
+  'sequence.numbers_signed': 'verified a sequence’s numbers',
+  'sequence.numbers_withdrawn': 'withdrew verification of a sequence’s numbers',
+  'settings.currency': 'changed the reporting currency',
+  'settings.glossary': 'reassigned a definition',
+  'settings.insight_owner': 'reassigned who owns a kind of finding',
+  'settings.roster': 'changed the marketing roster',
+  'settings.threshold': 'changed a threshold',
+  'user.activate': 'restored access',
+  'user.deactivate': 'revoked access',
+  'user.rename': 'renamed someone',
+  'user.role': 'changed a role',
+};
+
+/**
+ * The `record.*` actions `recentAuditEvents` synthesises from the `activity` table.
+ *
+ * Kept apart from the map above because nothing writes these — they are manufactured at
+ * read time from an ActivityType, so they cannot be members of `AuditAction` and the
+ * compiler has no list to check them against. The test file holds that list instead.
+ */
+const ACTIVITY_PHRASING: Record<string, string> = {
   'record.converted': 'converted a lead',
   'record.note_added': 'added a note',
   'record.owner_changed': 'reassigned a record',
   'record.stage_changed': 'moved a deal',
   'record.status_changed': 'changed a status',
   'record.task_completed': 'completed a task',
-  'integration.connect': 'connected an integration',
-  'integration.disconnect': 'disconnected an integration',
-  'settings.threshold': 'changed a threshold',
-  'settings.currency': 'changed the reporting currency',
-  'settings.glossary': 'reassigned a definition',
-  'user.activate': 'restored access',
-  'user.deactivate': 'revoked access',
-  'user.rename': 'renamed someone',
-  'user.role': 'changed a role',
+};
+
+/**
+ * Actions no call site writes any more, whose rows are still in the table.
+ *
+ * `insight.dismiss` and `insight.restore` were replaced by the single `insight.status`,
+ * and one row of each survives in this workspace's log. They cannot be members of
+ * `AuditAction` — nothing may write them again — but dropping their sentences would make
+ * the two oldest rows in the log the only unreadable ones, which is backwards: age is
+ * what makes a log row worth keeping legible.
+ */
+const RETIRED_PHRASING: Record<string, string> = {
+  'insight.dismiss': 'dismissed a finding',
+  'insight.restore': 'restored a finding',
+};
+
+/**
+ * An action with no entry in any of the three maps falls back to its own string rather than being
+ * hidden or relabelled — an unrecognised action is exactly the row someone is most likely
+ * to be looking for, and a log that quietly drops what it does not understand is worse
+ * than no log at all.
+ */
+const PHRASING: Record<string, string> = {
+  ...WRITTEN_PHRASING,
+  ...ACTIVITY_PHRASING,
+  ...RETIRED_PHRASING,
 };
 
 export function phraseAction(action: string): string {
@@ -71,13 +126,11 @@ export function phraseAction(action: string): string {
  * its own raw string, which is the one thing a reader would assume was a bug in the page
  * rather than in the write.
  *
- * The last two entries are patterns, not names: outreach builds its action from the kind
- * of sign-off being recorded, so that family cannot be listed. They are typed as far as
- * they can be rather than widened to `string`, which would give the whole union up for
- * two call sites.
- *
- * NOT every action here has a PHRASING entry, and that is a real gap rather than an
- * oversight of this list — see the note under KNOWN_UNPHRASED.
+ * The four sign-off actions are written as one template literal at their call site —
+ * `sequence.${kind}_signed` — but `kind` is a closed two-member union, so the four names
+ * it can produce are listed out rather than left as a `${string}` pattern. That is what
+ * lets PHRASING be a total map and the compiler enforce the sync; a pattern member makes
+ * exhaustiveness unexpressible and was how ten actions went unphrased unnoticed.
  */
 export type AuditAction =
   | 'apikey.create'
@@ -109,30 +162,10 @@ export type AuditAction =
   | 'user.deactivate'
   | 'user.rename'
   | 'user.role'
-  | `sequence.${string}_signed`
-  | `sequence.${string}_withdrawn`;
-
-/**
- * Actions that are written but have no sentence above, so the log prints the raw string —
- * "duplicate.merged" where every row around it reads like English.
- *
- * Listed rather than fixed. Giving them phrasings changes what the settings page shows,
- * and this pass is meant to move code about without moving anything a person looks at.
- * Written down so the gap is visible from the map it belongs to, and so the next person
- * to add an action can see that forgetting the sentence is a thing that happens.
- */
-export const KNOWN_UNPHRASED = [
-  'capacity.set',
-  'content.calendar_import',
-  'content.calendar_replace',
-  'content.update',
-  'duplicate.dismissed',
-  'duplicate.merge_undone',
-  'duplicate.merged',
-  'sequence.registry',
-  'settings.insight_owner',
-  'settings.roster',
-] as const satisfies readonly AuditAction[];
+  | 'sequence.copy_signed'
+  | 'sequence.copy_withdrawn'
+  | 'sequence.numbers_signed'
+  | 'sequence.numbers_withdrawn';
 
 /**
  * Write one audit row.

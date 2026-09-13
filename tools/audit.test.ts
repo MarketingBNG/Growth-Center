@@ -6,25 +6,69 @@ import { describeRow, phraseAction, summariseDetail } from '../lib/audit.ts';
 // of its reading. They are written to degrade rather than hide: an action or a detail
 // shape nobody anticipated is exactly the row someone will be hunting for.
 
-test('every action written in the app has a phrasing', async () => {
-  // Keeps the log from filling with raw identifiers as new call sites are added. If this
-  // fails, add the new action to PHRASING rather than deleting the case from here.
+test('every action written in the app has a phrasing', () => {
+  // The compiler already enforces this — PHRASING is a total map over AuditAction — so
+  // this is here for the half it cannot check: that a sentence is a SENTENCE and not the
+  // identifier copied across, which would satisfy the type and still print
+  // "duplicate.merged" in a column of English.
+  //
+  // Ten of these were unphrased for months. Nothing failed; the log simply printed raw
+  // identifiers, which reads as a bug in the page rather than a gap in a map.
   const written = [
     'apikey.create',
     'apikey.revoke',
+    'budget.envelope',
+    'capacity.set',
+    'content.approve',
+    'content.calendar_import',
+    'content.calendar_replace',
     'content.create',
+    'content.return',
     'content.status',
+    'content.update',
+    'duplicate.dismissed',
+    'duplicate.merge_undone',
+    'duplicate.merged',
+    'insight.status',
     'integration.configure',
     'integration.connect',
     'integration.disconnect',
+    'leads.rebalance',
+    'sequence.registry',
+    'sequence.copy_signed',
+    'sequence.copy_withdrawn',
+    'sequence.numbers_signed',
+    'sequence.numbers_withdrawn',
     'settings.currency',
+    'settings.glossary',
+    'settings.insight_owner',
+    'settings.roster',
+    'settings.threshold',
     'user.activate',
     'user.deactivate',
     'user.rename',
     'user.role',
   ];
+
   for (const action of written) {
-    assert.notEqual(phraseAction(action), action, `${action} has no phrasing`);
+    const phrase = phraseAction(action);
+    assert.notEqual(phrase, action, `${action} has no phrasing`);
+    // A sentence reads as one: lower case, spaced, and carrying none of the dotted
+    // identifier it replaces.
+    assert.match(phrase, /^[a-z][a-z '’-]* /, `${action} is phrased as "${phrase}"`);
+    assert.doesNotMatch(phrase, /\./, `${action} is phrased as "${phrase}"`);
+  }
+});
+
+test('a withdrawn sign-off does not read like a granted one', () => {
+  // These four are the only actions built from a variable at their call site, and the
+  // pair that matters most is the one the log is opened to settle: whether the copy was
+  // signed off or the sign-off was taken back.
+  for (const kind of ['copy', 'numbers']) {
+    const signed = phraseAction(`sequence.${kind}_signed`);
+    const withdrawn = phraseAction(`sequence.${kind}_withdrawn`);
+    assert.notEqual(signed, withdrawn);
+    assert.match(withdrawn, /withdrew/);
   }
 });
 
@@ -111,4 +155,16 @@ test('every record action the merge can produce has a phrasing', () => {
 // share a row in the phrasing map and one would silently win.
 test('a record action reads differently from a settings action', () => {
   assert.notEqual(phraseAction('record.status_changed'), phraseAction('content.status'));
+});
+
+// ── Retired actions ───────────────────────────────────────────────────────────────────
+
+test('an action nothing writes any more still reads as a sentence', () => {
+  // insight.dismiss and insight.restore became the single insight.status, and a row of
+  // each is still in the log. They were briefly dropped when the phrasing map was made
+  // total over the actions the app can write — which made the two oldest rows the only
+  // unreadable ones. A log is kept precisely so old rows stay legible.
+  for (const action of ['insight.dismiss', 'insight.restore']) {
+    assert.notEqual(phraseAction(action), action, `${action} lost its phrasing`);
+  }
 });
