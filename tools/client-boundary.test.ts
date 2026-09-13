@@ -48,6 +48,16 @@ function serverOnly(): Set<string> {
         const from = line.match(/from\s+'([^']+)'/)?.[1];
         if (from) imports.push(from);
       }
+      // `export … from` pulls the module in exactly as an import does, and a file that is
+      // nothing but re-exports has no import line at all. lib/metrics.ts and
+      // lib/content-calendar.ts are both that shape now: they front a directory whose
+      // halves do reach Prisma. Reading only import lines, this scan called them
+      // client-safe — the precise blindness it exists to prevent.
+      for (const line of source.match(/^\s*export\s[^;]*\sfrom\s[^;]+;/gm) ?? []) {
+        if (/^\s*export\s+type\s/.test(line)) continue;
+        const from = line.match(/from\s+'([^']+)'/)?.[1];
+        if (from) imports.push(from);
+      }
       modules.set(name, imports);
     }
   };

@@ -65,7 +65,11 @@ test('a customer lands on one channel, lead first and deal second', () => {
 // ── one implementation, not two ──────────────────────────────────────────────────────
 
 test('the funnel and the cost card count consultations with the same predicate', () => {
-  const metrics = readFileSync('lib/metrics.ts', 'utf8');
+  // The metrics layer is three files behind a façade now, so this reads all of them: the
+  // invariants below are about the layer, not about which file a line happens to sit in.
+  const metrics = ['lib/metrics.ts', 'lib/metrics/window.ts', 'lib/metrics/core.ts', 'lib/metrics/kpis.ts']
+    .map((f) => readFileSync(f, 'utf8'))
+    .join('\n');
   const uses = metrics.match(/consultationHeld\(/g) ?? [];
   assert.ok(uses.length >= 2, `expected both call sites to use it, saw ${uses.length}`);
   // What must not come back: a hand-written copy of the definition beside the named one.
