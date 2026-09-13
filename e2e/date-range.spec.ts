@@ -38,8 +38,15 @@ test('picking a start and an end puts both dates in the URL', async ({ page }) =
 
   await apply.click();
 
-  await expect(page).toHaveURL(new RegExp(`from=${startLabel}`));
-  await expect(page).toHaveURL(new RegExp(`to=${endLabel}`));
+  // Longer than the default 15s on purpose. Applying a range is a soft navigation, and
+  // the App Router leaves the old URL in the bar until the new route's payload arrives —
+  // so this is really waiting on /analytics rendering, not on the picker. Cold, that page
+  // takes about fifteen seconds in dev against the real database (warm it is under one),
+  // which put the assertion in a photo-finish with its own timeout: the suite failed here
+  // on a cleared .next and passed on a warm one, having proved nothing either way.
+  const settled = { timeout: 45_000 };
+  await expect(page).toHaveURL(new RegExp(`from=${startLabel}`), settled);
+  await expect(page).toHaveURL(new RegExp(`to=${endLabel}`), settled);
   // The preset is dropped, or the URL would claim two different windows at once.
   await expect(page).not.toHaveURL(/range=/);
 });
