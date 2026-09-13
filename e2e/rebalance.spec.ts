@@ -78,9 +78,19 @@ test('the Rebalance preview renders the real split', async ({ page, context, bas
 
   // The held-back figure is four digits on this data, so it must be separated like every
   // other number on the page.
+  //
+  // The word boundaries are load-bearing and were, for a while, not there at all: the
+  // source held two literal backspace bytes where \b had been meant, so the pattern
+  // asked for a control character either side of the digits and could never match. The
+  // assertion passed on every run and checked nothing. With real boundaries, a
+  // separated 2,082 reads as runs of 1 and 3 digits and passes; an unseparated 2082 is
+  // one run of 4 and fails, which is the whole point.
+  //
+  // Only `deferred` can reach four digits. The count beside it is capped at 200 moves
+  // per run, which is why it renders unformatted without tripping this.
   const note = await dialog.getByText(/leads move, oldest first/).innerText();
   console.log(`    note -> ${note.replace(/\s+/g, ' ')}`);
-  expect(note, 'thousands separator missing').not.toMatch(/\d{4,}/);
+  expect(note, 'thousands separator missing').not.toMatch(/\b\d{4,}\b/);
 
   for (const p of [...new Set(problems)]) console.log(`    problem: ${p}`);
   expect(problems, 'page reported errors').toEqual([]);
