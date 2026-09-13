@@ -63,6 +63,103 @@ export function phraseAction(action: string): string {
 }
 
 /**
+ * Every action the app can write.
+ *
+ * Thirty-odd call sites each spelled their action as a bare string literal inside an
+ * inline auditEvent.create, with nothing connecting them to the PHRASING map above. A
+ * mistyped action did not fail anywhere — it wrote happily and then rendered in the log as
+ * its own raw string, which is the one thing a reader would assume was a bug in the page
+ * rather than in the write.
+ *
+ * The last two entries are patterns, not names: outreach builds its action from the kind
+ * of sign-off being recorded, so that family cannot be listed. They are typed as far as
+ * they can be rather than widened to `string`, which would give the whole union up for
+ * two call sites.
+ *
+ * NOT every action here has a PHRASING entry, and that is a real gap rather than an
+ * oversight of this list — see the note under KNOWN_UNPHRASED.
+ */
+export type AuditAction =
+  | 'apikey.create'
+  | 'apikey.revoke'
+  | 'budget.envelope'
+  | 'capacity.set'
+  | 'content.approve'
+  | 'content.calendar_import'
+  | 'content.calendar_replace'
+  | 'content.create'
+  | 'content.return'
+  | 'content.status'
+  | 'content.update'
+  | 'duplicate.dismissed'
+  | 'duplicate.merge_undone'
+  | 'duplicate.merged'
+  | 'insight.status'
+  | 'integration.configure'
+  | 'integration.connect'
+  | 'integration.disconnect'
+  | 'leads.rebalance'
+  | 'sequence.registry'
+  | 'settings.currency'
+  | 'settings.glossary'
+  | 'settings.insight_owner'
+  | 'settings.roster'
+  | 'settings.threshold'
+  | 'user.activate'
+  | 'user.deactivate'
+  | 'user.rename'
+  | 'user.role'
+  | `sequence.${string}_signed`
+  | `sequence.${string}_withdrawn`;
+
+/**
+ * Actions that are written but have no sentence above, so the log prints the raw string —
+ * "duplicate.merged" where every row around it reads like English.
+ *
+ * Listed rather than fixed. Giving them phrasings changes what the settings page shows,
+ * and this pass is meant to move code about without moving anything a person looks at.
+ * Written down so the gap is visible from the map it belongs to, and so the next person
+ * to add an action can see that forgetting the sentence is a thing that happens.
+ */
+export const KNOWN_UNPHRASED = [
+  'capacity.set',
+  'content.calendar_import',
+  'content.calendar_replace',
+  'content.update',
+  'duplicate.dismissed',
+  'duplicate.merge_undone',
+  'duplicate.merged',
+  'sequence.registry',
+  'settings.insight_owner',
+  'settings.roster',
+] as const satisfies readonly AuditAction[];
+
+/**
+ * Write one audit row.
+ *
+ * The shape was identical at every call site — actor, action, entity, detail — so the
+ * only thing each one was really choosing was its four literals. Going through here means
+ * `action` is checked against the union above instead of being any string at all.
+ */
+export async function recordAudit(input: {
+  actorEmail: string;
+  action: AuditAction;
+  entityType: string;
+  entityId?: string | null;
+  detail?: unknown;
+}): Promise<void> {
+  await db().auditEvent.create({
+    data: {
+      actorEmail: input.actorEmail,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId ?? null,
+      detail: (input.detail ?? undefined) as never,
+    },
+  });
+}
+
+/**
  * The one-line "what changed" beside the sentence, read out of the detail JSON.
  *
  * Deliberately generic rather than a switch per action: detail shapes are written by a

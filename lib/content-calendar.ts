@@ -1,4 +1,5 @@
 import { db } from './prisma.ts';
+import { recordAudit } from './audit.ts';
 import { csvDocument, csvParse, csvRow } from './csv.ts';
 import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from './enums.ts';
 import { COMPANY_SEGMENTS } from './company-facts.ts';
@@ -1203,23 +1204,22 @@ export async function importCalendar(input: {
   // read. The same numbers lib/ai.ts arrived at for the same reason.
   { timeout: 30_000, maxWait: 10_000 });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: replace ? 'content.calendar_replace' : 'content.calendar_import',
-      entityType: 'content_import',
-      entityId: result.importId,
-      detail: {
-        month: monthKey(month),
-        fileName,
-        fileFormat,
-        rowsRead: sheet.rowsRead,
-        created: sheet.rows.length,
-        skipped: sheet.skippedReasons.length,
-        replaced: result.replaced,
-        keptPublished: result.keptPublished,
-      },
+  await recordAudit({
+    actorEmail,
+    action: replace ? 'content.calendar_replace' : 'content.calendar_import',
+    entityType: 'content_import',
+    entityId: result.importId,
+    detail: {
+      month: monthKey(month),
+      fileName,
+      fileFormat,
+      rowsRead: sheet.rowsRead,
+      created: sheet.rows.length,
+      skipped: sheet.skippedReasons.length,
+      replaced: result.replaced,
+      keptPublished: result.keptPublished,
     },
+  
   });
 
   return {

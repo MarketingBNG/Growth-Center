@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordAudit } from './audit.ts';
 import { db } from './prisma.ts';
 import { rate } from './calc.ts';
 import { slice, type ListQuery } from './list-query.ts';
@@ -158,14 +159,13 @@ export async function setSequenceRegistry(id: string, input: RegistryInput, acto
   if (!before) return null;
 
   await db().sequence.update({ where: { id }, data: input });
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'sequence.registry',
-      entityType: 'sequence',
-      entityId: id,
-      detail: { name: before.name, ...input },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'sequence.registry',
+    entityType: 'sequence',
+    entityId: id,
+    detail: { name: before.name, ...input },
+  
   });
   return { ok: true };
 }
@@ -234,15 +234,14 @@ export async function signOffSequence(
         : { numbersVerifiedByEmail: who, numbersVerifiedAt: stamp, numbersVerifiedHash: hash },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: granted ? `sequence.${kind}_signed` : `sequence.${kind}_withdrawn`,
-      entityType: 'sequence',
-      entityId: id,
-      // The hash goes in the record too, so the log says which version was signed.
-      detail: { name: seq.name, kind, templateHash: hash },
-    },
+  await recordAudit({
+    actorEmail,
+    action: granted ? `sequence.${kind}_signed` : `sequence.${kind}_withdrawn`,
+    entityType: 'sequence',
+    entityId: id,
+    // The hash goes in the record too, so the log says which version was signed.
+    detail: { name: seq.name, kind, templateHash: hash },
+  
   });
 
   return { ok: true };

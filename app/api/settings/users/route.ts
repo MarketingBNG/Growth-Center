@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
-import { db } from '@/lib/prisma';
 import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/roles';
 import { renameUser, setActive, setRole } from '@/lib/users';
+import { recordAudit } from '@/lib/audit';
 
 const input = z
   .object({
@@ -25,13 +25,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
   try {
     if (name !== undefined) {
       await renameUser(target, name);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: 'user.rename',
-          entityType: 'app_user',
-          detail: { email: target, name },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: 'user.rename',
+        entityType: 'app_user',
+        detail: { email: target, name },
+      
       });
     }
 
@@ -43,13 +42,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
       }
 
       await setRole(target, role);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: 'user.role',
-          entityType: 'app_user',
-          detail: { email: target, role },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: 'user.role',
+        entityType: 'app_user',
+        detail: { email: target, role },
+      
       });
     }
 
@@ -61,13 +59,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
       }
 
       await setActive(target, active);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: active ? 'user.activate' : 'user.deactivate',
-          entityType: 'app_user',
-          detail: { email: target },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: active ? 'user.activate' : 'user.deactivate',
+        entityType: 'app_user',
+        detail: { email: target },
+      
       });
     }
   } catch (e) {

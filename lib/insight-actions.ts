@@ -1,4 +1,5 @@
 import { db } from './prisma.ts';
+import { recordAudit } from './audit.ts';
 import { canonicalEmail } from './roles.ts';
 import {
   APPROVAL_STATE,
@@ -114,20 +115,19 @@ export async function setInsightStatus(
     },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'insight.status',
-      entityType: 'ai_insight',
-      entityId: id,
-      detail: {
-        title: insight.title,
-        from,
-        to: change.to,
-        ...(ownerEmail ? { owner: ownerEmail } : {}),
-        ...(change.reviewNote?.trim() ? { note: change.reviewNote.trim() } : {}),
-      },
+  await recordAudit({
+    actorEmail,
+    action: 'insight.status',
+    entityType: 'ai_insight',
+    entityId: id,
+    detail: {
+      title: insight.title,
+      from,
+      to: change.to,
+      ...(ownerEmail ? { owner: ownerEmail } : {}),
+      ...(change.reviewNote?.trim() ? { note: change.reviewNote.trim() } : {}),
     },
+  
   });
 
   return { id, status: change.to };

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { recordAudit } from '@/lib/audit';
 import { body, route } from '@/lib/api';
 import { generateApiKey } from '@/lib/crypto';
 import { db } from '@/lib/prisma';
@@ -17,8 +18,11 @@ export const POST = route('apikeys:manage', async (user, req) => {
 
   const { plaintext, hash, prefix } = generateApiKey();
   await db().apiKey.create({ data: { name, hash, prefix, createdByEmail: user.email } });
-  await db().auditEvent.create({
-    data: { actorEmail: user.email, action: 'apikey.create', entityType: 'api_key', detail: { name, prefix } },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'apikey.create',
+    entityType: 'api_key',
+    detail: { name, prefix },
   });
 
   // The only time the plaintext leaves the server.

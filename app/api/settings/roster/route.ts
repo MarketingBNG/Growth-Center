@@ -4,6 +4,7 @@ import { db } from '@/lib/prisma';
 import { ROSTER_KEY, marketingRoster } from '@/lib/roster';
 import { canonicalEmail } from '@/lib/roles';
 import { TAGS, invalidate } from '@/lib/cache';
+import { recordAudit } from '@/lib/audit';
 
 // Who the Growth Center's queue is for. D2: the task-debt rule was raising a finding per
 // person across the whole firm, eighteen of them, of whom one was on the marketing team.
@@ -53,14 +54,13 @@ export const PUT = route('settings:manage', async (user, req) => {
 
   // Recorded for the same reason a threshold change is: removing somebody from the roster
   // is how their overdue work stops appearing, and a quiet queue should be explainable.
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: 'settings.roster',
-      entityType: 'app_setting',
-      entityId: ROSTER_KEY,
-      detail: { from: before, to: unique },
-    },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'settings.roster',
+    entityType: 'app_setting',
+    entityId: ROSTER_KEY,
+    detail: { from: before, to: unique },
+  
   });
 
   return { emails: unique, rejected };

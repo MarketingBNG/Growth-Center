@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
 import { CURRENCIES, currencySettings, refreshRatesIfStale, saveCurrencySettings } from '@/lib/settings';
 import { TAGS, invalidate } from '@/lib/cache';
+import { recordAudit } from '@/lib/audit';
 
 const codes = CURRENCIES.map((c) => c.code) as [string, ...string[]];
 
@@ -41,14 +41,13 @@ export const PUT = route('settings:manage', async (user, req) => {
   // has to go the moment it changes rather than at the end of its TTL.
   await invalidate(TAGS.settings);
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: 'settings.currency',
-      entityType: 'app_setting',
-      entityId: 'currency',
-      detail: currency,
-    },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'settings.currency',
+    entityType: 'app_setting',
+    entityId: 'currency',
+    detail: currency,
+  
   });
 
   return { currency };

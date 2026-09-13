@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
 import { GLOSSARY, GLOSSARY_SLUGS, isGlossarySlug } from '@/lib/glossary';
 import { glossaryOwners, saveGlossaryOwner } from '@/lib/settings';
 import { TAGS, invalidate } from '@/lib/cache';
+import { recordAudit } from '@/lib/audit';
 
 // Appendix C's third column: who owns each definition.
 //
@@ -36,14 +36,13 @@ export const PUT = route('settings:manage', async (user, req) => {
   // Recorded for the same reason a threshold change is: the owner of a definition is who
   // gets asked when two reports disagree, and a quiet reassignment leaves the question
   // pointed at somebody who never agreed to answer it.
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: 'settings.glossary',
-      entityType: 'app_setting',
-      entityId: input.slug,
-      detail: { name: term.term, from: before, to: owner ?? `${term.defaultOwner} (default)` },
-    },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'settings.glossary',
+    entityType: 'app_setting',
+    entityId: input.slug,
+    detail: { name: term.term, from: before, to: owner ?? `${term.defaultOwner} (default)` },
+  
   });
 
   return { slug: input.slug, owner: owner ?? term.defaultOwner, isDefault: owner === null };

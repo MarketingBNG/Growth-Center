@@ -20,6 +20,7 @@ import { writeSeoRows, writeWebVitals } from './writers/seo.ts';
 import { writeWorkTasks } from './writers/tasks.ts';
 import { linkConvertedLeads, writeCrmActivity, writeCrmRecords, writeRevenueFromWonDeals } from './writers/crm.ts';
 import { writeOutreach } from './writers/outreach.ts';
+import { recordAudit } from '../audit.ts';
 
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.
@@ -225,8 +226,11 @@ export async function connect(id: string, input: ConnectInput, actorEmail: strin
       update: { ...sealed, expiresAt: result.expiresAt },
     });
 
-    await db().auditEvent.create({
-      data: { actorEmail, action: 'integration.connect', entityType: 'integration', entityId: id },
+    await recordAudit({
+      actorEmail,
+      action: 'integration.connect',
+      entityType: 'integration',
+      entityId: id,
     });
 
     return { ok: true as const };
@@ -277,8 +281,11 @@ export async function disconnect(id: string, actorEmail: string) {
       syncedThrough: null,
     },
   });
-  await db().auditEvent.create({
-    data: { actorEmail, action: 'integration.disconnect', entityType: 'integration', entityId: id },
+  await recordAudit({
+    actorEmail,
+    action: 'integration.disconnect',
+    entityType: 'integration',
+    entityId: id,
   });
 
   return { ok: true as const };
@@ -804,14 +811,13 @@ export async function setConfig(
     update: { config: config as Prisma.InputJsonValue },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'integration.configure',
-      entityType: 'integration',
-      entityId: id,
-      detail: config as Prisma.InputJsonValue,
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'integration.configure',
+    entityType: 'integration',
+    entityId: id,
+    detail: config as Prisma.InputJsonValue,
+  
   });
 
   return config;

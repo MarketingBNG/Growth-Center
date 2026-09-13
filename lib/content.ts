@@ -12,6 +12,7 @@ import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from './enu
 import { COMPANY_SEGMENTS } from './company-facts.ts';
 import { FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from './calc.ts';
+import { recordAudit } from './audit.ts';
 
 export const contentInput = z.object({
   title: z.string().trim().min(1).max(200),
@@ -131,16 +132,15 @@ export async function updateContent(id: string, patch: ContentPatch, actorEmail:
 
   await db().contentPiece.update({ where: { id }, data });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'content.update',
-      entityType: 'content_piece',
-      entityId: id,
-      // The title as it was, so the log still says which piece this was about after the
-      // piece has been renamed twice.
-      detail: { title: existing.title, fields: changed },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'content.update',
+    entityType: 'content_piece',
+    entityId: id,
+    // The title as it was, so the log still says which piece this was about after the
+    // piece has been renamed twice.
+    detail: { title: existing.title, fields: changed },
+  
   });
 
   return { id, changed, unchanged: false };
@@ -218,14 +218,13 @@ export async function createContent(input: ContentInput, actorEmail: string) {
     select: { id: true },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'content.create',
-      entityType: 'content_piece',
-      entityId: piece.id,
-      detail: { title: input.title, status: input.status, format: input.format },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'content.create',
+    entityType: 'content_piece',
+    entityId: piece.id,
+    detail: { title: input.title, status: input.status, format: input.format },
+  
   });
 
   return piece;
@@ -336,16 +335,15 @@ export async function setContentStatus(
         status === CONTENT_REVIEW_STATUS && !existing.reviewStartedAt ? new Date() : undefined,
     },
   });
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'content.status',
-      entityType: 'content_piece',
-      entityId: id,
-      // The title is copied in rather than joined at read time: a piece can be renamed
-      // or deleted, and the log has to still say what was published.
-      detail: { title: existing.title, from: existing.status, to: status },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'content.status',
+    entityType: 'content_piece',
+    entityId: id,
+    // The title is copied in rather than joined at read time: a piece can be renamed
+    // or deleted, and the log has to still say what was published.
+    detail: { title: existing.title, from: existing.status, to: status },
+  
   });
 
   return { from: existing.status, to: status, unchanged: false };
@@ -398,17 +396,16 @@ export async function approveContent(id: string, actorEmail: string) {
     },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'content.approve',
-      entityType: 'content_piece',
-      entityId: id,
-      // The hash goes in the log as well as on the row. The row records the current
-      // approval; the log records that this exact version was approved on this date, and
-      // survives the row being approved again later.
-      detail: { title: piece.title, hash },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'content.approve',
+    entityType: 'content_piece',
+    entityId: id,
+    // The hash goes in the log as well as on the row. The row records the current
+    // approval; the log records that this exact version was approved on this date, and
+    // survives the row being approved again later.
+    detail: { title: piece.title, hash },
+  
   });
 
   return { approved: true as const, hash };
@@ -471,14 +468,13 @@ export async function returnContent(id: string, note: string, actorEmail: string
     });
   }
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'content.return',
-      entityType: 'content_piece',
-      entityId: id,
-      detail: { title: piece.title, note: trimmed, to: piece.authorEmail ?? 'no author on record' },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'content.return',
+    entityType: 'content_piece',
+    entityId: id,
+    detail: { title: piece.title, note: trimmed, to: piece.authorEmail ?? 'no author on record' },
+  
   });
 
   return { returned: true as const, notifiedAuthor: piece.authorEmail !== null };

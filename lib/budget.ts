@@ -2,6 +2,7 @@ import { db } from './prisma.ts';
 import { convert } from './currency.ts';
 import { currencySettings } from './settings.ts';
 import { num, rate } from './calc.ts';
+import { recordAudit } from './audit.ts';
 
 // The budget envelope, and spend against it. §22.
 //
@@ -227,19 +228,18 @@ export async function setEnvelope(input: EnvelopeInput, actorEmail: string) {
     },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'budget.envelope',
-      entityType: 'budget_envelope',
-      entityId: saved.id,
-      detail: {
-        name: channel.name,
-        period: `${input.periodStart} to ${input.periodEnd}`,
-        from: before ? `${before.currency} ${num(before.amount)}` : null,
-        to: `${input.currency} ${input.amount}`,
-      },
+  await recordAudit({
+    actorEmail,
+    action: 'budget.envelope',
+    entityType: 'budget_envelope',
+    entityId: saved.id,
+    detail: {
+      name: channel.name,
+      period: `${input.periodStart} to ${input.periodEnd}`,
+      from: before ? `${before.currency} ${num(before.amount)}` : null,
+      to: `${input.currency} ${input.amount}`,
     },
+  
   });
 
   return saved;

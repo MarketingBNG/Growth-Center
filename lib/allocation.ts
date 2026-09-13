@@ -362,6 +362,11 @@ export async function applyAllocation(actorEmail: string, options: PlanOptions =
       // decision by one person, and recorded only as two thousand rows it is invisible as
       // a decision: there is nothing to find unless you already know which lead to open.
       // Not a duplicate of the Activity rows, a different fact at a different grain.
+      // Not recordAudit(), alone among the audit writes: this one is a member of a
+      // $transaction array, which takes Prisma's own promises. Going through the helper
+      // would return a plain promise, quietly drop this row out of the transaction, and
+      // leave a rebalance that moved two thousand leads with no record of who ordered it
+      // if the surrounding writes rolled back.
       db().auditEvent.create({
         data: {
           actorEmail,

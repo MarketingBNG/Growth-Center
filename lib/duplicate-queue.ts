@@ -1,6 +1,7 @@
 import { db } from './prisma.ts';
 import { findCandidates, RULE_LABELS, type Candidate, type MatchRule } from './duplicates.ts';
 import { isMachineAddress } from './dedupe.ts';
+import { recordAudit } from './audit.ts';
 
 // The database half of §8.1: scanning for candidates, and acting on one.
 //
@@ -402,25 +403,24 @@ export async function mergeDuplicate(candidateId: string, actorEmail: string) {
 
   // Outside the transaction: a merge that succeeded must not be rolled back because the
   // audit row failed to write, and G6 wants the record of who did it either way.
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'duplicate.merged',
-      entityType,
-      entityId: primaryId,
-      detail: {
-        merged: duplicateId,
-        into: primaryId,
-        rule: candidate.rule,
-        matchedOn: candidate.matchedOn,
-        candidateId,
-        // The deleted record and the rows that moved, so the merge can be reversed. It
-        // lives on the audit row rather than in a table of its own because the audit row
-        // is already the thing that says this merge happened, and a snapshot that could
-        // drift out of step with it would be worse than none.
-        undo,
-      },
+  await recordAudit({
+    actorEmail,
+    action: 'duplicate.merged',
+    entityType,
+    entityId: primaryId,
+    detail: {
+      merged: duplicateId,
+      into: primaryId,
+      rule: candidate.rule,
+      matchedOn: candidate.matchedOn,
+      candidateId,
+      // The deleted record and the rows that moved, so the merge can be reversed. It
+      // lives on the audit row rather than in a table of its own because the audit row
+      // is already the thing that says this merge happened, and a snapshot that could
+      // drift out of step with it would be worse than none.
+      undo,
     },
+  
   });
 
   return { primaryId, duplicateId, entityType };
@@ -514,14 +514,13 @@ export async function unmergeDuplicate(candidateId: string, actorEmail: string) 
     });
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'duplicate.merge_undone',
-      entityType,
-      entityId: primaryId,
-      detail: { restored: duplicateId, from: primaryId, candidateId, mergedAt: event.createdAt },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'duplicate.merge_undone',
+    entityType,
+    entityId: primaryId,
+    detail: { restored: duplicateId, from: primaryId, candidateId, mergedAt: event.createdAt },
+  
   });
 
   return { restored: duplicateId, primaryId, entityType };
@@ -544,14 +543,13 @@ export async function dismissDuplicate(candidateId: string, reason: string, acto
   });
   if (updated.count === 0) throw new MergeError('That pair has already been resolved.');
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'duplicate.dismissed',
-      entityType: 'duplicate_candidate',
-      entityId: candidateId,
-      detail: { reason: note },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'duplicate.dismissed',
+    entityType: 'duplicate_candidate',
+    entityId: candidateId,
+    detail: { reason: note },
+  
   });
 }
 

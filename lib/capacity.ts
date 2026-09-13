@@ -2,6 +2,7 @@ import { db } from './prisma.ts';
 import { z } from 'zod';
 import { Prisma } from './generated/prisma/client.ts';
 import { rate } from './calc.ts';
+import { recordAudit } from './audit.ts';
 
 // §6.2: "Add a Delivery capacity card: open consultations against capacity, fed by Zoho
 // Projects or a monthly manual input from Simran/Kanishka."
@@ -62,14 +63,13 @@ export async function setCapacity(input: CapacitySetting, actorEmail: string) {
     update: { value: value as Prisma.InputJsonValue },
   });
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail,
-      action: 'capacity.set',
-      entityType: 'app_setting',
-      entityId: CAPACITY_KEY,
-      detail: { monthlyConsultations: input.monthlyConsultations, note: input.note ?? null },
-    },
+  await recordAudit({
+    actorEmail,
+    action: 'capacity.set',
+    entityType: 'app_setting',
+    entityId: CAPACITY_KEY,
+    detail: { monthlyConsultations: input.monthlyConsultations, note: input.note ?? null },
+  
   });
 
   return value;
