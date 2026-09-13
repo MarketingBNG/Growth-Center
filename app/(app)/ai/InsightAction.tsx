@@ -1,10 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useMutation } from '@/lib/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
 import {
   APPROVAL_STATE,
@@ -35,12 +35,10 @@ export function InsightAction({
   currentOwner: string | null;
   canApprove: boolean;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
   const [target, setTarget] = useState<InsightStatus | null>(null);
   const [owner, setOwner] = useState(currentOwner ?? '');
   const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, setError, run } = useMutation();
 
   // Approval is the one move that belongs to a single identity. Offered only to whoever
   // holds it: the route refuses it regardless, and a button that always fails teaches
@@ -61,23 +59,17 @@ export function InsightAction({
   }
 
   function submit(to: InsightStatus) {
-    setError(null);
-    start(async () => {
-      try {
-        await api(`/api/ai/insights/${id}`, {
-          method: 'PATCH',
-          json: {
-            status: to,
-            ownerEmail: owner || undefined,
-            reviewNote: note.trim() || undefined,
-          },
-        });
-        setTarget(null);
-        setNote('');
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
+    run(async () => {
+      await api(`/api/ai/insights/${id}`, {
+        method: 'PATCH',
+        json: {
+          status: to,
+          ownerEmail: owner || undefined,
+          reviewNote: note.trim() || undefined,
+        },
+      });
+      setTarget(null);
+      setNote('');
     });
   }
 

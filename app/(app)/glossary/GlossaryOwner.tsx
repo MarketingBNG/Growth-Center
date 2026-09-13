@@ -1,9 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useMutation } from '@/lib/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
 
 /**
@@ -26,10 +26,8 @@ export function GlossaryOwner({
   owner: string;
   isDefault: boolean;
 }) {
-  const router = useRouter();
   const [value, setValue] = useState(isDefault ? '' : owner);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { pending, error, run } = useMutation();
 
   function commit() {
     const next = value.trim();
@@ -37,19 +35,15 @@ export function GlossaryOwner({
     // audit row per term saying an owner went from Akshay to Akshay.
     if (next === (isDefault ? '' : owner)) return;
 
-    setError(null);
-    start(async () => {
-      try {
+    run(
+      async () => {
         await api('/api/settings/glossary', {
           method: 'PUT',
           json: { slug, owner: next || null },
         });
-        router.refresh();
-      } catch (e) {
-        setValue(isDefault ? '' : owner);
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
-    });
+      },
+      () => setValue(isDefault ? '' : owner),
+    );
   }
 
   return (

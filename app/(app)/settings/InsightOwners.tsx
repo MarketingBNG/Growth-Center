@@ -1,8 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { api } from '@/lib/fetcher';
+import { useMutation } from '@/lib/use-mutation';
 import { ErrorBanner } from '@/components/patterns/state';
 import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insight-owners';
 
@@ -24,26 +24,20 @@ export function InsightOwners({
   initial: OwnerBindings;
   owners: { email: string; name: string | null }[];
 }) {
-  const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries((Object.keys(OWNER_DOMAINS) as OwnerDomain[]).map((d) => [d, initial[d] ?? ''])),
   );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { pending, error, run } = useMutation();
 
   function commit(domain: OwnerDomain, email: string) {
     if (email === (initial[domain] ?? '')) return;
     setValues((v) => ({ ...v, [domain]: email }));
-    setError(null);
-    start(async () => {
-      try {
+    run(
+      async () => {
         await api('/api/settings/owners', { method: 'PUT', json: { domain, email } });
-        router.refresh();
-      } catch (e) {
-        setValues((v) => ({ ...v, [domain]: initial[domain] ?? '' }));
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
-    });
+      },
+      () => setValues((v) => ({ ...v, [domain]: initial[domain] ?? '' })),
+    );
   }
 
   return (

@@ -1,9 +1,9 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useMutation } from '@/lib/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
 import { THRESHOLDS, type ThresholdKey, type Thresholds as Values } from '@/lib/thresholds';
 
@@ -19,13 +19,11 @@ import { THRESHOLDS, type ThresholdKey, type Thresholds as Values } from '@/lib/
  * field a person has finished typing in is a number they have finished choosing.
  */
 export function Thresholds({ initial }: { initial: Values }) {
-  const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(Object.entries(initial).map(([k, v]) => [k, String(v)])),
   );
   const [saved, setSaved] = useState<ThresholdKey | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { pending, error, run } = useMutation();
 
   function commit(key: ThresholdKey) {
     const n = Number(values[key]);
@@ -36,21 +34,17 @@ export function Thresholds({ initial }: { initial: Values }) {
       return;
     }
 
-    setError(null);
-    start(async () => {
-      try {
+    run(
+      async () => {
         const out = await api<{ value: number }>('/api/settings/thresholds', {
           method: 'PUT',
           json: { key, value: Math.round(n) },
         });
         setValues((v) => ({ ...v, [key]: String(out.value) }));
         setSaved(key);
-        router.refresh();
-      } catch (e) {
-        setValues((v) => ({ ...v, [key]: String(initial[key]) }));
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
-    });
+      },
+      () => setValues((v) => ({ ...v, [key]: String(initial[key]) })),
+    );
   }
 
   return (

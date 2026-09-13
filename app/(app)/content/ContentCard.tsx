@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
+import { useBooleanApiAction } from '@/lib/use-api-action';
 import { ErrorText } from '@/components/patterns/state';
 import { CONTENT_STATUSES } from '@/lib/enums';
 import { safeUrl } from '@/lib/format';
@@ -27,15 +28,12 @@ export type Piece = {
 
 export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, setError, run } = useBooleanApiAction();
   const [returning, setReturning] = useState(false);
   const [note, setNote] = useState('');
 
   async function decide(decision: 'approve' | 'return') {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/content/${piece.id}/approval`, {
         method: 'POST',
         json: decision === 'approve' ? { decision } : { decision, note: note.trim() },
@@ -43,24 +41,14 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
       setReturning(false);
       setNote('');
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function move(status: string) {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/content/${piece.id}`, { method: 'PATCH', json: { status } });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
