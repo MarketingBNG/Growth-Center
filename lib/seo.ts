@@ -69,6 +69,13 @@ async function readSeoOverview() {
     const seen = earned.get(k.keyword) ?? { clicks: 0, impressions: 0 };
     // Lower is better, so a fall in position number is an improvement.
     const move = latest && prior ? prior.position - latest.position : null;
+    // Readings are not daily — Search Console only reports a query on days it had an
+    // impression, so two consecutive rows can be a day or six weeks apart. A move is
+    // meaningless without the window it happened over, so the gap travels with it.
+    const moveDays =
+      latest && prior
+        ? Math.max(1, Math.round((latest.date.getTime() - prior.date.getTime()) / 86_400_000))
+        : null;
     return {
       id: k.id,
       keyword: k.keyword,
@@ -80,6 +87,7 @@ async function readSeoOverview() {
       intent: k.intent,
       position: latest?.position ?? null,
       move,
+      moveDays,
       clicks: seen.clicks,
       impressions: seen.impressions,
       /// Oldest first, which is the direction a line is read.
