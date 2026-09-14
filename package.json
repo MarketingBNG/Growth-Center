@@ -25,7 +25,8 @@
     "smoke:definitions": "node --experimental-strip-types --env-file-if-exists=.env.local tools/smoke-definitions.ts",
     "smoke:metrics": "node --experimental-strip-types --env-file-if-exists=.env.local tools/smoke-metrics.ts",
     "shots": "playwright test e2e/shots.spec.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "docker:build": "node --experimental-strip-types tools/docker-build.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+lib/generated
+.git
+.env
+.env.local
+.env*.local
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+screenshots
+playwright-report
+test-results
+e2e/tmp
+/New
+npm-debug.log*

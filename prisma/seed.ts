@@ -12,9 +12,24 @@
 // Integrations are seeded as `demo_data` or `disconnected` — never `connected`. There
 // is no credential behind them and the UI must not imply there is.
 
+import { existsSync, readFileSync } from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../lib/generated/prisma/client.ts';
 import { normalizeEmail } from '../lib/dedupe.ts';
+
+// Local/CLI convenience only — this script runs outside Next.js (which is what
+// normally loads .env.local), so it reads the same files itself. Same reasoning
+// as prisma.config.ts. Never touches a real deployment: this only ever targets
+// whatever DATABASE_URL is on hand, and refuses to run against a non-empty,
+// provider-written database regardless of where that URL points.
+for (const file of ['.env.local', '.env']) {
+  if (!existsSync(file)) continue;
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
+    if (!match) continue;
+    process.env[match[1]] ??= match[2].trim().replace(/^["']|["']$/g, '');
+  }
+}
 
 const url = process.env.DATABASE_URL;
 if (!url) {
@@ -592,7 +607,6 @@ async function main() {
           date: d,
           amount: monthly,
           kind: 'recurring',
-          opportunityId: opp.id,
           campaignId: lead.campaignId,
           channelId: lead.channelId,
         },
@@ -716,7 +730,19 @@ async function main() {
 
   console.log('Content, outreach, tasks…');
   for (let i = 0; i < 22; i++) {
-    const status = pick(['idea', 'planned', 'draft', 'review', 'published', 'published', 'archived']);
+    const status = pick([
+      'idea',
+      'brief',
+      'draft',
+      'technical_check',
+      'proofread',
+      'partner_approval',
+      'scheduled',
+      'published',
+      'published',
+      'repurposed',
+      'archived',
+    ]);
     const published = status === 'published';
     await db.contentPiece.create({
       data: {

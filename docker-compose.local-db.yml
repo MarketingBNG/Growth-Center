@@ -1,0 +1,45 @@
+# Opt-in only — never auto-applied. Adds a throwaway local Postgres container
+# and points the app at it instead of Neon, for offline dev or exploring the
+# app/schema without touching a real database.
+#
+# Layer it on top of the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.local-db.yml up --build
+#
+# First time (or after a fresh volume), apply the existing schema and seed it:
+#   docker compose -f docker-compose.yml -f docker-compose.local-db.yml exec app npx prisma migrate deploy
+#   docker compose -f docker-compose.yml -f docker-compose.local-db.yml exec app npm run db:seed
+#
+# Plain `docker compose up` (no -f flags) never touches this file or this
+# container — it stays pointed at whatever Neon URL is in .env.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-growth_center}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-growth_center}
+      POSTGRES_DB: ${POSTGRES_DB:-growth_center}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-growth_center}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Overrides whatever DATABASE_URL/DIRECT_URL is in .env (Neon) — with this
+      # file layered in, the app always talks to the container above instead.
+      # Compose has no pgbouncer, so the pooled/direct split collapses to one URL.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-growth_center}:${POSTGRES_PASSWORD:-growth_center}@postgres:5432/${POSTGRES_DB:-growth_center}?sslmode=disable
+      DIRECT_URL: postgresql://${POSTGRES_USER:-growth_center}:${POSTGRES_PASSWORD:-growth_center}@postgres:5432/${POSTGRES_DB:-growth_center}?sslmode=disable
+
+volumes:
+  postgres_data:

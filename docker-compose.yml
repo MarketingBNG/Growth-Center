@@ -1,0 +1,32 @@
+# Production-shaped stack, pointed at Neon — not a local database.
+# DATABASE_URL/DIRECT_URL come from .env (your Neon connection strings); this
+# file adds no database service and no overrides for them. Builds and runs the
+# real production images (no hot reload) — plain:
+#   docker compose up --build
+#
+# Nginx is a separate container (nginx/Dockerfile) reverse-proxying to `app` —
+# see nginx/nginx.conf. It's the only service with a published port; `app`
+# is reached only through it, over Compose's internal network.
+#
+# Want a local containerized Postgres instead of Neon, for offline dev or just
+# to poke at the schema without touching a real database? See
+# docker-compose.local-db.yml — it's opt-in, layered on top explicitly:
+#   docker compose -f docker-compose.yml -f docker-compose.local-db.yml up --build
+
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    # No "ports:" here — only nginx faces the host/outside world.
+
+  nginx:
+    build:
+      context: ./nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - app
