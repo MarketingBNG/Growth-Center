@@ -75,8 +75,8 @@ export default async function ContentPage({
   // and move a piece without being able to sign it off — which is the separation the
   // permission was created for and, until this page, nothing used.
   const user = await currentUser();
-  const canApprove = can(user?.role ?? 'user', 'approve');
-  const canWrite = can(user?.role ?? 'user', 'content:write');
+  const canApprove = can(user?.role, 'approve');
+  const canWrite = can(user?.role, 'content:write');
 
   const view = params.view === 'board' ? 'board' : 'calendar';
   const month = parseMonth(typeof params.month === 'string' ? params.month : null) ?? currentMonth();

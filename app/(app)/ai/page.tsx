@@ -69,7 +69,7 @@ export default async function AiPage({
   // §5.1 gives approval to one identity. Hiding the button is a courtesy — the route
   // refuses the transition either way — but a button that always 403s teaches people to
   // ignore the row it sits on.
-  const canApprove = can(user?.role ?? 'user', 'approve');
+  const canApprove = can(user?.role, 'approve');
 
   const status = aiStatus();
   const [context, stored, owners] = await Promise.all([

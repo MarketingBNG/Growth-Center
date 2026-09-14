@@ -141,6 +141,24 @@ export function canAdminister(role: Role): boolean {
  *
  * Now that ROLES_ENFORCED is true this consults POLICY. It stays a signed-in check first:
  * no role means no permission, whatever the tier rules say.
+ *
+ * That first line is why the argument is nullable, and why a page asking whether to show
+ * a control should pass `user?.role` and nothing else:
+ *
+ *   can(user?.role, 'crm:write')                 // the idiom
+ *   can(user?.role ?? 'user', 'crm:write')       // grants the `user` tier to nobody
+ *   user ? can(user.role, 'crm:write') : false   // re-implements the line above
+ *
+ * All three were in use across six pages. The middle one is the one that matters: `user`
+ * is a real tier holding crm:write and content:write, so defaulting to it hands an
+ * unauthenticated caller write controls rather than denying them. Nothing was exposed by
+ * it — the (app) layout redirects before any of those pages render, and every API route
+ * checks again through route() — but it is a fallback that reads like caution and does
+ * the opposite of what it looks like.
+ *
+ * Pages that must not render at all for a signed-out visitor say so separately, with
+ * `if (!user) redirect('/signin')`. That is a different question from which controls a
+ * signed-in person gets, and it stays a different line.
  */
 export function can(role: Role | null | undefined, permission: Permission): boolean {
   if (!role) return false;

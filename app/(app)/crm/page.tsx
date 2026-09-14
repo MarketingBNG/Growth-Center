@@ -158,7 +158,7 @@ export default async function CrmPage({
       <DuplicateQueue
         rows={dupRows}
         counts={dupCounts}
-        canManage={user ? can(user.role, 'crm:write') : false}
+        canManage={can(user?.role, 'crm:write')}
       />
 
       <div className="flex flex-wrap items-center gap-1 pb-4">
@@ -187,7 +187,7 @@ export default async function CrmPage({
       </div>
 
       {tab === 'lifecycle' ? (
-        <Lifecycle canManage={user ? can(user.role, 'crm:write') : false} />
+        <Lifecycle canManage={can(user?.role, 'crm:write')} />
       ) : (
         <>
       {/* Both lists were unfilterable, though every row carries an owner and the leads

@@ -42,7 +42,7 @@ export default async function MarketingPage({
 
   const quarter = quarterOf(new Date());
   const user = await currentUser();
-  const canSetBudget = can(user?.role ?? 'user', 'settings:manage');
+  const canSetBudget = can(user?.role, 'settings:manage');
 
   const [channels, allChannels, rows, band, health, envelopes] = await Promise.all([
     channelPerformance(current),
