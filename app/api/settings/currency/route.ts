@@ -39,7 +39,15 @@ export const PUT = route('settings:manage', async (user, req) => {
 
   // The reporting currency sits behind every money figure in the app, so the cached read
   // has to go the moment it changes rather than at the end of its TTL.
-  await invalidate(TAGS.settings);
+  //
+  // TAGS.metrics too, and that is the half this was missing. Dropping settings only
+  // re-reads the rates; it does nothing for the six metrics reads that have ALREADY
+  // converted with the old ones and cached the result — the analytics and marketing
+  // bands, the trend, the channel table, campaign performance and attribution coverage.
+  // Switching the reporting currency left every one of those showing figures derived
+  // from the previous base for the rest of the five-minute TTL, on the one screen where
+  // the user has just declared the old numbers wrong.
+  await invalidate(TAGS.settings, TAGS.metrics);
 
   await recordAudit({
     actorEmail: user.email,
@@ -56,6 +64,8 @@ export const PUT = route('settings:manage', async (user, req) => {
 /** The settings page's Refresh button. */
 export const POST = route('settings:manage', async () => {
   const currency = await refreshRatesIfStale(true);
-  await invalidate(TAGS.settings);
+  // Same pair as the PUT above: a new rate changes every converted figure, not just the
+  // rate the settings page prints.
+  await invalidate(TAGS.settings, TAGS.metrics);
   return { currency };
 });
