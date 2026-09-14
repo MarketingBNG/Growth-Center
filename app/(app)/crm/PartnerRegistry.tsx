@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Handshake, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input, Select } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState, ErrorBanner } from '@/components/patterns/state';
@@ -72,43 +73,44 @@ export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[
       {adding ? (
         <div className="flex flex-wrap items-end gap-2 border-t border-border px-4 py-3">
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Name</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Name</span>
+            <Input
               autoFocus
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-48 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-48 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Type</span>
-            <select
+            <span className="mb-1 block font-medium text-muted-foreground">Type</span>
+            <Select
+              aria-label="Type"
               value={form.partnerType}
               onChange={(e) => setForm({ ...form, partnerType: e.target.value })}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-auto rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             >
               {PARTNER_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {PARTNER_TYPE_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Firm</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Firm</span>
+            <Input
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
-              className="w-44 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-44 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Email</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Email</span>
+            <Input
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-52 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-52 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <Button size="sm" disabled={!form.name.trim() || busy !== null} onClick={save}>

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
 import type { CapacitySetting } from '@/lib/capacity';
 import { ErrorText } from '@/components/patterns/state';
@@ -46,23 +47,23 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs">
-          <span className="mb-1 block text-muted-foreground">New consultations per month</span>
-          <input
+          <span className="mb-1 block font-medium text-muted-foreground">New consultations per month</span>
+          <Input
             type="number"
             min={0}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Not set"
-            className="w-36 rounded-md border border-border bg-background px-2 py-1.5 text-xs tnum"
+            className="h-auto w-36 rounded-md border border-border bg-background px-2 py-1.5 text-xs tnum"
           />
         </label>
         <label className="flex-1 text-xs">
-          <span className="mb-1 block text-muted-foreground">Why this number</span>
-          <input
+          <span className="mb-1 block font-medium text-muted-foreground">Why this number</span>
+          <Input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Two senior reviewers, four days a week…"
-            className="w-full min-w-[220px] rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+            className="h-auto w-full min-w-[220px] rounded-md border border-border bg-background px-2 py-1.5 text-xs"
           />
         </label>
         <Button size="sm" onClick={save} disabled={busy}>

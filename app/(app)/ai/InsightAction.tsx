@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
 import { useMutation } from '@/lib/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
@@ -91,10 +91,14 @@ export function InsightAction({
       ) : (
         <>
           {needsOwner ? (
-            <select
+            <Select
+              aria-label="Owner"
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
-              className="h-6 rounded border border-input bg-background px-1 text-meta"
+              // The size this row was built around, kept. Only the open list changes:
+              // Select's default is a full-width h-9 control, which would break a row
+              // meant to sit inline beside a note field and two buttons.
+              className="h-6 w-auto rounded border border-input bg-background px-1 text-meta"
             >
               <option value="">Choose an owner…</option>
               {owners.map((o) => (
@@ -102,7 +106,7 @@ export function InsightAction({
                   {o.name ?? o.email}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : null}
 
           {needsNote ? (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
 import { useMutation } from '@/lib/use-mutation';
 import { ErrorBanner } from '@/components/patterns/state';
@@ -47,11 +48,12 @@ export function InsightOwners({
           <span className="min-w-64 flex-1 text-xs text-muted-foreground">
             {OWNER_DOMAINS[domain]}
           </span>
-          <select
+          <Select
+            aria-label={OWNER_DOMAINS[domain]}
             value={values[domain]}
             disabled={pending}
             onChange={(e) => commit(domain, e.target.value)}
-            className="h-7 min-w-56 rounded border border-input bg-background px-1 text-xs"
+            className="h-7 w-auto min-w-56 rounded border border-input bg-background px-1 text-xs"
           >
             <option value="">Nobody yet</option>
             {owners.map((o) => (
@@ -59,7 +61,7 @@ export function InsightOwners({
                 {o.name ?? o.email}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       ))}
       <ErrorBanner error={error} tone="compact" />

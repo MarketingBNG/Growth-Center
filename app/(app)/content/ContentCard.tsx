@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { Select } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { api } from '@/lib/fetcher';
 import { useBooleanApiAction } from '@/lib/use-api-action';
 import { ErrorText } from '@/components/patterns/state';
@@ -95,12 +95,12 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {returning ? (
             <>
-              <input
+              <Input
                 aria-label="Why this is going back"
                 placeholder="What needs changing"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-meta"
+                className="h-7 w-auto min-w-0 flex-1 rounded border border-input bg-background px-2 text-meta"
               />
               <button
                 type="button"

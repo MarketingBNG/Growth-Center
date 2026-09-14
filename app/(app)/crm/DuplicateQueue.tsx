@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Copy, Search, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { api } from '@/lib/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
@@ -169,12 +170,12 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
                 {canManage ? (
                   dismissing === row.id ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <input
+                      <Input
                         autoFocus
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="Why are these not the same record?"
-                        className="min-w-[240px] flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                        className="h-auto w-auto min-w-[240px] flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
                       />
                       <Button
                         size="sm"
