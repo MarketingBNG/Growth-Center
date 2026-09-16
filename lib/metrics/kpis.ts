@@ -29,7 +29,6 @@ import {
 } from './core.ts';
 
 
-/** Leads: New · Converted · Qualified · Cost per lead · Median response · Unassigned. */
 /**
  * Median lead quality in a period. §7.3.
  *
@@ -51,6 +50,7 @@ export async function medianLeadScore(range: Range): Promise<number | null> {
   return median === null || median === undefined ? null : Math.round(median);
 }
 
+/** Leads: New · Converted · Qualified · Cost per lead · Median response · Unassigned. */
 export async function leadsKpis(spec: number | Range) {
   const { current, previous } = windowFor(spec);
   const [now, before, medianNow, medianBefore, unassignedNow, unassignedBefore, weekday, convNow, convBefore, medianScoreNow, medianScoreBefore] =
@@ -102,8 +102,6 @@ export async function leadsKpis(spec: number | Range) {
 }
 
 /** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */
-
-/** CRM: Companies · Contacts · Customers · Avg account value · Duplicates merged. */
 export async function crmKpis(spec: number | Range) {
   const { current, previous } = windowFor(spec);
   const [now, before, dupNow, dupBefore, share, weekday] = await Promise.all([
@@ -131,12 +129,6 @@ export async function crmKpis(spec: number | Range) {
 
   return { cards: await comparableDeltas(cards, current, previous), customerShare: share, weekday };
 }
-
-/** Pipeline: Open deals · Total value · Weighted · Win rate · Avg cycle.
- *
- *  The first three are snapshots with no previous period — a pipeline is a standing
- *  balance, not a flow — so their delta renders as "No prior period" rather than a
- *  fabricated comparison. */
 
 /** Pipeline: Open deals · Total value · Weighted · Win rate · Avg cycle.
  *
@@ -173,8 +165,6 @@ export async function pipelineKpis(spec: number | Range) {
 }
 
 /** Marketing: Spend · Leads · CPL · ROAS · CAC. */
-
-/** Marketing: Spend · Leads · CPL · ROAS · CAC. */
 export async function marketingKpis(spec: number | Range, channelId?: string) {
   const { current, previous } = windowFor(spec);
   const [now, before, pacing, weekday] = await Promise.all([
@@ -209,8 +199,6 @@ export async function marketingKpis(spec: number | Range, channelId?: string) {
 }
 
 /** Analytics: Sessions · Visitor→lead · Lead→qualified · Opp→customer · Revenue. */
-
-/** Analytics: Sessions · Visitor→lead · Lead→qualified · Opp→customer · Revenue. */
 export async function analyticsKpis(spec: number | Range) {
   const { current, previous } = windowFor(spec);
   const [now, before, weekday] = await Promise.all([
@@ -242,8 +230,3 @@ export async function analyticsKpis(spec: number | Range) {
 
   return { cards: await comparableDeltas(cards, current, previous), current: now, weekday };
 }
-
-// ─── per-screen trend series ──────────────────────────────────────────────────
-//
-// Bucketed the same way as trend(): one query, grouped in JS, because the date columns
-// are DATE and a per-driver cast is not worth it at 365 rows.

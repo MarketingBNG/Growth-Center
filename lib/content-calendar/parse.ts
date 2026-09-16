@@ -927,15 +927,3 @@ export function readSheet(grid: readonly (readonly unknown[])[], month: Date): S
 
 /** A CSV, as a grid, ready for `readSheet`. */
 export const csvGrid = (text: string): string[][] => csvParse(text);
-
-// ── The month on screen ───────────────────────────────────────────────────────────────
-
-/**
- * A piece as the calendar shows it — and as its editor writes it back.
- *
- * Every field the edit form can change is here, including the ones the grid tile never
- * displays. That is not padding: the form sends the whole record on save, so a field the
- * page did not load would arrive back as empty and clear a target keyword or a topic
- * cluster that nobody touched. A month is tens of rows, so the columns are free; a
- * request per tile to fill in a form that may never open would not be.
- */

@@ -238,20 +238,6 @@ export async function sessions(range: Range): Promise<number> {
  * `comparableDeltas` reads the same row for the same reason, but only to blank a change
  * chip. This is the funnel's own version of that question.
  */
-
-/**
- * The first day the sessions series has data for, or null if it has none.
- *
- * The funnel puts visitors above leads, but sessions arrive from GA4 and leads from the
- * CRM, and the two do not begin on the same day — GA4 was connected on 28 July 2026 and
- * the CRM holds years. Over any window reaching back further than GA4 does, the visitor
- * count is not a smaller number than leads because the funnel leaked; it is a shorter
- * series. Compared once here so the pages that draw the funnel can say so rather than
- * printing a 251% visitor-to-lead rate.
- *
- * `comparableDeltas` reads the same row for the same reason, but only to blank a change
- * chip. This is the funnel's own version of that question.
- */
 export const sessionsStart = cache(async (): Promise<Date | null> => {
   const first = await db().metricSnapshot.findFirst({
     where: { metricKey: 'sessions', source: await excludeDemo('sessions') },
@@ -263,9 +249,6 @@ export const sessionsStart = cache(async (): Promise<Date | null> => {
 
 /** The first day ad spend was recorded, or null if none ever was. The same question
  *  `sessionsStart` answers, for the series that makes CAC and ROAS a ratio. */
-
-/** The first day ad spend was recorded, or null if none ever was. The same question
- *  `sessionsStart` answers, for the series that makes CAC and ROAS a ratio. */
 export const spendStart = cache(async (): Promise<Date | null> => {
   const first = await db().marketingSpend.findFirst({
     orderBy: { date: 'asc' },
@@ -273,18 +256,6 @@ export const spendStart = cache(async (): Promise<Date | null> => {
   });
   return first?.date ?? null;
 });
-
-/**
- * Several site-wide daily metrics, each summed over the same range.
- *
- * Two queries for the whole set rather than two per metric. `siteMetric` costs an
- * existence check and an aggregate every time it is called, so the analytics band asking
- * for pageviews and users across two windows was eight round trips against one table.
- *
- * The demo-exclusion rule is unchanged and still per metric: a key with any live row
- * anywhere drops its seeded rows, a key with none keeps them. That question is asked once
- * for the whole set here instead of once per key.
- */
 
 /**
  * Several site-wide daily metrics, each summed over the same range.
@@ -329,9 +300,6 @@ export async function siteMetrics(
 
 /** Any site-wide daily metric, summed over a range. GA4 and Search Console both report
  *  several of these and only `sessions` was ever read. */
-
-/** Any site-wide daily metric, summed over a range. GA4 and Search Console both report
- *  several of these and only `sessions` was ever read. */
 export async function siteMetric(metricKey: string, range: Range): Promise<number> {
   const result = await db().metricSnapshot.aggregate({
     where: {
@@ -343,21 +311,6 @@ export async function siteMetric(metricKey: string, range: Range): Promise<numbe
   });
   return Math.round(num(result._sum.value));
 }
-
-
-/**
- * The funnel for one period.
- *
- * Qualified counts leads that reached qualified at any point, not leads currently
- * sitting in that status — otherwise converting a lead would decrease the qualified
- * count and the funnel would appear to leak backwards.
- *
- * Semi-qualified is its own stage. This CRM's "Semi-Qualified Lead" used to reach
- * `qualified` through a substring match, so "qualified leads" was 2,480 semi-qualified
- * ones and 10 fully qualified ones. Counted as "reached at least semi-qualified" — the
- * current status, or any later stage — so it stays above `qualified` and cannot leak
- * backwards either.
- */
 
 
 /**
@@ -610,9 +563,6 @@ export type Funnel = Awaited<ReturnType<typeof funnel>>;
 
 /** Open pipeline, which is a snapshot rather than a period — a deal opened last year
  *  is still in the pipeline today, so this deliberately ignores the date range. */
-
-/** Open pipeline, which is a snapshot rather than a period — a deal opened last year
- *  is still in the pipeline today, so this deliberately ignores the date range. */
 export async function openPipeline(now = new Date()) {
   const deals = await db().opportunity.findMany({
     where: OPEN_DEAL,
@@ -683,22 +633,6 @@ export async function openPipeline(now = new Date()) {
  * the deals do not carry it. Naming that share here is the difference between a figure a
  * partner can quote and one they will be caught out by.
  */
-
-
-/**
- * The KPI row, plus the funnel it was computed from.
- *
- * Returns `current` so callers do not recompute it — the dashboard needs both the
- * cards and the funnel, and calling funnel() again cost another 7 queries at ~280ms
- * round trip each.
- */
-/**
- * What the New business card leaves out, said in money.
- *
- * The split is read from the deal-naming convention (lib/deal-name.ts), and a quarter of
- * the deals do not carry it. Naming that share here is the difference between a figure a
- * partner can quote and one they will be caught out by.
- */
 function newBusinessHint(f: Funnel): string {
   const money = (n: number) => fmtMoney(n, false, f.currency);
   const parts = ['First engagement with an account, read from the deal name'];
@@ -715,26 +649,6 @@ function newBusinessHint(f: Funnel): string {
   // The unclassified remainder has its own card now, so it is not restated here.
   return parts.join('. ');
 }
-
-/**
- * Consultations held in a period, and what each one cost. §6.1.
- *
- * **The proxy is the whole difficulty, and it is stated on the card rather than hidden.**
- * The manual's headline KPI is CPQL, whose numerator is a consultation being booked. This
- * CRM records no such event: `qualifiedAt` is stamped on conversion — 1,031 leads carry
- * one and 1,028 of those are conversions — so the figure the manual wants cannot be
- * computed from anything in the system.
- *
- * A deal being opened is the nearest real thing, because that is what a consultation
- * produces when it goes well. It is the same substitution the capacity card makes, made
- * deliberately in one place so the two screens cannot disagree about what a consultation
- * is. It over-counts nothing and under-counts every consultation that led nowhere, which
- * means **the cost per consultation reported here is an upper bound** — the true figure is
- * lower, and the card says so.
- *
- * Divided by acquisition spend, not by all of it. G4 again: money spent hiring did not
- * book a consultation.
- */
 
 /**
  * Consultations held in a period, and what each one cost. §6.1.
@@ -774,15 +688,6 @@ export async function consultations(range: Range) {
     channels,
   };
 }
-
-/**
- * Cost per consultation for each channel that carried acquisition spend. §6.1's "CPQL by
- * paid channel".
- *
- * Only the paid channels. An organic channel's consultations cost something, and nothing
- * measures what — `costPer` returns null rather than zero for exactly that reason, and a
- * row of dashes under a heading about cost is noise.
- */
 
 /**
  * Cost per consultation for each channel that carried acquisition spend. §6.1's "CPQL by
@@ -877,15 +782,6 @@ export async function kpis(spec: number | Range): Promise<{ cards: Kpi[]; curren
 
   return { cards: await comparableDeltas(cards, current, previous), current: now, previous: before };
 }
-
-
-/**
- * Daily or monthly series for the trend charts.
- *
- * Buckets are built in JS from one query per metric rather than grouped in SQL: the
- * date column is a DATE and grouping by month needs a cast that differs per driver,
- * and at 365 rows the cost is irrelevant.
- */
 
 
 /**
@@ -1006,9 +902,6 @@ async function readTrend(range: Range, bucket: 'day' | 'month', channelId?: stri
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
-
-/** Per-channel performance. Leads and revenue join through channelId, which every
- *  lead and revenue row carries, so this needs no walk up the funnel. */
 
 /** Per-channel performance. Leads and revenue join through channelId, which every
  *  lead and revenue row carries, so this needs no walk up the funnel. */
@@ -1183,29 +1076,7 @@ export type ChannelRow = Awaited<ReturnType<typeof channelPerformance>>[number];
  *  dropdown without ever having contacted the lead. */
 // Exported so lib/speed-to-lead.ts measures the same event this does. Two definitions of
 // "an outbound touch" would put two different response figures on two screens.
-
-// ─── operational metrics for the per-module analytics band ────────────────────
-//
-// These live here rather than in the pages that show them so a figure appearing on two
-// screens cannot disagree with itself. Every one returns null rather than 0 where there
-// is no denominator, per the rule in lib/calc.ts.
-
-/** An outbound touch. A status flip to `contacted` is not one — someone can change a
- *  dropdown without ever having contacted the lead. */
-// Exported so lib/speed-to-lead.ts measures the same event this does. Two definitions of
-// "an outbound touch" would put two different response figures on two screens.
 export const CONTACT_TYPES = ['email', 'call', 'meeting'] as const;
-
-/**
- * Median hours from a lead arriving to the first outbound touch, over leads created in
- * the period.
- *
- * Median rather than mean: one lead left for three weeks dragged the mean past every
- * individual response time, which made the number useless for spotting a bad week.
- *
- * Leads with no touch at all are EXCLUDED rather than counted as zero or as infinity —
- * they have no response time, and they are what the Unassigned card is for.
- */
 
 /**
  * Median hours from a lead arriving to the first outbound touch, over leads created in
@@ -1259,24 +1130,11 @@ export async function medianResponseHours(range: Range): Promise<number | null> 
 /** Leads that arrived in the period and still have no owner. Period-scoped rather than
  *  an all-time backlog so it can be compared against the previous period like every
  *  other card in the band. */
-
-/** Leads that arrived in the period and still have no owner. Period-scoped rather than
- *  an all-time backlog so it can be compared against the previous period like every
- *  other card in the band. */
 export async function unassignedLeads(range: Range): Promise<number> {
   return db().lead.count({
     where: { createdAt: { gte: range.from, lte: range.to }, ownerEmail: null },
   });
 }
-
-/**
- * Duplicates folded into an existing record, from both paths.
- *
- * Two sources, and both are real merges. The public lead form has always deduplicated on
- * arrival and writes an activity when it does; §8.1's queue is where somebody merges two
- * records the scanner proposed, and it resolves a DuplicateCandidate. Counting only the
- * first was how this card read 0 for months while nothing was scanning at all.
- */
 
 /**
  * Duplicates folded into an existing record, from both paths.
@@ -1300,26 +1158,6 @@ export async function duplicatesMerged(range: Range): Promise<number> {
   ]);
   return onArrival + fromQueue;
 }
-
-/**
- * Won ÷ decided, over deals that CLOSED in the period.
- *
- * Open deals are excluded from the denominator: counting them as not-yet-won drives the
- * rate toward zero on any period where the pipeline grew, which is the opposite of what
- * a growing pipeline means.
- */
-/**
- * Win rate and average cycle for one period, from a single read.
- *
- * These were two functions asking the same question — which deals closed in this range —
- * as two round trips, each pulling the stage relation as a third and fourth. The pipeline
- * band calls both for the current period and both for the previous one, so one KPI row
- * cost eight queries over a table it had already read.
- *
- * The stage flags are looked up from a map rather than joined per row: `select: { stage:
- * { ... } }` makes Prisma issue a second query for the relation, which is the same
- * multiplication the board's `include` was doing.
- */
 
 /**
  * Won ÷ decided, over deals that CLOSED in the period.
@@ -1375,8 +1213,6 @@ export async function decidedDeals(
 }
 
 /** Every stage's won/lost flags, read once per render. */
-
-/** Every stage's won/lost flags, read once per render. */
 export const stageFlags = cache(
   async (): Promise<Map<string, { isWon: boolean; isLost: boolean }>> => {
     const stages = await db().pipelineStage.findMany({
@@ -1392,15 +1228,9 @@ export async function winRate(range: Range): Promise<number | null> {
 
 /** Mean days from a deal being created to being won, over deals won in the period. Lost
  *  deals are left out — an abandoned deal's "cycle" measures neglect, not sales speed. */
-
-/** Mean days from a deal being created to being won, over deals won in the period. Lost
- *  deals are left out — an abandoned deal's "cycle" measures neglect, not sales speed. */
 export async function avgCycleDays(range: Range): Promise<number | null> {
   return (await decidedDeals(range, await stageFlags())).avgCycleDays;
 }
-
-/** Leads per weekday for the band's bar chart. Indexed Monday-first, because a week that
- *  starts on Sunday puts the quietest two days at opposite ends of the chart. */
 
 /** Leads per weekday for the band's bar chart. Indexed Monday-first, because a week that
  *  starts on Sunday puts the quietest two days at opposite ends of the chart. */
@@ -1430,8 +1260,6 @@ export async function leadsByWeekday(
   }
   return labels.map((label, i) => ({ label, value: counts[i] }));
 }
-
-/** Companies, contacts and the average revenue booked per paying account. */
 
 /** Companies, contacts and the average revenue booked per paying account. */
 export async function accountMetrics(range: Range) {
@@ -1466,9 +1294,6 @@ export async function accountMetrics(range: Range) {
 
 /** Share of all companies on the books that are customers. A snapshot, so it ignores the
  *  date range — a company won last year is still a customer today. */
-
-/** Share of all companies on the books that are customers. A snapshot, so it ignores the
- *  date range — a company won last year is still a customer today. */
 export async function customerShare(): Promise<number | null> {
   const [companies, customers] = await Promise.all([
     db().company.count(),
@@ -1476,17 +1301,6 @@ export async function customerShare(): Promise<number | null> {
   ]);
   return rate(customers, companies);
 }
-
-/**
- * Spend against the budget of the campaigns that were actually live in the period.
- *
- * Only overlapping campaigns count toward the denominator. Summing every budget on the
- * books against one period's spend compared a month of spend to years of budget and
- * reported single-digit pacing on a campaign that had already overspent; the reverse —
- * a long period against a handful of budgets — read as 185%.
- *
- * Null when no live campaign carries a budget: pacing against nothing is not 0%.
- */
 
 /**
  * Spend against the budget of the campaigns that were actually live in the period.
@@ -1597,9 +1411,6 @@ function emptyBuckets(range: Range, bucket: 'day' | 'month'): string[] {
 
 /** Companies and contacts created per bucket — what the CRM screen's "Accounts added"
  *  chart draws. Counted together because the screen treats them as one population. */
-
-/** Companies and contacts created per bucket — what the CRM screen's "Accounts added"
- *  chart draws. Counted together because the screen treats them as one population. */
 export async function accountsTrend(range: Range, bucket: 'day' | 'month') {
   const window = { gte: range.from, lte: range.to };
 
@@ -1626,9 +1437,6 @@ export async function accountsTrend(range: Range, bucket: 'day' | 'month') {
 
   return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
-
-/** Deal value created per bucket, by the date the opportunity was opened — "pipeline
- *  created", not pipeline closed. */
 
 /** Deal value created per bucket, by the date the opportunity was opened — "pipeline
  *  created", not pipeline closed. */
@@ -1665,9 +1473,6 @@ export async function pipelineTrend(range: Range, bucket: 'day' | 'month') {
 
 /** Share of customers who have billed more than once. A snapshot: it asks whether an
  *  account came back at all, which no single period can answer. */
-
-/** Share of customers who have billed more than once. A snapshot: it asks whether an
- *  account came back at all, which no single period can answer. */
 export async function repeatCustomerRate(): Promise<number | null> {
   const rows = await db().revenueEntry.groupBy({
     by: ['customerId'],
@@ -1677,18 +1482,6 @@ export async function repeatCustomerRate(): Promise<number | null> {
   const repeat = rows.filter((r) => r._count._all > 1).length;
   return rate(repeat, rows.length);
 }
-
-/**
- * What actually produced each headline figure in a period.
- *
- * Provenance existed in the data — metric_snapshot.source, campaign.source — but only
- * the Analytics page ever read it, so a page mixing reported spend with seeded visitors
- * looked completely uniform. This is what the SourceLine under each page header renders.
- *
- * Returns a list per figure rather than one label: real spend alongside a seeded
- * campaign is honestly two sources, and collapsing that to one would be the same lie
- * the badges exist to prevent.
- */
 
 /**
  * What actually produced each headline figure in a period.
@@ -1730,16 +1523,6 @@ export async function provenance(range: Range): Promise<Record<string, string[]>
     revenue: revenueCount ? [INTERNAL_SOURCE] : [],
   };
 }
-
-/**
- * The two reads behind the dashboard, analytics and marketing charts.
- *
- * Both aggregate MetricSnapshot rows that a sync writes once a day, and both were the
- * reason those pages still took one to two seconds warm after the first round of caching
- * — measured at 2.5s on /analytics with everything else already cached. The range and
- * bucket are ordinary arguments, so each window gets its own entry rather than the last
- * one viewed serving all of them.
- */
 
 /**
  * The two reads behind the dashboard, analytics and marketing charts.
