@@ -49,8 +49,7 @@ export const PUT = route('settings:manage', async (user, req) => {
 
   // Both tags: the roster is a setting, and the rules that read it are computed under
   // metrics.
-  await invalidate(TAGS.settings);
-  await invalidate(TAGS.metrics);
+  await invalidate(TAGS.settings, TAGS.metrics);
 
   // Recorded for the same reason a threshold change is: removing somebody from the roster
   // is how their overdue work stops appearing, and a quiet queue should be explainable.
@@ -60,7 +59,6 @@ export const PUT = route('settings:manage', async (user, req) => {
     entityType: 'app_setting',
     entityId: ROSTER_KEY,
     detail: { from: before, to: unique },
-  
   });
 
   return { emails: unique, rejected };

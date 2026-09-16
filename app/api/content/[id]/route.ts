@@ -1,10 +1,8 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { contentPatch, setContentStatus, updateContent } from '@/lib/content';
 import { CONTENT_STATUSES } from '@/lib/enums';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Two kinds of change, and they stay two kinds.

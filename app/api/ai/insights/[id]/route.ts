@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { APPROVAL_STATE, INSIGHT_STATUSES } from '@/lib/insight-lifecycle';
 import { setInsightStatus } from '@/lib/insight-actions';
@@ -11,8 +11,6 @@ import { can } from '@/lib/roles';
 // Everything the transition implies — the owner, the note, `dismissedAt`, the audit row —
 // is written by setInsightStatus rather than here, so the HTTP layer cannot produce a
 // state the domain would refuse.
-
-type Ctx = { params: Promise<{ id: string }> };
 
 export const PATCH = route<unknown, Ctx>('ai:run', async (user, req, ctx) => {
   const { id } = await ctx.params;

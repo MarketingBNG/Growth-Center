@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { convertLead } from '@/lib/pipeline';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 export const POST = route<unknown, Ctx>('pipeline:write', async (user, req, ctx) => {
   const { id } = await ctx.params;

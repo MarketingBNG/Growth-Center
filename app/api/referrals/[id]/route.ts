@@ -1,7 +1,5 @@
-import { route } from '@/lib/api';
+import { route, type Ctx } from '@/lib/api';
 import { partnerEvent, recordPartnerEvent } from '@/lib/referrals';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Records a touch or an acknowledgement.

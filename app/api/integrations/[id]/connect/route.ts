@@ -1,13 +1,11 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { authUrlFor, connect } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
 import { signState } from '@/lib/oauth-state';
 import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 const input = z.object({
   apiKey: z.string().trim().min(1).max(500).optional(),

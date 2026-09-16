@@ -1,10 +1,8 @@
-import { route } from '@/lib/api';
+import { route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { disconnect } from '@/lib/integrations/service';
 import { IntegrationError } from '@/lib/integrations/types';
 import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req, ctx) => {
   const { id } = await ctx.params;

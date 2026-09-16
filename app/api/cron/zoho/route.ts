@@ -1,7 +1,5 @@
-import { NextResponse } from 'next/server';
-import { sync } from '@/lib/integrations/service';
-import { cronGuard } from '@/lib/cron-auth';
-import { TAGS, invalidate } from '@/lib/cache';
+import { providerCron } from '@/lib/cron-auth';
+import { TAGS } from '@/lib/cache';
 
 /**
  * Nightly Zoho CRM import. Scheduled in vercel.json.
@@ -25,35 +23,7 @@ import { TAGS, invalidate } from '@/lib/cache';
  */
 export const maxDuration = 300;
 
-export async function GET(req: Request) {
-  const refusal = cronGuard(req);
-  if (refusal) return refusal;
-
-  const started = Date.now();
-
-  try {
-    const result = await sync('zoho_crm', 30);
-
-    // Every CRM page reads Lead, Contact and Opportunity, and the dashboard reads the
-    // metric rows. Both have just been rewritten; without this they show yesterday's
-    // pipeline until the TTL expires.
-    await invalidate(TAGS.integrations, TAGS.metrics);
-
-    return NextResponse.json({
-      ok: true,
-      ms: Date.now() - started,
-      rows: result.rows,
-      // False means the pull ran out of budget with records still to fetch. Not a
-      // failure: it keeps its cursor and resumes tomorrow. Reported so a backfill that
-      // never finishes is visible rather than looking like a clean nightly import.
-      done: result.done,
-      detail: result.detail,
-    });
-  } catch (e) {
-    const reason = (e as Error).message;
-    // Logged as well as returned: the response goes to the scheduler, which nobody reads
-    // unless something breaks. The log is where a failure is actually noticed.
-    console.error('[cron/zoho] failed:', reason);
-    return NextResponse.json({ ok: false, ms: Date.now() - started, error: reason }, { status: 500 });
-  }
-}
+// Every CRM page reads Lead, Contact and Opportunity, and the dashboard reads the metric
+// rows. Both have just been rewritten; without invalidating them the screens show
+// yesterday's pipeline until the TTL expires.
+export const GET = providerCron('zoho_crm', 'zoho', [TAGS.integrations, TAGS.metrics]);

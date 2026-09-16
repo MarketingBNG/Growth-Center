@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { route } from '@/lib/api';
+import { route, type Ctx } from '@/lib/api';
 import { dismissDuplicate, mergeDuplicate, unmergeDuplicate } from '@/lib/duplicate-queue';
 import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Resolve one pair: merge it, or say why it is not a duplicate.

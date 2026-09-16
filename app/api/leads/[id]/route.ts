@@ -1,10 +1,8 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { getLead, setLeadOwner, setLeadStatus } from '@/lib/leads';
 import { LEAD_STATUSES } from '@/lib/enums';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 export const GET = route<unknown, Ctx>('growth:read', async (_user, _req, ctx) => {
   const lead = await getLead((await ctx.params).id);

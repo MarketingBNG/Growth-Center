@@ -1,9 +1,7 @@
 import { z } from 'zod';
-import { route } from '@/lib/api';
+import { route, type Ctx } from '@/lib/api';
 import { db } from '@/lib/prisma';
 import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * §8.2's four lifecycle dates.

@@ -1,11 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { setConfig } from '@/lib/integrations/service';
 import { IntegrationError } from '@/lib/integrations/types';
 import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 // Non-secret settings only. Anything sealed goes through connect().
 const input = z.object({

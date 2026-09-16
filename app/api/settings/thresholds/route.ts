@@ -33,8 +33,7 @@ export const PUT = route('settings:manage', async (user, req) => {
 
   // Both tags: the thresholds read is tagged settings, and every rule finding and the
   // attribution card are computed against these and tagged metrics.
-  await invalidate(TAGS.settings);
-  await invalidate(TAGS.metrics);
+  await invalidate(TAGS.settings, TAGS.metrics);
 
   // §20.5 asks for the change to be recorded, and the reason is not bookkeeping: lowering
   // a threshold is how a finding stops being raised, and someone looking at a quiet page
@@ -45,7 +44,6 @@ export const PUT = route('settings:manage', async (user, req) => {
     entityType: 'app_setting',
     entityId: input.key,
     detail: { name: THRESHOLDS[input.key].label, from: before, to: value },
-  
   });
 
   return { key: input.key, value };

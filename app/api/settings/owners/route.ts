@@ -43,8 +43,7 @@ export const PUT = route('settings:manage', async (user, req) => {
     update: { value: next },
   });
 
-  await invalidate(TAGS.settings);
-  await invalidate(TAGS.metrics);
+  await invalidate(TAGS.settings, TAGS.metrics);
 
   await recordAudit({
     actorEmail: user.email,
@@ -56,7 +55,6 @@ export const PUT = route('settings:manage', async (user, req) => {
       from: before[input.domain] ?? null,
       to: email,
     },
-  
   });
 
   return { domain: input.domain, email };

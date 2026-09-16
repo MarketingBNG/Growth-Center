@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
+import { body, route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { approveContent, returnContent } from '@/lib/content';
 
@@ -12,8 +12,6 @@ import { approveContent, returnContent } from '@/lib/content';
 //
 // Both actions live on one route because they are one decision with two outcomes, and a
 // caller should not be able to reach for one without the other being right there.
-
-type Ctx = { params: Promise<{ id: string }> };
 
 export const POST = route<unknown, Ctx>('approve', async (user, req, ctx) => {
   const { id } = await ctx.params;

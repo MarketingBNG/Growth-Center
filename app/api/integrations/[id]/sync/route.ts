@@ -1,12 +1,10 @@
 import { after } from 'next/server';
-import { route } from '@/lib/api';
+import { route, type Ctx } from '@/lib/api';
 import { HttpError } from '@/lib/auth';
 import { driveSync } from '@/lib/integrations/driver';
 import { syncStatus } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Starts a sync and answers as soon as it has started, not when it has finished.

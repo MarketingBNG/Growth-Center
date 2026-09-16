@@ -1,7 +1,5 @@
-import { NextResponse } from 'next/server';
-import { sync } from '@/lib/integrations/service';
-import { cronGuard } from '@/lib/cron-auth';
-import { TAGS, invalidate } from '@/lib/cache';
+import { providerCron } from '@/lib/cron-auth';
+import { TAGS } from '@/lib/cache';
 
 /**
  * Weekly Core Web Vitals measurement. Scheduled in vercel.json.
@@ -23,34 +21,11 @@ import { TAGS, invalidate } from '@/lib/cache';
  */
 export const maxDuration = 300;
 
-export async function GET(req: Request) {
-  const refusal = cronGuard(req);
-  if (refusal) return refusal;
-
-  const started = Date.now();
-
-  try {
-    const result = await sync('pagespeed', 30);
-
-    // The SEO page reads both the metric rows and SeoPage.issues, and both have just been
-    // rewritten. Without this the page shows last week's figures until the TTL expires.
-    await invalidate(TAGS.integrations, TAGS.metrics, TAGS.seo);
-
-    return NextResponse.json({
-      ok: true,
-      ms: Date.now() - started,
-      rows: result.rows,
-      // False means the pass ran out of budget with pages still to measure. Not a failure:
-      // it keeps its cursor and finishes on the next run. Reported so a pass that never
-      // completes is visible rather than looking like a successful weekly measurement.
-      done: result.done,
-      detail: result.detail,
-    });
-  } catch (e) {
-    const reason = (e as Error).message;
-    // Logged as well as returned: the response goes to the scheduler, which nobody reads
-    // unless something breaks. The log is where a failure is actually noticed.
-    console.error('[cron/pagespeed] failed:', reason);
-    return NextResponse.json({ ok: false, ms: Date.now() - started, error: reason }, { status: 500 });
-  }
-}
+// The SEO page reads both the metric rows and SeoPage.issues, and both have just been
+// rewritten. Without invalidating them the page shows last week's figures until the TTL
+// expires.
+export const GET = providerCron('pagespeed', 'pagespeed', [
+  TAGS.integrations,
+  TAGS.metrics,
+  TAGS.seo,
+]);

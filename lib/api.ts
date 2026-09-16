@@ -37,6 +37,16 @@ export {
 
 export type ApiError = { error: string; detail?: unknown };
 
+/**
+ * What Next hands a `[id]` route as its second argument.
+ *
+ * Nineteen route files declared this identically. It is small enough that nobody minded
+ * writing it again, and identical enough that the next shape change to it — params became
+ * a promise once already — would have been nineteen edits with no way to tell which had
+ * been missed short of the type checker.
+ */
+export type Ctx = { params: Promise<{ id: string }> };
+
 export function fail(status: number, error: string, detail?: unknown) {
   return NextResponse.json<ApiError>({ error, ...(detail ? { detail } : {}) }, { status });
 }
