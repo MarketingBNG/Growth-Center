@@ -64,11 +64,26 @@ function serverOnly(): Set<string> {
   scan(join(ROOT, 'lib'), '');
 
   const tainted = new Set<string>();
+
+  /**
+   * A relative specifier, resolved against the importing module's directory.
+   *
+   * This used to strip a single leading `../` and then ignore the directory it was
+   * resolving from, so anything reached by `../../` resolved to a name no module had and
+   * the taint was silently dropped on the floor. lib/integrations/writers/crm.ts imports
+   * '../../prisma.ts' — the most direct route to the database in the tree — and this scan
+   * called it clean. Nothing failed: a scan that finds less simply reports fewer offenders,
+   * which is the vacuous pass the test at the bottom of this file exists to catch.
+   */
   const resolve = (from: string, spec: string): string | null => {
     if (!spec.startsWith('.')) return null;
-    const base = from.includes('/') ? from.slice(0, from.lastIndexOf('/') + 1) : '';
-    const path = spec.startsWith('./') ? base + spec.slice(2) : spec.replace(/^\.\.\//, '');
-    return path.replace(/\.ts$/, '');
+    const out = from.includes('/') ? from.slice(0, from.lastIndexOf('/')).split('/') : [];
+    for (const part of spec.replace(/\.ts$/, '').split('/')) {
+      if (part === '.') continue;
+      else if (part === '..') out.pop();
+      else out.push(part);
+    }
+    return out.join('/');
   };
 
   // Fixed point. Cheap at this size and immune to import order, which a single pass is
@@ -254,6 +269,16 @@ test('the import scan actually finds the modules that reach the database', () =>
   // The one that got through when this list was hand-written.
   assert.ok(SERVER_ONLY.includes('lib/referrals'));
   assert.ok(SERVER_ONLY.length > 20, `expected many, found ${SERVER_ONLY.length}`);
+
+  // Reached by '../../prisma.ts', two directories up. resolve() used to strip one `../`
+  // and ignore where it was resolving from, so every writer in this directory came back
+  // clean — six modules that import the database more directly than almost anything else
+  // in lib/. Asserted by depth rather than by name: what broke was nesting, so the guard
+  // has to be a module that is nested.
+  assert.ok(
+    SERVER_ONLY.includes('lib/integrations/writers/crm'),
+    'a module two directories deep still reaches lib/prisma',
+  );
 
   // …and that it is not simply flagging everything.
   for (const safe of CLIENT_SAFE) {
