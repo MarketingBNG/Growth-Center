@@ -16,7 +16,7 @@
 
 import { connect, stopUnlessApplying, transact } from './script.ts';
 import { channelSlugFor } from '../lib/integrations/crm-mapping.ts';
-import type { SourceType } from '../lib/enums.ts';
+import type { SourceType } from '../lib/shared/enums.ts';
 
 const client = await connect();
 

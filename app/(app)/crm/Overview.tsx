@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { LEAD_STATES, type CrmOverview } from '@/lib/crm-overview';
-import { fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
+import { LEAD_STATES, type CrmOverview } from '@/lib/crm/crm-overview';
+import { fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
 import { ProgressLink } from '@/components/NavProgress';
 
 /**

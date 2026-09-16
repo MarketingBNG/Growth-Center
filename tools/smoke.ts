@@ -11,10 +11,10 @@
 //   DATABASE_URL=… node --experimental-strip-types tools/smoke.ts
 
 import { checker } from './script.ts';
-import { createLead, getLead, listLeads, setLeadStatus } from '../lib/leads.ts';
-import { board, convertLead, moveOpportunity } from '../lib/pipeline.ts';
-import { getCompany, getContact, listCompanies, listContacts } from '../lib/crm.ts';
-import { db } from '../lib/prisma.ts';
+import { createLead, getLead, listLeads, setLeadStatus } from '../lib/leads/leads.ts';
+import { board, convertLead, moveOpportunity } from '../lib/pipeline/pipeline.ts';
+import { getCompany, getContact, listCompanies, listContacts } from '../lib/crm/crm.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set.');

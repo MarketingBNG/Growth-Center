@@ -40,13 +40,13 @@ import {
   figuresIn,
   percentageWithoutBasis,
   unsupportedFigures,
-} from '../lib/eval-checks.ts';
-import { blocksSending, lintStep, type LintableStep } from '../lib/outreach-lint.ts';
-import { requirementFor, type InsightStatus } from '../lib/insight-lifecycle.ts';
-import { fingerprint, normaliseSubject } from '../lib/insight-identity.ts';
-import { RULES, runRules } from '../lib/insight-rules.ts';
-import { aiStatus, ask, generateInsights, growthContext } from '../lib/ai.ts';
-import { db } from '../lib/prisma.ts';
+} from '../lib/ai/eval-checks.ts';
+import { blocksSending, lintStep, type LintableStep } from '../lib/outreach/outreach-lint.ts';
+import { requirementFor, type InsightStatus } from '../lib/insights/insight-lifecycle.ts';
+import { fingerprint, normaliseSubject } from '../lib/insights/insight-identity.ts';
+import { RULES, runRules } from '../lib/insights/insight-rules.ts';
+import { aiStatus, ask, generateInsights, growthContext } from '../lib/ai/ai.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 const FREE_ONLY = process.argv.includes('--free');
 

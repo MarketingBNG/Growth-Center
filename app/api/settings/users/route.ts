@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/roles';
-import { renameUser, setActive, setRole } from '@/lib/users';
-import { recordAudit } from '@/lib/audit';
+import { body, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/access/roles';
+import { renameUser, setActive, setRole } from '@/lib/access/users';
+import { recordAudit } from '@/lib/platform/audit';
 
 const input = z
   .object({

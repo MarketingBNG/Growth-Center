@@ -1,5 +1,5 @@
-import { db } from '../prisma.ts';
-import { OPEN_DEAL } from '../pipeline.ts';
+import { db } from '../platform/prisma.ts';
+import { OPEN_DEAL } from '../pipeline/pipeline.ts';
 import { openPipeline } from '../metrics.ts';
 import { int, type ReportContext, type Section } from './shared.ts';
 

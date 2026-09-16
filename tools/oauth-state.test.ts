@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.NEXTAUTH_SECRET = 'test-secret-for-state-signing';
 
-const { signState, verifyState } = await import('../lib/oauth-state.ts');
+const { signState, verifyState } = await import('../lib/access/oauth-state.ts');
 const { createHmac } = await import('node:crypto');
 
 test('a freshly signed state verifies', () => {

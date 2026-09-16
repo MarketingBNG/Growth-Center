@@ -5,10 +5,10 @@ import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
 import { AnswerText } from '@/components/patterns/answer-text';
-import { AI_KEY_ENV, SUGGESTED_QUESTIONS } from '@/lib/enums';
+import { AI_KEY_ENV, SUGGESTED_QUESTIONS } from '@/lib/shared/enums';
 
 export function AskBox({ configured }: { configured: boolean }) {
   const [question, setQuestion] = useState('');

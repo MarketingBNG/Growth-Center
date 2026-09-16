@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
-import { currentUser } from '@/lib/auth';
+import { currentUser } from '@/lib/access/auth';
 import { getProvider } from '@/lib/integrations/registry';
-import { db, hasDb } from '@/lib/prisma';
-import { TAGS, cached } from '@/lib/cache';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { TAGS, cached } from '@/lib/platform/cache';
 
 /** Fallback for a provider that has an Integration row but no registry entry yet —
  *  better than rendering the raw id in the header. */

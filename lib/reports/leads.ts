@@ -1,4 +1,4 @@
-import { db } from '../prisma.ts';
+import { db } from '../platform/prisma.ts';
 import { leadSourceLabel } from '../integrations/crm-mapping.ts';
 import { int, type ReportContext, type Section } from './shared.ts';
 

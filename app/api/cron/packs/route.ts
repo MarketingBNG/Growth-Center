@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cronGuard } from '@/lib/cron-auth';
-import { packsDue, sendPack } from '@/lib/packs';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { packsDue, sendPack } from '@/lib/reports/packs';
 
 /**
  * §12.6's scheduled packs: Shweta on a Monday, Akshay on the first working day. K7.

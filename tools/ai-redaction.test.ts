@@ -10,8 +10,8 @@ import {
   redactedInFilter,
   refusal,
   withoutRedacted,
-} from '../lib/ai-redaction.ts';
-import { TABLES } from '../lib/ai-tools.ts';
+} from '../lib/ai/ai-redaction.ts';
+import { TABLES } from '../lib/ai/ai-tools.ts';
 
 // §20.7: "No taxpayer PII in any prompt."
 //

@@ -4,11 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { Input, Select } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { api } from '@/lib/shared/fetcher';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 import { ErrorText } from '@/components/patterns/state';
-import { CONTENT_STATUSES } from '@/lib/enums';
-import { safeUrl } from '@/lib/format';
+import { CONTENT_STATUSES } from '@/lib/shared/enums';
+import { safeUrl } from '@/lib/shared/format';
 
 export type Piece = {
   id: string;

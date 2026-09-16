@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyApiKey } from '@/lib/apikeys';
-import { createLead } from '@/lib/leads';
-import { rateLimit } from '@/lib/rate-limit';
-import { SOURCE_TYPES } from '@/lib/enums';
-import { hasDb } from '@/lib/prisma';
+import { verifyApiKey } from '@/lib/access/apikeys';
+import { createLead } from '@/lib/leads/leads';
+import { rateLimit } from '@/lib/platform/rate-limit';
+import { SOURCE_TYPES } from '@/lib/shared/enums';
+import { hasDb } from '@/lib/platform/prisma';
 
 // Website form capture. Authenticated by an org API key rather than a session, because
 // the caller is a landing page, not a signed-in person.

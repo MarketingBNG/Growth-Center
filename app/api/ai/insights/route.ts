@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { generateInsights, growthContext } from '@/lib/ai';
-import { rateLimit } from '@/lib/rate-limit';
-import { RANGE_OPTIONS } from '@/lib/enums';
+import { body, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { generateInsights, growthContext } from '@/lib/ai/ai';
+import { rateLimit } from '@/lib/platform/rate-limit';
+import { RANGE_OPTIONS } from '@/lib/shared/enums';
 
 // The window the page was showing when the button was pressed, off the same list the
 // picker offers — not a free number, because this decides what a stored finding is a

@@ -1,5 +1,5 @@
-import { convertOrDrop, warnUnconverted } from './currency.ts';
-import { currencySettings } from './settings.ts';
+import { convertOrDrop, warnUnconverted } from './shared/currency.ts';
+import { currencySettings } from './platform/settings.ts';
 import { windowFor, type Range } from './metrics.ts';
 import { moneyIn, type ReportContext, type Section } from './reports/shared.ts';
 import { weeklyPack } from './reports/weekly-pack.ts';

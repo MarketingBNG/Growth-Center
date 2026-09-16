@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { libSource } from './source.ts';
 import { join } from 'node:path';
 
 // Guards the server/client boundary.
@@ -10,10 +11,33 @@ import { join } from 'node:path';
 // and the build died on "Can't resolve 'fs'" — or worse, dev returned 500 on every
 // route while the production build passed clean.
 //
-// Client-safe modules import nothing, so anything a client component needs belongs in
-// lib/enums.ts (values) or lib/calc.ts (arithmetic).
+// Client-safe modules import nothing that reaches the database, so anything a client
+// component needs belongs in lib/shared/enums.ts (values) or lib/shared/calc.ts
+// (arithmetic). CLIENT_SAFE below is the list, and says why it is curated.
 
 const ROOT = join(import.meta.dirname, '..');
+
+/**
+ * A relative specifier, resolved against the importing module's directory, as a path
+ * relative to lib/.
+ *
+ * This used to strip a single leading `../` and then ignore the directory it was resolving
+ * from, so anything reached by `../../` resolved to a name no module had and the taint was
+ * dropped on the floor. lib/integrations/writers/crm.ts imports '../../prisma.ts' — as
+ * direct a route to the database as exists here — and the scan called it clean. Nothing
+ * failed: a scan that finds less reports fewer offenders, which is the vacuous pass the
+ * last test in this file exists to catch.
+ */
+function resolve(from: string, spec: string): string | null {
+  if (!spec.startsWith('.')) return null;
+  const out = from.includes('/') ? from.slice(0, from.lastIndexOf('/')).split('/') : [];
+  for (const part of spec.replace(/\.ts$/, '').split('/')) {
+    if (part === '.') continue;
+    else if (part === '..') out.pop();
+    else out.push(part);
+  }
+  return out.join('/');
+}
 
 /**
  * Every lib module that can reach the database, worked out by following imports.
@@ -65,27 +89,6 @@ function serverOnly(): Set<string> {
 
   const tainted = new Set<string>();
 
-  /**
-   * A relative specifier, resolved against the importing module's directory.
-   *
-   * This used to strip a single leading `../` and then ignore the directory it was
-   * resolving from, so anything reached by `../../` resolved to a name no module had and
-   * the taint was silently dropped on the floor. lib/integrations/writers/crm.ts imports
-   * '../../prisma.ts' — the most direct route to the database in the tree — and this scan
-   * called it clean. Nothing failed: a scan that finds less simply reports fewer offenders,
-   * which is the vacuous pass the test at the bottom of this file exists to catch.
-   */
-  const resolve = (from: string, spec: string): string | null => {
-    if (!spec.startsWith('.')) return null;
-    const out = from.includes('/') ? from.slice(0, from.lastIndexOf('/')).split('/') : [];
-    for (const part of spec.replace(/\.ts$/, '').split('/')) {
-      if (part === '.') continue;
-      else if (part === '..') out.pop();
-      else out.push(part);
-    }
-    return out.join('/');
-  };
-
   // Fixed point. Cheap at this size and immune to import order, which a single pass is
   // not — lib/a importing lib/b importing lib/prisma would otherwise depend on which of
   // the two the directory listing reached first.
@@ -111,20 +114,32 @@ function serverOnly(): Set<string> {
 
 const SERVER_ONLY = [...serverOnly()].sort();
 
-/** Modules with no imports at all, safe for either side. */
+/**
+ * The modules a client component may take a value from.
+ *
+ * Curated, not derived from the folder they happen to sit in. "Imports nothing" is not the
+ * same question as "safe in a browser": lib/platform/cache.ts imports nothing statically
+ * and reaches next/cache through an await import(), while lib/shared/utils.ts imports clsx
+ * and is perfectly safe. A lib/shared/ that meant "client-safe" would be a claim the
+ * directory cannot keep, so the mechanical half of this is serverOnly() above and the
+ * judgment half is this list.
+ *
+ * Named by module rather than by path — libSource resolves them wherever they live — so
+ * moving a file does not make this list wrong, only differently spelled.
+ */
 const CLIENT_SAFE = [
-  'lib/enums',
-  'lib/calc',
-  'lib/utils',
-  'lib/format',
-  'lib/nav',
-  'lib/fetcher',
-  'lib/kpi',
-  'lib/sources',
+  'shared/enums',
+  'shared/calc',
+  'shared/utils',
+  'shared/format',
+  'shared/nav',
+  'shared/fetcher',
+  'shared/kpi',
+  'shared/sources',
   // The currency arithmetic and the settings shape. The settings form renders it, and it
-  // is deliberately import-free for that reason — lib/settings.ts is the half that
-  // touches the database.
-  'lib/currency',
+  // is deliberately import-free for that reason — lib/platform/settings.ts is the half
+  // that touches the database.
+  'shared/currency',
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -180,20 +195,23 @@ test('a client-safe module only reaches other client-safe modules', () => {
   // nothing on the list can reach the database, directly or through a neighbour.
   //
   // A type-only import is exempt: it is erased before the bundle exists.
-  const safe = new Set(CLIENT_SAFE.map((m) => m.replace('lib/', '')));
+  const safe = new Set(CLIENT_SAFE);
 
   for (const mod of CLIENT_SAFE) {
-    const source = readFileSync(join(ROOT, `${mod}.ts`), 'utf8');
+    const source = libSource(mod);
     for (const line of source.match(/^\s*import\s[^;]+;/gm) ?? []) {
       const from = line.match(/from\s+'([^']+)'/)?.[1];
       // A package, not a module of ours.
       if (!from || !from.startsWith('.')) continue;
       if (/^\s*import\s+type\s/.test(line)) continue;
 
-      const target = from.replace(/^\.\//, '').replace(/\.ts$/, '');
+      // Resolved against the module's own directory, the same way serverOnly() does it.
+      // These sit in lib/shared/ together, so a neighbour is './calc.ts' rather than a
+      // bare name, and comparing the raw specifier would have passed on anything.
+      const target = resolve(mod, from);
       assert.ok(
-        safe.has(target),
-        `${mod}.ts imports ./${target}, which is not client-safe — a client component that renders it would pull ${target} into the browser bundle`,
+        target !== null && safe.has(target),
+        `${mod} imports ${from}, which is not client-safe — a client component that renders it would pull ${target ?? from} into the browser bundle`,
       );
     }
   }
@@ -265,9 +283,9 @@ test('no client component reaches a server-only module through another component
 // server-only modules means no offenders, every time.
 test('the import scan actually finds the modules that reach the database', () => {
   assert.ok(SERVER_ONLY.includes('lib/metrics'), 'lib/metrics reaches lib/prisma');
-  assert.ok(SERVER_ONLY.includes('lib/leads'));
+  assert.ok(SERVER_ONLY.includes('lib/leads/leads'));
   // The one that got through when this list was hand-written.
-  assert.ok(SERVER_ONLY.includes('lib/referrals'));
+  assert.ok(SERVER_ONLY.includes('lib/crm/referrals'));
   assert.ok(SERVER_ONLY.length > 20, `expected many, found ${SERVER_ONLY.length}`);
 
   // Reached by '../../prisma.ts', two directories up. resolve() used to strip one `../`
@@ -282,6 +300,10 @@ test('the import scan actually finds the modules that reach the database', () =>
 
   // …and that it is not simply flagging everything.
   for (const safe of CLIENT_SAFE) {
-    assert.equal(SERVER_ONLY.includes(safe), false, `${safe} is client-safe and must not be flagged`);
+    assert.equal(
+      SERVER_ONLY.includes(`lib/${safe}`),
+      false,
+      `${safe} is client-safe and must not be flagged`,
+    );
   }
 });

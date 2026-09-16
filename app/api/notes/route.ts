@@ -1,6 +1,6 @@
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { addNote, noteInput, singleParent } from '@/lib/crm';
+import { body, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { addNote, noteInput, singleParent } from '@/lib/crm/crm';
 
 export const POST = route('crm:write', async (user, req) => {
   const input = await body(req, noteInput);

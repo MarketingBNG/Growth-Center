@@ -1,4 +1,4 @@
-import { db } from '../prisma.ts';
+import { db } from '../platform/prisma.ts';
 import { int, sumByKey, type ReportContext, type Section } from './shared.ts';
 
 export async function attribution({ current, money, inFx }: ReportContext): Promise<Section[]> {

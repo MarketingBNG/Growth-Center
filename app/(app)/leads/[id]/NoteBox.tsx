@@ -4,9 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function NoteBox(parent: {
   leadId?: string;

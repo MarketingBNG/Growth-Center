@@ -16,9 +16,9 @@
 // Safe to re-run: pure functions of unchanged fields write unchanged values.
 
 import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
-import { resolveAttribution } from '../lib/attribution-confidence.ts';
-import { lostReasonOf } from '../lib/lead-lost-reason.ts';
-import { scoreLead, SCORE_VERSION } from '../lib/lead-score.ts';
+import { resolveAttribution } from '../lib/money/attribution-confidence.ts';
+import { lostReasonOf } from '../lib/leads/lead-lost-reason.ts';
+import { scoreLead, SCORE_VERSION } from '../lib/leads/lead-score.ts';
 import type { SourceType } from '../lib/generated/prisma/client.ts';
 
 const client = await connect();

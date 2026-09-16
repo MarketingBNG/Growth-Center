@@ -1,11 +1,11 @@
 import { PageHeader } from '@/components/patterns/page-header';
 import { redirect } from 'next/navigation';
-import { hasDb } from '@/lib/prisma';
-import type { PageParams } from '@/lib/range';
-import { hasEncryptionKey } from '@/lib/crypto';
+import { hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { hasEncryptionKey } from '@/lib/access/crypto';
 import { cards } from '@/lib/integrations/service';
-import { can } from '@/lib/roles';
-import { currentUser } from '@/lib/auth';
+import { can } from '@/lib/access/roles';
+import { currentUser } from '@/lib/access/auth';
 import { ErrorBanner, noDatabasePage } from '@/components/patterns/state';
 import { IntegrationGrid } from './IntegrationGrid';
 import { SyncHealth } from './SyncHealth';

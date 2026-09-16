@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cronGuard } from '@/lib/cron-auth';
-import { sendDigest } from '@/lib/digest';
-import { generateInsights, growthContext } from '@/lib/ai';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { sendDigest } from '@/lib/insights/digest';
+import { generateInsights, growthContext } from '@/lib/ai/ai';
 
 /**
  * §20.6's daily run: the rules, then the digest. Scheduled in vercel.json.

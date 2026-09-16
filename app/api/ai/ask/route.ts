@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { ask, growthContext } from '@/lib/ai';
-import { rateLimit } from '@/lib/rate-limit';
+import { body, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { ask, growthContext } from '@/lib/ai/ai';
+import { rateLimit } from '@/lib/platform/rate-limit';
 
 // Every call spends Anthropic tokens, so a signed-in user must not be able to loop it.
 // Keyed on the user, not the IP, because the roster is the identity here.

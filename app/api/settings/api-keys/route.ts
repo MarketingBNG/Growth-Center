@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { recordAudit } from '@/lib/audit';
-import { body, route } from '@/lib/api';
-import { generateApiKey } from '@/lib/crypto';
-import { db } from '@/lib/prisma';
+import { recordAudit } from '@/lib/platform/audit';
+import { body, route } from '@/lib/platform/api';
+import { generateApiKey } from '@/lib/access/crypto';
+import { db } from '@/lib/platform/prisma';
 
 export const GET = route('apikeys:manage', async () => {
   // Deliberately never selects `hash`.

@@ -1,4 +1,4 @@
-import { db } from '../../prisma.ts';
+import { db } from '../../platform/prisma.ts';
 import { prospectStatus as prospectStatusOf } from '../providers/smartlead.ts';
 import type { MetricPoint } from '../types.ts';
 import { bulkUpsert, importedEmail, meta, str } from '../persist.ts';

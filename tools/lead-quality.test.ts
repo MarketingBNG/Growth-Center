@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { leadStatement, segmentOf, segmentLabel } from '../lib/lead-segment.ts';
-import { lostReasonOf, lostReasonLabel } from '../lib/lead-lost-reason.ts';
-import { SCORE_VERSION, scoreBand, scoreLead } from '../lib/lead-score.ts';
-import { inheritedConfidence, resolveAttribution } from '../lib/attribution-confidence.ts';
+import { leadStatement, segmentOf, segmentLabel } from '../lib/leads/lead-segment.ts';
+import { lostReasonOf, lostReasonLabel } from '../lib/leads/lead-lost-reason.ts';
+import { SCORE_VERSION, scoreBand, scoreLead } from '../lib/leads/lead-score.ts';
+import { inheritedConfidence, resolveAttribution } from '../lib/money/attribution-confidence.ts';
 
 // ── §7.4 segment ─────────────────────────────────────────────────────────────────────
 

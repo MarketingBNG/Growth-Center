@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { GLOSSARY, GLOSSARY_SLUGS, isGlossarySlug } from '@/lib/glossary';
-import { glossaryOwners, saveGlossaryOwner } from '@/lib/settings';
-import { TAGS, invalidate } from '@/lib/cache';
-import { recordAudit } from '@/lib/audit';
+import { body, route } from '@/lib/platform/api';
+import { GLOSSARY, GLOSSARY_SLUGS, isGlossarySlug } from '@/lib/shared/glossary';
+import { glossaryOwners, saveGlossaryOwner } from '@/lib/platform/settings';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 // Appendix C's third column: who owns each definition.
 //

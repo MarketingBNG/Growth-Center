@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { currentUser } from '@/lib/auth';
+import { currentUser } from '@/lib/access/auth';
 import { connect } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
-import { verifyState } from '@/lib/oauth-state';
-import { can } from '@/lib/roles';
-import { TAGS, invalidate } from '@/lib/cache';
+import { verifyState } from '@/lib/access/oauth-state';
+import { can } from '@/lib/access/roles';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 // The provider redirects the browser here, so this returns a redirect rather than JSON.
 

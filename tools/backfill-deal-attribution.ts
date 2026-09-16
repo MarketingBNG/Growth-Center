@@ -10,7 +10,7 @@
 //       …the same with --apply to write.
 
 import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
-import { inheritedConfidence, resolveAttribution, type AttributionConfidence } from '../lib/attribution-confidence.ts';
+import { inheritedConfidence, resolveAttribution, type AttributionConfidence } from '../lib/money/attribution-confidence.ts';
 import { leadSourceType } from '../lib/integrations/crm-mapping.ts';
 
 const client = await connect();

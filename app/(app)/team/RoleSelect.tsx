@@ -3,10 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Select } from '@/components/ui/select';
-import { api } from '@/lib/fetcher';
-import { ROLES, canAdminister, type Role } from '@/lib/roles';
+import { api } from '@/lib/shared/fetcher';
+import { ROLES, canAdminister, type Role } from '@/lib/access/roles';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * The Role cell on the Team page.

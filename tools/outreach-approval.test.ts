@@ -6,8 +6,8 @@ import {
   purposeLabel,
   templateHash,
   SEQUENCE_PURPOSES,
-} from '../lib/outreach-approval.ts';
-import { lintSequence } from '../lib/outreach-lint.ts';
+} from '../lib/outreach/outreach-approval.ts';
+import { lintSequence } from '../lib/outreach/outreach-lint.ts';
 
 const CLEAN = [
   { position: 1, subject: 'Your US filing deadline', body: 'Hi {{first_name}}, a quick note.' },

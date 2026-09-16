@@ -9,16 +9,16 @@
  *
  * lib/content-calendar.ts re-exports both halves, so nothing that imports it changes.
  */
-import { csvParse } from '../csv.ts';
-import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '../enums.ts';
-import { COMPANY_SEGMENTS } from '../company-facts.ts';
+import { csvParse } from '../shared/csv.ts';
+import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '../shared/enums.ts';
+import { COMPANY_SEGMENTS } from '../crm/company-facts.ts';
 import {
   FORMATS,
   MAX_BRIEF,
   SERVICE_LINES,
   TOPIC_CLUSTERS,
   type ContentFormat,
-} from '../content-fields.ts';
+} from '../content/content-fields.ts';
 
 // The content calendar, as a month rather than a pipeline.
 //

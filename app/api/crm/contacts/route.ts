@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { body, listQuery, paged, parseQuery, route } from '@/lib/api';
-import { contactInput, createContact, listContacts } from '@/lib/crm';
+import { body, listQuery, paged, parseQuery, route } from '@/lib/platform/api';
+import { contactInput, createContact, listContacts } from '@/lib/crm/crm';
 
 export const GET = route('growth:read', async (_user, req) => {
   const q = parseQuery(req, listQuery.extend({ companyId: z.string().optional() }));

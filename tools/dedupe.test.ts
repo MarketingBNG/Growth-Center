@@ -6,7 +6,7 @@ import {
   normalizeCompanyName,
   normalizeDomain,
   normalizeEmail,
-} from '../lib/dedupe.ts';
+} from '../lib/crm/dedupe.ts';
 
 test('normalizeEmail lowercases and trims', () => {
   assert.equal(normalizeEmail('  Alice@Acme.COM '), 'alice@acme.com');

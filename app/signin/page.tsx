@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
-import { currentUser } from '@/lib/auth';
-import { safeReturnTo } from '@/lib/return-to';
+import { currentUser } from '@/lib/access/auth';
+import { safeReturnTo } from '@/lib/access/return-to';
 import { SignInCard } from './SignInCard';
 
 export const metadata = { title: 'Sign in · Growth Center' };

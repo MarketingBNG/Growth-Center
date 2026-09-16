@@ -6,10 +6,10 @@
  * hands the pair to comparableDeltas. Nothing here queries anything core.ts does not
  * already expose, which is why the dependency runs one way and can stay that way.
  */
-import { type Range } from '../range.ts';
-import { db } from '../prisma.ts';
-import { costPer } from '../calc.ts';
-import { type Kpi } from '../kpi.ts';
+import { type Range } from '../shared/range.ts';
+import { db } from '../platform/prisma.ts';
+import { costPer } from '../shared/calc.ts';
+import { type Kpi } from '../shared/kpi.ts';
 import { windowFor } from './window.ts';
 import {
   accountMetrics,

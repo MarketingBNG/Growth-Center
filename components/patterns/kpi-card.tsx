@@ -20,10 +20,10 @@ import {
   UserX,
   Users,
 } from 'lucide-react';
-import { fmtCompact, fmtDays, fmtDuration, fmtMoney, fmtPercent, fmtRatio } from '@/lib/format';
-import { cn } from '@/lib/utils';
-import { kpiDelta, type Kpi } from '@/lib/kpi';
-import { sourceMeta } from '@/lib/sources';
+import { fmtCompact, fmtDays, fmtDuration, fmtMoney, fmtPercent, fmtRatio } from '@/lib/shared/format';
+import { cn } from '@/lib/shared/utils';
+import { kpiDelta, type Kpi } from '@/lib/shared/kpi';
+import { sourceMeta } from '@/lib/shared/sources';
 
 function show(k: Kpi): string {
   if (k.value === null) return '—';

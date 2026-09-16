@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
-import { useMutation } from '@/lib/use-mutation';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
 import { ErrorBanner } from '@/components/patterns/state';
 
 /**

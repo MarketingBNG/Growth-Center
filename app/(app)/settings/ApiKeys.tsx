@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function ApiKeys() {
   const router = useRouter();

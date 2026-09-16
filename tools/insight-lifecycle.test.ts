@@ -9,7 +9,7 @@ import {
   isOpen,
   nextStatuses,
   requirementFor,
-} from '../lib/insight-lifecycle.ts';
+} from '../lib/insights/insight-lifecycle.ts';
 
 // ── The state machine ─────────────────────────────────────────────────────────────────
 

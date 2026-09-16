@@ -1,5 +1,5 @@
-import { providerCron } from '@/lib/cron-auth';
-import { TAGS } from '@/lib/cache';
+import { providerCron } from '@/lib/platform/cron-auth';
+import { TAGS } from '@/lib/platform/cache';
 
 /**
  * Weekly Core Web Vitals measurement. Scheduled in vercel.json.

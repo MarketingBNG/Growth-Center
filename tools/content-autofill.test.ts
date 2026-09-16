@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { articleFromUrl, titleFromSlug } from '../lib/content-autofill.ts';
+import { articleFromUrl, titleFromSlug } from '../lib/content/content-autofill.ts';
 
 const site = (path: string) => `https://usaindiacfo.com${path}`;
 

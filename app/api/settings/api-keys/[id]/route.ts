@@ -1,7 +1,7 @@
-import { route, type Ctx } from '@/lib/api';
-import { recordAudit } from '@/lib/audit';
-import { HttpError } from '@/lib/auth';
-import { db } from '@/lib/prisma';
+import { route, type Ctx } from '@/lib/platform/api';
+import { recordAudit } from '@/lib/platform/audit';
+import { HttpError } from '@/lib/access/auth';
+import { db } from '@/lib/platform/prisma';
 
 export const DELETE = route<unknown, Ctx>('apikeys:manage', async (user, _req, ctx) => {
   const { id } = await ctx.params;

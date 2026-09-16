@@ -1,7 +1,7 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { syncHealth, type Freshness } from '@/lib/sync-health';
-import { fmtNumber, fmtRelative } from '@/lib/format';
-import { thresholds } from '@/lib/settings';
+import { syncHealth, type Freshness } from '@/lib/platform/sync-health';
+import { fmtNumber, fmtRelative } from '@/lib/shared/format';
+import { thresholds } from '@/lib/platform/settings';
 
 // G5.2: the freshness panel, with the two thresholds the manual asks for.
 //

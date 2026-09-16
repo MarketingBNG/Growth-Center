@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseDealName } from '../lib/deal-name.ts';
+import { parseDealName } from '../lib/pipeline/deal-name.ts';
 
 // Every name below is a real one from the 8,072 deals in this workspace, or a shape taken
 // from them. The convention is undocumented and lives only in the data, so the fixtures

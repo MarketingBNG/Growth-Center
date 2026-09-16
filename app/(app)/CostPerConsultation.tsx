@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { costPerConsultation } from '@/lib/metrics';
-import { fmtMoney, fmtNumber } from '@/lib/format';
+import { fmtMoney, fmtNumber } from '@/lib/shared/format';
 import type { Range } from '@/lib/metrics';
 
 // §6.1's "CPQL by paid channel", which is the half of the clause a card cannot carry.

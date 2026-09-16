@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { driveSync, MAX_CHAIN_HOPS } from '@/lib/integrations/driver';
-import { cronGuard } from '@/lib/cron-auth';
+import { cronGuard } from '@/lib/platform/cron-auth';
 
 /**
  * One more invocation's worth of a sync that has not finished.

@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { chooseSurvivor, findCandidates, pairKey, pairsByKey, RULE_CONFIDENCE } from '../lib/duplicates.ts';
-import { isMachineAddress } from '../lib/dedupe.ts';
-import { normalizePhone } from '../lib/phone.ts';
+import { chooseSurvivor, findCandidates, pairKey, pairsByKey, RULE_CONFIDENCE } from '../lib/crm/duplicates.ts';
+import { isMachineAddress } from '../lib/crm/dedupe.ts';
+import { normalizePhone } from '../lib/crm/phone.ts';
 
 const at = (iso: string) => new Date(iso);
 

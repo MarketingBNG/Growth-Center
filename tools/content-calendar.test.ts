@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { csvParse } from '../lib/csv.ts';
+import { csvParse } from '../lib/shared/csv.ts';
 import {
   EXPORT_HEADERS,
   mapHeaders,
@@ -15,7 +15,7 @@ import {
   readSheet,
   readStatus,
 } from '../lib/content-calendar.ts';
-import { formatSlot, slotToInput } from '../lib/content-fields.ts';
+import { formatSlot, slotToInput } from '../lib/content/content-fields.ts';
 
 // The content board could only be filled by hand — its own empty state said so — and a
 // month's calendar is always already written, in a spreadsheet, by whoever planned it.

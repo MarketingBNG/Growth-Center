@@ -8,7 +8,7 @@ import { ThemeToggle } from './ThemeToggle';
 import { Notifications } from './Notifications';
 import { NavProgressProvider } from './NavProgress';
 import { Button } from './ui/button';
-import type { CurrentUser } from '@/lib/auth';
+import type { CurrentUser } from '@/lib/access/auth';
 
 export function AppShell({
   user,

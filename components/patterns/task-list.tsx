@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PriorityBadge } from '@/components/patterns/badges';
-import { fmtDate } from '@/lib/format';
+import { fmtDate } from '@/lib/shared/format';
 
 type TaskRow = {
   id: string;

@@ -7,10 +7,10 @@ import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
 import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
-import { getLead } from '@/lib/leads';
-import { hasDb } from '@/lib/prisma';
-import { listAssignable, peopleOn, personOptions } from '@/lib/users';
-import { fmtDate, fmtMoney } from '@/lib/format';
+import { getLead } from '@/lib/leads/leads';
+import { hasDb } from '@/lib/platform/prisma';
+import { listAssignable, peopleOn, personOptions } from '@/lib/access/users';
+import { fmtDate, fmtMoney } from '@/lib/shared/format';
 import { LeadActions } from './LeadActions';
 
 export const metadata = { title: 'Lead · Growth Center' };

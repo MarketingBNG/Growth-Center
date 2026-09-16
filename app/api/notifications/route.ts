@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { recordId } from '@/lib/id';
-import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
+import { recordId } from '@/lib/platform/id';
+import { body, route } from '@/lib/platform/api';
+import { db } from '@/lib/platform/prisma';
 
 // The bell was a dead button with a hardcoded unread dot, while sync failures wrote
 // notification rows no page ever read.

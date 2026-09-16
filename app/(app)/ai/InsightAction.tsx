@@ -3,15 +3,15 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import { useMutation } from '@/lib/use-mutation';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
 import {
   APPROVAL_STATE,
   STATUS_LABELS,
   nextStatuses,
   type InsightStatus,
-} from '@/lib/insight-lifecycle';
+} from '@/lib/insights/insight-lifecycle';
 
 /**
  * Moving one finding along, with whatever that move requires.

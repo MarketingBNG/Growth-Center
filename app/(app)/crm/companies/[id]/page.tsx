@@ -6,17 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
-import { getCompany } from '@/lib/crm';
-import { hasDb } from '@/lib/prisma';
-import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
-import { convertOrDrop, warnUnconverted } from '@/lib/currency';
-import { currencySettings } from '@/lib/settings';
+import { getCompany } from '@/lib/crm/crm';
+import { hasDb } from '@/lib/platform/prisma';
+import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/shared/format';
+import { convertOrDrop, warnUnconverted } from '@/lib/shared/currency';
+import { currencySettings } from '@/lib/platform/settings';
 import {
   COMPANY_SEGMENT_LABELS,
   entityTypeLabel,
   jurisdictionLabels,
   jurisdictionWarning,
-} from '@/lib/company-facts';
+} from '@/lib/crm/company-facts';
 
 export const metadata = { title: 'Company · Growth Center' };
 

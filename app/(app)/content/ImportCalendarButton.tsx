@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 type Summary = {
   rowsRead: number;

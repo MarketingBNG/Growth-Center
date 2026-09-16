@@ -1,4 +1,4 @@
-import { campaignPerformance, campaignTotals } from '../campaigns.ts';
+import { campaignPerformance, campaignTotals } from '../money/campaigns.ts';
 import { int, pct, ratio, type ReportContext, type Section } from './shared.ts';
 
 export async function marketing({ current, money }: ReportContext): Promise<Section[]> {

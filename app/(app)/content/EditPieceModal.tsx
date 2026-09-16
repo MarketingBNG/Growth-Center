@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
-import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/enums';
+import { api } from '@/lib/shared/fetcher';
+import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/shared/enums';
 import {
   CALENDAR_TIMEZONE,
   FORMAT_LABELS,
@@ -15,10 +15,10 @@ import {
   SERVICE_LINES,
   TOPIC_CLUSTERS,
   slotToInput,
-} from '@/lib/content-fields';
-import { COMPANY_SEGMENTS } from '@/lib/company-facts';
+} from '@/lib/content/content-fields';
+import { COMPANY_SEGMENTS } from '@/lib/crm/company-facts';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export type EditablePiece = {
   id: string;

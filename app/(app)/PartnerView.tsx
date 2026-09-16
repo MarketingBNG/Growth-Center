@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 // §6.6's toggle. The constants and the argument for them are in lib/partner-view.ts,
 // which a server component and the test runner can both read.
 
-import { PARTNER_PARAM, PARTNER_VALUE } from '@/lib/partner-view';
+import { PARTNER_PARAM, PARTNER_VALUE } from '@/lib/shared/partner-view';
 
 /**
  * Partner view, held in the browser rather than fetched.

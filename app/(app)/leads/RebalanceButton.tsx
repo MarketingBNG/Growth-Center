@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Scale } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
 
 // Preview first, apply second, never one click.

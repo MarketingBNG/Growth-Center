@@ -19,10 +19,10 @@ test('a nested module is found by either name', () => {
 });
 
 test('the .ts suffix and a lib/ prefix are both tolerated', () => {
-  const plain = libSource('leads');
-  assert.equal(libSource('leads.ts'), plain);
-  assert.equal(libSource('lib/leads'), plain);
-  assert.equal(libSource('lib/leads.ts'), plain);
+  const plain = libSource('leads/leads');
+  assert.equal(libSource('leads/leads.ts'), plain);
+  assert.equal(libSource('lib/leads/leads'), plain);
+  assert.equal(libSource('lib/leads/leads.ts'), plain);
 });
 
 test('an unknown module throws instead of returning nothing', () => {
@@ -35,10 +35,10 @@ test('an unknown module throws instead of returning nothing', () => {
 });
 
 test('an exact path beats a shared basename', () => {
-  // lib/leads.ts and lib/reports/leads.ts share a basename, so "leads" would be ambiguous
-  // — except that it is also the exact path of the first, which is what it must resolve to.
-  assert.notEqual(libSource('leads'), libSource('reports/leads'));
-  assert.equal(libSource('leads'), libSource('lib/leads.ts'));
+  // lib/metrics.ts is a file and lib/metrics/ is a directory beside it, so "metrics" is
+  // both a basename and a whole path. The path is what it must resolve to.
+  assert.match(libSource('metrics'), /export \* from/);
+  assert.notEqual(libSource('metrics'), libSource('metrics/core'));
 });
 
 test('an ambiguous name throws and names the candidates', () => {

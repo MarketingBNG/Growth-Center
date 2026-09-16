@@ -10,19 +10,19 @@ import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { currentUser } from '@/lib/auth';
-import { db, hasDb } from '@/lib/prisma';
+import { currentUser } from '@/lib/access/auth';
+import { db, hasDb } from '@/lib/platform/prisma';
 import { openPipeline, windowFor, channelPerformance } from '@/lib/metrics';
-import { dashboardBand } from '@/lib/band';
-import { aiStatus } from '@/lib/ai';
-import { resolveRange, type PageParams } from '@/lib/range';
-import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
-import { WEB_LEAD_BASIS } from '@/lib/web-leads';
-import { segmentMix } from '@/lib/leads';
-import { deliveryCapacity } from '@/lib/capacity';
+import { dashboardBand } from '@/lib/analytics/band';
+import { aiStatus } from '@/lib/ai/ai';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/shared/format';
+import { WEB_LEAD_BASIS } from '@/lib/analytics/web-leads';
+import { segmentMix } from '@/lib/leads/leads';
+import { deliveryCapacity } from '@/lib/crm/capacity';
 import { CostPerConsultation } from './CostPerConsultation';
 import { ActionQueue } from './ActionQueue';
-import { isPartnerView } from '@/lib/partner-view';
+import { isPartnerView } from '@/lib/shared/partner-view';
 import {
   PartnerHidden,
   PartnerViewProvider,

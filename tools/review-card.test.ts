@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { refusals, reviewCard } from '../lib/review-card.ts';
-import { INSIGHTS_PROMPT_VERSION } from '../lib/ai.ts';
+import { refusals, reviewCard } from '../lib/insights/review-card.ts';
+import { INSIGHTS_PROMPT_VERSION } from '../lib/ai/ai.ts';
 
 // ── §21.4 what must never be approved ────────────────────────────────────────────────
 

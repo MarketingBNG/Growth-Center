@@ -3,7 +3,7 @@ import { libSource } from './source.ts';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { PACKS, isFirstWorkingDay, isWeeklyDay, packsDue, renderPack } from '../lib/packs.ts';
+import { PACKS, isFirstWorkingDay, isWeeklyDay, packsDue, renderPack } from '../lib/reports/packs.ts';
 import type { Report } from '../lib/reports.ts';
 
 const utc = (iso: string) => new Date(`${iso}T02:30:00Z`);

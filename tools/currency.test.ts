@@ -9,7 +9,7 @@ import {
   sumInReporting,
   convertOrDrop,
   warnUnconverted,
-} from '../lib/currency.ts';
+} from '../lib/shared/currency.ts';
 
 // The bug these guard against: the Meta account bills in INR, most deals are written in
 // USD, and every figure was summed as though currency did not exist — a ₹292 cost per

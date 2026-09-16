@@ -1,6 +1,6 @@
 import { after } from 'next/server';
-import { route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { driveSync } from '@/lib/integrations/driver';
 import { syncStatus } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';

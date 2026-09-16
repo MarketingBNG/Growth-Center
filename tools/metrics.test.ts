@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/calc.ts';
+import { cac, costPer, ctr, delta, num, rate, roas } from '../lib/shared/calc.ts';
 import { bucketKey, liveDays, previousOf, rangeFor, windowFor } from '../lib/metrics.ts';
 
 // Rates return null, not 0, when there is no denominator. A 0% CTR on a campaign that

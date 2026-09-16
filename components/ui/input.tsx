@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // The themed listbox lives in its own client module; re-exported so every existing
 // `import { Select } from '@/components/ui/input'` keeps working.

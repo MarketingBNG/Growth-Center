@@ -7,7 +7,7 @@ import {
   fingerprint,
   normaliseSubject,
   toResolve,
-} from '../lib/insight-identity.ts';
+} from '../lib/insights/insight-identity.ts';
 
 // ── normaliseSubject ──────────────────────────────────────────────────────────────────
 

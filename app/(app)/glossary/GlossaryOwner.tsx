@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import { useMutation } from '@/lib/use-mutation';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
 import { ErrorText } from '@/components/patterns/state';
 
 /**

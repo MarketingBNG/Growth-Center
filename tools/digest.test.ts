@@ -9,7 +9,7 @@ import {
   type Digest,
   digestsByRecipient,
   type PendingFinding,
-} from '../lib/digest.ts';
+} from '../lib/insights/digest.ts';
 
 // §20.6's digest. The ranking is the product: the reader acts on the first item and skims
 // the rest, so an item in the wrong place is an item that does not get done.

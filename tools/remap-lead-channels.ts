@@ -20,7 +20,7 @@
 
 import { apply, connect, stopUnlessApplying, transact } from './script.ts';
 import { channelSlugFor, leadSourceType } from '../lib/integrations/crm-mapping.ts';
-import type { SourceType } from '../lib/enums.ts';
+import type { SourceType } from '../lib/shared/enums.ts';
 
 /** Channels the mapping can now name. Kind matters: Marketing's ROAS and CAC are measured
  *  against the channels that carried spend, and `paid` is what puts Canada among them. */

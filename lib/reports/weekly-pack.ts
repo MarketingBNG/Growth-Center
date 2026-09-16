@@ -1,10 +1,10 @@
-import { db } from '../prisma.ts';
-import { insightHealth } from '../insight-health.ts';
-import { speedToLead } from '../speed-to-lead.ts';
-import { thresholds } from '../settings.ts';
-import { fitness, type HashableStep } from '../outreach-approval.ts';
-import { lintSequence } from '../outreach-lint.ts';
-import { rate } from '../calc.ts';
+import { db } from '../platform/prisma.ts';
+import { insightHealth } from '../insights/insight-health.ts';
+import { speedToLead } from '../analytics/speed-to-lead.ts';
+import { thresholds } from '../platform/settings.ts';
+import { fitness, type HashableStep } from '../outreach/outreach-approval.ts';
+import { lintSequence } from '../outreach/outreach-lint.ts';
+import { rate } from '../shared/calc.ts';
 import { assignedByOwner, int, ownerRows, pct, SEVERITY_RANK, type ReportContext, type Section } from './shared.ts';
 
 export async function weeklyPack({ current }: ReportContext): Promise<Section[]> {

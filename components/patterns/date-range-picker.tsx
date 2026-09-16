@@ -3,8 +3,8 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { Calendar } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { RANGE_OPTIONS } from '@/lib/enums';
+import { cn } from '@/lib/shared/utils';
+import { RANGE_OPTIONS } from '@/lib/shared/enums';
 import { DateRangeCalendar, isoDay, type PickedRange } from './date-range-calendar';
 
 /**

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { dateKey, parseDateKey, quarterOf } from '../lib/budget.ts';
+import { dateKey, parseDateKey, quarterOf } from '../lib/money/budget.ts';
 
 // The quarter arithmetic decides which spend an envelope is judged against. Every
 // off-by-one here is a figure that looks plausible and is wrong by a month.

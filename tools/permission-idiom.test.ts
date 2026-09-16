@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
-import { can, wouldAllow, PERMISSIONS, ROLE_VALUES, type Role } from '../lib/roles.ts';
+import { can, wouldAllow, PERMISSIONS, ROLE_VALUES, type Role } from '../lib/access/roles.ts';
 
 // One way to ask whether to show a control.
 //

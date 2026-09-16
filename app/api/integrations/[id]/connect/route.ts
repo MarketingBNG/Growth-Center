@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { authUrlFor, connect } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
-import { signState } from '@/lib/oauth-state';
-import { TAGS, invalidate } from '@/lib/cache';
+import { signState } from '@/lib/access/oauth-state';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 const input = z.object({
   apiKey: z.string().trim().min(1).max(500).optional(),

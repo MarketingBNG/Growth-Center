@@ -1,4 +1,4 @@
-import { fmtRelative } from '@/lib/format';
+import { fmtRelative } from '@/lib/shared/format';
 
 type Entry = {
   id: string;

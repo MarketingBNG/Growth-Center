@@ -21,7 +21,7 @@ import {
   nameFromEmail,
   roleLabel,
   wouldAllow,
-} from '../lib/roles.ts';
+} from '../lib/access/roles.ts';
 
 // ── Who may sign in ───────────────────────────────────────────────────────────
 // The domain is the entire gate now. There is no roster to be absent from.

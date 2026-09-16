@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts';
 import { AXIS, ChartFrame, GRID, SERIES, Tip } from './chart-parts';
-import { fmtCompact, fmtDay, fmtMoneyCompact } from '@/lib/format';
+import { fmtCompact, fmtDay, fmtMoneyCompact } from '@/lib/shared/format';
 
 export type TrendPoint = { date: string; [key: string]: string | number };
 

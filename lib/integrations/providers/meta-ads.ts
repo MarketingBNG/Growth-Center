@@ -1,4 +1,4 @@
-import { resolveObjective } from '../../campaign-objective.ts';
+import { resolveObjective } from '../../money/campaign-objective.ts';
 import { vendorMessage } from '../messages.ts';
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
 import { metaExchangeForLongLived, metaRefresh } from './oauth.ts';

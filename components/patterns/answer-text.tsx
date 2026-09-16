@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import { parseAnswer } from '@/lib/answer-format';
+import { parseAnswer } from '@/lib/ai/answer-format';
 
 // Renders the light markdown the model actually writes: paragraphs, bullets, numbered
 // lists, `**bold**` and `` `code` ``. Before this, answers were dropped into a

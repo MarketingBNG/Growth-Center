@@ -1,8 +1,8 @@
-import { route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { disconnect } from '@/lib/integrations/service';
 import { IntegrationError } from '@/lib/integrations/types';
-import { TAGS, invalidate } from '@/lib/cache';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req, ctx) => {
   const { id } = await ctx.params;

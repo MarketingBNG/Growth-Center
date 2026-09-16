@@ -11,9 +11,9 @@ import { Select } from '@/components/ui/select';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
-import { api } from '@/lib/fetcher';
-import { fmtDate, fmtMoney, fmtNumber } from '@/lib/format';
-import { DEMO_SOURCE } from '@/lib/sources';
+import { api } from '@/lib/shared/fetcher';
+import { fmtDate, fmtMoney, fmtNumber } from '@/lib/shared/format';
+import { DEMO_SOURCE } from '@/lib/shared/sources';
 import { ProgressLink } from '@/components/NavProgress';
 import { ErrorBanner, ErrorText } from '@/components/patterns/state';
 

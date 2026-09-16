@@ -6,7 +6,7 @@
  * nothing — no database, no other metric — while almost everything else depends on it.
  * Kept separate so that stays true.
  */
-import { rangeFor, type Range } from '../range.ts';
+import { rangeFor, type Range } from '../shared/range.ts';
 
 const DAY_MS = 86_400_000;
 

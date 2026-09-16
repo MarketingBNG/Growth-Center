@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { ListChecks } from 'lucide-react';
 import { ActionQueueDrawer } from './ActionQueueDrawer';
-import { db } from '@/lib/prisma';
-import { STATUS_LABELS, type InsightStatus } from '@/lib/insight-lifecycle';
-import { fmtRelative } from '@/lib/format';
+import { db } from '@/lib/platform/prisma';
+import { STATUS_LABELS, type InsightStatus } from '@/lib/insights/insight-lifecycle';
+import { fmtRelative } from '@/lib/shared/format';
 
 // §6.3: "Move AI insights to the top and render as an action queue — each row an insight,
 // a proposed action, an owner and a status. Not paragraphs."

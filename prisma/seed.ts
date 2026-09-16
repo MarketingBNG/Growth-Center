@@ -14,7 +14,7 @@
 
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../lib/generated/prisma/client.ts';
-import { normalizeEmail } from '../lib/dedupe.ts';
+import { normalizeEmail } from '../lib/crm/dedupe.ts';
 
 const url = process.env.DATABASE_URL;
 if (!url) {

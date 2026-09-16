@@ -24,10 +24,10 @@ import {
   winRate,
 } from '../lib/metrics.ts';
 import { checker } from './script.ts';
-import { campaignPerformance, campaignTotals } from '../lib/campaigns.ts';
+import { campaignPerformance, campaignTotals } from '../lib/money/campaigns.ts';
 import { cards } from '../lib/integrations/service.ts';
 import { providerList } from '../lib/integrations/registry.ts';
-import { db } from '../lib/prisma.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set.');

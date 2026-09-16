@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 // Shared chart furniture. Grid and axes are recessive; every label wears a text token
 // rather than a series colour, so identity is carried by the mark beside it.

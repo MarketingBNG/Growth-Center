@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { envelopesFor, quarterOf, setEnvelope } from '@/lib/budget';
-import { TAGS, invalidate } from '@/lib/cache';
+import { body, route } from '@/lib/platform/api';
+import { envelopesFor, quarterOf, setEnvelope } from '@/lib/money/budget';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 // The budget envelope. §22: Akshay sets it by channel, once a quarter, recorded with his
 // identity.

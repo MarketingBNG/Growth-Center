@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { moveOpportunity, opportunityPatch, updateOpportunity } from '@/lib/pipeline';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { moveOpportunity, opportunityPatch, updateOpportunity } from '@/lib/pipeline/pipeline';
 
 export const PATCH = route<unknown, Ctx>('pipeline:write', async (user, req, ctx) => {
   const { id } = await ctx.params;

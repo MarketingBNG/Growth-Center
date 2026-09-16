@@ -1,7 +1,7 @@
-import { db } from '../prisma.ts';
+import { db } from '../platform/prisma.ts';
 import { Prisma } from '../generated/prisma/client.ts';
-import { hasEncryptionKey, open, seal } from '../crypto.ts';
-import { dispatch } from '../events.ts';
+import { hasEncryptionKey, open, seal } from '../access/crypto.ts';
+import { dispatch } from '../platform/events.ts';
 import { getProvider, providerList } from './registry.ts';
 import {
   IntegrationError,
@@ -12,7 +12,7 @@ import {
   type SyncCursor,
   type SyncResult,
 } from './types.ts';
-import { TAGS, cached } from '../cache.ts';
+import { TAGS, cached } from '../platform/cache.ts';
 import { writePoints } from './persist.ts';
 import { writeCampaignSpend } from './writers/campaigns.ts';
 import { writeSocialActivity } from './writers/social.ts';
@@ -20,7 +20,7 @@ import { writeSeoRows, writeWebVitals } from './writers/seo.ts';
 import { writeWorkTasks } from './writers/tasks.ts';
 import { linkConvertedLeads, writeCrmActivity, writeCrmRecords, writeRevenueFromWonDeals } from './writers/crm.ts';
 import { writeOutreach } from './writers/outreach.ts';
-import { recordAudit } from '../audit.ts';
+import { recordAudit } from '../platform/audit.ts';
 
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.

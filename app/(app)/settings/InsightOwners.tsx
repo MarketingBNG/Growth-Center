@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { Select } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import { useMutation } from '@/lib/use-mutation';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
 import { ErrorBanner } from '@/components/patterns/state';
-import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insight-owners';
+import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insights/insight-owners';
 
 /**
  * Who each kind of finding lands on. §5.2.

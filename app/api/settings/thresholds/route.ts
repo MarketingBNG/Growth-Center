@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { THRESHOLDS, THRESHOLD_KEYS, isThresholdKey } from '@/lib/thresholds';
-import { saveThreshold, thresholds } from '@/lib/settings';
-import { TAGS, invalidate } from '@/lib/cache';
-import { recordAudit } from '@/lib/audit';
+import { body, route } from '@/lib/platform/api';
+import { THRESHOLDS, THRESHOLD_KEYS, isThresholdKey } from '@/lib/shared/thresholds';
+import { saveThreshold, thresholds } from '@/lib/platform/settings';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 // The numbers the rule library compares against. §20.5: "Thresholds live in a config
 // table, editable by Shweta with the change recorded. They are never hard-coded and never

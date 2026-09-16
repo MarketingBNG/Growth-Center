@@ -6,11 +6,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { currentUser } from '@/lib/auth';
-import { hasDb } from '@/lib/prisma';
-import { ADMIN_EMAILS, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin, pinnedName } from '@/lib/roles';
-import { fmtRelative } from '@/lib/format';
-import { ensureAdmins, listUsers } from '@/lib/users';
+import { currentUser } from '@/lib/access/auth';
+import { hasDb } from '@/lib/platform/prisma';
+import { ADMIN_EMAILS, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin, pinnedName } from '@/lib/access/roles';
+import { fmtRelative } from '@/lib/shared/format';
+import { ensureAdmins, listUsers } from '@/lib/access/users';
 import { RoleSelect } from './RoleSelect';
 import { TeamActions } from './TeamActions';
 

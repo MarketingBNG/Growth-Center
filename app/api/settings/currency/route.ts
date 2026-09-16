@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { CURRENCIES, currencySettings, refreshRatesIfStale, saveCurrencySettings } from '@/lib/settings';
-import { TAGS, invalidate } from '@/lib/cache';
-import { recordAudit } from '@/lib/audit';
+import { body, route } from '@/lib/platform/api';
+import { CURRENCIES, currencySettings, refreshRatesIfStale, saveCurrencySettings } from '@/lib/platform/settings';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 const codes = CURRENCIES.map((c) => c.code) as [string, ...string[]];
 

@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { daysToAnniversary, flagsFor } from '../lib/lifecycle.ts';
-import { jurisdictionWarning, entityTypeLabel } from '../lib/company-facts.ts';
-import { PARTNER_TYPES, partnerInput } from '../lib/referrals.ts';
-import { RULE_IDS } from '../lib/insight-rules.ts';
-import { THRESHOLDS } from '../lib/thresholds.ts';
+import { daysToAnniversary, flagsFor } from '../lib/crm/lifecycle.ts';
+import { jurisdictionWarning, entityTypeLabel } from '../lib/crm/company-facts.ts';
+import { PARTNER_TYPES, partnerInput } from '../lib/crm/referrals.ts';
+import { RULE_IDS } from '../lib/insights/insight-rules.ts';
+import { THRESHOLDS } from '../lib/shared/thresholds.ts';
 
 const at = (iso: string) => new Date(iso);
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setRole } from '../lib/users.ts';
+import { setRole } from '../lib/access/users.ts';
 
 // The guards inside setRole(), which all run before it reaches the database. They matter
 // more than they look: `role` is not enforced yet, so nothing today would notice a bad

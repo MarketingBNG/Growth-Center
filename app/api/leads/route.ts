@@ -1,5 +1,5 @@
-import { body, listQuery, paged, parseQuery, route } from '@/lib/api';
-import { createLead, leadFilters, leadInput, listLeads } from '@/lib/leads';
+import { body, listQuery, paged, parseQuery, route } from '@/lib/platform/api';
+import { createLead, leadFilters, leadInput, listLeads } from '@/lib/leads/leads';
 
 export const GET = route('growth:read', async (_user, req) => {
   const q = parseQuery(req, listQuery.extend(leadFilters.shape));

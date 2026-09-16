@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressLink } from '@/components/NavProgress';
 import { NoteBox } from '@/app/(app)/leads/[id]/NoteBox';
-import { fmtRelative } from '@/lib/format';
+import { fmtRelative } from '@/lib/shared/format';
 
 /**
  * The pieces every record page is built from.

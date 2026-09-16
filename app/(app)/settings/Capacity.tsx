@@ -4,10 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import type { CapacitySetting } from '@/lib/capacity';
+import { api } from '@/lib/shared/fetcher';
+import type { CapacitySetting } from '@/lib/crm/capacity';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 // §6.2's monthly manual input.
 //

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { KPI_SERIES } from '../lib/kpi.ts';
+import { KPI_SERIES } from '../lib/shared/kpi.ts';
 
 const band = libSource('band');
 // The metrics layer is three files behind a façade now, so this reads all of them: the

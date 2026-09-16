@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { APPROVAL_STATE, INSIGHT_STATUSES } from '@/lib/insight-lifecycle';
-import { setInsightStatus } from '@/lib/insight-actions';
-import { can } from '@/lib/roles';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { APPROVAL_STATE, INSIGHT_STATUSES } from '@/lib/insights/insight-lifecycle';
+import { setInsightStatus } from '@/lib/insights/insight-actions';
+import { can } from '@/lib/access/roles';
 
 // Moving a finding through its lifecycle: proposed → reviewed → approved → assigned →
 // in progress → done, or dismissed with a reason at almost any point.

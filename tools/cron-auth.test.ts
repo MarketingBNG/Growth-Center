@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cronCheck } from '../lib/cron-check.ts';
+import { cronCheck } from '../lib/platform/cron-check.ts';
 
 // Every /api/cron/* route delegates to lib/cron-auth.ts's cronGuard, which wraps this in
 // NextResponse.json — not tested here because next/server does not resolve under bare

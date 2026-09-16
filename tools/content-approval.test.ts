@@ -7,7 +7,7 @@ import {
   canPublish,
   contentHash,
   reviewAgeHours,
-} from '../lib/content-approval.ts';
+} from '../lib/content/content-approval.ts';
 
 const piece = {
   title: 'What the new 1099-K threshold means for founders',

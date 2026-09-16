@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { route, type Ctx } from '@/lib/api';
-import { db } from '@/lib/prisma';
-import { TAGS, invalidate } from '@/lib/cache';
+import { route, type Ctx } from '@/lib/platform/api';
+import { db } from '@/lib/platform/prisma';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * §8.2's four lifecycle dates.

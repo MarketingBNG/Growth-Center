@@ -8,8 +8,8 @@ import {
   ownerFor,
   unboundDomains,
   type OwnerBindings,
-} from '../lib/insight-owners.ts';
-import { RULE_IDS } from '../lib/insight-rules.ts';
+} from '../lib/insights/insight-owners.ts';
+import { RULE_IDS } from '../lib/insights/insight-rules.ts';
 
 // D7: "Insights carry an owner only for task and lead items; the rest are unowned."
 

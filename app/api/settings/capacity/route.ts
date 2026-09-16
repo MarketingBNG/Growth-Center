@@ -1,6 +1,6 @@
-import { route } from '@/lib/api';
-import { capacityInput, setCapacity } from '@/lib/capacity';
-import { TAGS, invalidate } from '@/lib/cache';
+import { route } from '@/lib/platform/api';
+import { capacityInput, setCapacity } from '@/lib/crm/capacity';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * §6.2's monthly ceiling.

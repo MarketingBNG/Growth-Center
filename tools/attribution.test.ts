@@ -9,7 +9,7 @@ import {
   coverageCaveat,
   parseThreshold,
   type AttributionHealth,
-} from '../lib/attribution.ts';
+} from '../lib/money/attribution.ts';
 
 // ── parseThreshold ────────────────────────────────────────────────────────────────────
 //
@@ -104,7 +104,7 @@ test('the caveat says what it is safe to do with the ranking', () => {
 // idea and stops believing either.
 
 test('the sufficiency window is a definition, not a caller’s choice', () => {
-  const source = libSource('attribution');
+  const source = libSource('money/attribution');
   assert.equal(SUFFICIENCY_WINDOW_DAYS, 365);
   assert.match(source, /rangeFor\(SUFFICIENCY_WINDOW_DAYS, now\)/);
 });

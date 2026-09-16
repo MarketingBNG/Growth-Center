@@ -8,12 +8,12 @@ import { Input, Select } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState, ErrorBanner } from '@/components/patterns/state';
-import { api } from '@/lib/fetcher';
-import { fmtNumber, fmtRelative } from '@/lib/format';
+import { api } from '@/lib/shared/fetcher';
+import { fmtNumber, fmtRelative } from '@/lib/shared/format';
 // From referral-types, not referrals: the latter imports lib/prisma, and a value read
 // from there pulls the `pg` driver into the browser bundle.
-import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/referral-types';
-import { useApiAction } from '@/lib/use-api-action';
+import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/crm/referral-types';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 // §8.5's registry. "What is not recorded is not followed up."
 //

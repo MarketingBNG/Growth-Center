@@ -1,8 +1,8 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { ownerScorecard } from '@/lib/scorecard';
-import { thresholds } from '@/lib/settings';
-import { fmtNumber, fmtPercent } from '@/lib/format';
+import { ownerScorecard } from '@/lib/analytics/scorecard';
+import { thresholds } from '@/lib/platform/settings';
+import { fmtNumber, fmtPercent } from '@/lib/shared/format';
 
 // §7.5. "Serves Nafis and Nilesh as much as marketing, and ends the argument about
 // whether lead quality or lead handling is the problem."

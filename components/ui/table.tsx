@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 /** Wraps the table in its own horizontal scroll container so a wide table never makes
  *  the page scroll sideways. */

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { unsupportedIdentifiers } from '../lib/narration-check.ts';
+import { unsupportedIdentifiers } from '../lib/ai/narration-check.ts';
 
 // The evidence one low-CTR finding actually carries.
 const seoEvidence = {

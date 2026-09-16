@@ -8,7 +8,7 @@ import {
   isGlossarySlug,
   ownerKey,
   parseOwner,
-} from '../lib/glossary.ts';
+} from '../lib/shared/glossary.ts';
 
 // Appendix C names thirteen terms. A glossary that quietly drops one is worse than no
 // glossary: the word stays in use and now has no entry to look up.

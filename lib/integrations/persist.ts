@@ -1,4 +1,4 @@
-import { db } from '../prisma.ts';
+import { db } from '../platform/prisma.ts';
 import { str } from './coerce.ts';
 import type { MetricPoint } from './types.ts';
 

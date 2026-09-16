@@ -1,8 +1,8 @@
-import { requirePermission } from '@/lib/auth';
-import { fail } from '@/lib/api';
-import { hasDb } from '@/lib/prisma';
+import { requirePermission } from '@/lib/access/auth';
+import { fail } from '@/lib/platform/api';
+import { hasDb } from '@/lib/platform/prisma';
 import { calendarCsv, currentMonth, parseMonth } from '@/lib/content-calendar';
-import { calendarXlsx } from '@/lib/content-calendar-xlsx';
+import { calendarXlsx } from '@/lib/content/content-calendar-xlsx';
 
 // The month as a file. Returns a download rather than JSON, so it cannot use route() —
 // that wraps every result in NextResponse.json. Same shape as /api/reports/export, which

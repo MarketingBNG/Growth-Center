@@ -18,7 +18,7 @@
 // a second run over unchanged rows writes the same values.
 
 import { connect, stopUnlessApplying, transact } from './script.ts';
-import { resolveObjective } from '../lib/campaign-objective.ts';
+import { resolveObjective } from '../lib/money/campaign-objective.ts';
 
 const client = await connect();
 

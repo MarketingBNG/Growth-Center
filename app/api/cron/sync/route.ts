@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
-import { scanDuplicates } from '@/lib/duplicate-queue';
-import { autofillContent } from '@/lib/content-autofill';
-import { refreshRatesIfStale } from '@/lib/settings';
-import { cronGuard } from '@/lib/cron-auth';
-import { TAGS, invalidate } from '@/lib/cache';
+import { scanDuplicates } from '@/lib/crm/duplicate-queue';
+import { autofillContent } from '@/lib/content/content-autofill';
+import { refreshRatesIfStale } from '@/lib/platform/settings';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * Nightly refresh of every connected integration. Scheduled in vercel.json.

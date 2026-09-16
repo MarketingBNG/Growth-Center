@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { consume, rateLimit, resetRateLimits, type Bucket } from '../lib/rate-limit.ts';
+import { consume, rateLimit, resetRateLimits, type Bucket } from '../lib/platform/rate-limit.ts';
 
 // The clock is an argument, so these are deterministic — no sleeping.
 

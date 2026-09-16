@@ -5,11 +5,11 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
+import { hasDb } from '@/lib/platform/prisma';
 import { buildReport, isReportId, REPORTS } from '@/lib/reports';
-import { resolveRange, type PageParams } from '@/lib/range';
-import { fmtDate } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { fmtDate } from '@/lib/shared/format';
+import { cn } from '@/lib/shared/utils';
 
 export const metadata = { title: 'Reports · Growth Center' };
 

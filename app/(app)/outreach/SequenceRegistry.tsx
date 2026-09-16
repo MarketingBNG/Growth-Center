@@ -6,11 +6,11 @@ import { Check, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { api } from '@/lib/fetcher';
-import { PURPOSE_LABELS, SEQUENCE_PURPOSES } from '@/lib/outreach-approval';
-import { fmtDate } from '@/lib/format';
+import { api } from '@/lib/shared/fetcher';
+import { PURPOSE_LABELS, SEQUENCE_PURPOSES } from '@/lib/outreach/outreach-approval';
+import { fmtDate } from '@/lib/shared/format';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 type SignOffView =
   | { state: 'none' }

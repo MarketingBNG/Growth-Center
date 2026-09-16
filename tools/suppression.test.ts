@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import test from 'node:test';
 
-import { needsSuppressionCheck } from '../lib/suppression.ts';
+import { needsSuppressionCheck } from '../lib/outreach/suppression.ts';
 
 // §12.5 and Appendix C: "no cold send to a client or referral partner". §7.7 says why it
 // is not a metrics problem — a client receiving a cold pitch is a relationship event, and
@@ -61,7 +61,7 @@ test('one hit per address, and the more serious reason wins', () => {
 // A sign-off is the moment somebody takes responsibility for the list, so it is where the
 // refusal belongs — not only on a page somebody might read.
 test('signing off a list with suppressed recipients is refused', () => {
-  const outreach = libSource('outreach');
+  const outreach = libSource('outreach/outreach');
   assert.match(outreach, /const hits = await suppressionCheck\(id\);/);
   assert.match(outreach, /already has a relationship with/);
 });

@@ -6,15 +6,15 @@ import { RefreshCw, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import {
   CURRENCIES,
   RATE_STALE_HOURS,
   rateAgeHours,
   type CurrencySettings as Settings,
-} from '@/lib/currency';
+} from '@/lib/shared/currency';
 import { ErrorText } from '@/components/patterns/state';
-import { useApiAction } from '@/lib/use-api-action';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * Which currency the workspace reports in, and what the others are worth against it.

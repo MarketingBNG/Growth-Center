@@ -8,9 +8,9 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpe
 import { signOut } from 'next-auth/react';
 import { usePersisted } from './use-persisted';
 import { LinkProgress } from './NavProgress';
-import { ACCOUNT_NAV, NAV } from '@/lib/nav';
-import { cn } from '@/lib/utils';
-import type { CurrentUser } from '@/lib/auth';
+import { ACCOUNT_NAV, NAV } from '@/lib/shared/nav';
+import { cn } from '@/lib/shared/utils';
+import type { CurrentUser } from '@/lib/access/auth';
 
 /**
  * Warm a route when the pointer reaches its link, rather than when it scrolls into view.

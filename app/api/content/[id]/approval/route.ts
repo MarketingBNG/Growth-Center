@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { approveContent, returnContent } from '@/lib/content';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { approveContent, returnContent } from '@/lib/content/content';
 
 // Approving a content piece, or sending it back. §21.2.
 //

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { COLD_START, deriveFromHistory } from '../lib/deal-origin.ts';
-import type { HistoryInput } from '../lib/deal-origin.ts';
+import { COLD_START, deriveFromHistory } from '../lib/pipeline/deal-origin.ts';
+import type { HistoryInput } from '../lib/pipeline/deal-origin.ts';
 
 // Every fixture sits after the cold-start boundary unless a test is specifically about
 // that boundary, so an unrelated test cannot pass for the wrong reason.

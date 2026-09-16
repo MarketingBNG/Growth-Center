@@ -18,8 +18,8 @@
 // sends. Any future tool reaching for raw SQL over a date range has the same problem.
 import { connect } from './script.ts';
 import { consultations, funnel } from '../lib/metrics.ts';
-import { rangeFor } from '../lib/range.ts';
-import { costPer } from '../lib/calc.ts';
+import { rangeFor } from '../lib/shared/range.ts';
+import { costPer } from '../lib/shared/calc.ts';
 
 const days = Number(process.argv[2] ?? 30);
 const { current } = rangeFor(days);

@@ -14,7 +14,7 @@ import {
   readCursor as smartleadCursor,
   sequenceStatus,
 } from '../lib/integrations/providers/smartlead.ts';
-import { seoLiveness } from '../lib/seo.ts';
+import { seoLiveness } from '../lib/analytics/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { splitName } from '../lib/integrations/service.ts';
 import {

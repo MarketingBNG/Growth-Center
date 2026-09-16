@@ -6,11 +6,11 @@ import { Copy, Search, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
-import { fmtRelative } from '@/lib/format';
-import type { QueueRow } from '@/lib/duplicate-queue';
-import { useApiAction } from '@/lib/use-api-action';
+import { fmtRelative } from '@/lib/shared/format';
+import type { QueueRow } from '@/lib/crm/duplicate-queue';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 // §8.1's front end. The engine proposes; this is where a person decides.
 //

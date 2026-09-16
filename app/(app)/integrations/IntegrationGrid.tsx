@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
 import { StateBadge } from '@/components/patterns/integration-state';
-import { api } from '@/lib/fetcher';
-import { fmtNumber, fmtRelative } from '@/lib/format';
+import { api } from '@/lib/shared/fetcher';
+import { fmtNumber, fmtRelative } from '@/lib/shared/format';
 import type { Card as IntegrationCard } from '@/lib/integrations/service';
 import { ErrorBanner, ErrorText } from '@/components/patterns/state';
-import { useApiAction } from '@/lib/use-api-action';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 const CATEGORY_LABEL: Record<string, string> = {
   analytics: 'Analytics',

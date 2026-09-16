@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { notifyNewFindings } from '../lib/insight-notify.ts';
+import { notifyNewFindings } from '../lib/insights/insight-notify.ts';
 
 // §22: "One notification, never a queue." The tests that matter here are the ones about
 // when NOT to send — a bell that fires on every run of every rule is a bell people turn

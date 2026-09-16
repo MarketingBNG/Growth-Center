@@ -1,12 +1,12 @@
-import { db } from '../../prisma.ts';
+import { db } from '../../platform/prisma.ts';
 import { channelSlugFor, cleanImportedName, leadSourceType, leadStatus, matchStage, taskPriority, taskStatus } from '../crm-mapping.ts';
-import { normalizeCompanyName } from '../../dedupe.ts';
-import { resolveAttribution } from '../../attribution-confidence.ts';
-import { lostReasonOf } from '../../lead-lost-reason.ts';
-import { SCORE_VERSION, scoreLead } from '../../lead-score.ts';
-import { parseDealName } from '../../deal-name.ts';
-import { applyHistoryOrigins } from '../../deal-origin.ts';
-import { currencySettings } from '../../settings.ts';
+import { normalizeCompanyName } from '../../crm/dedupe.ts';
+import { resolveAttribution } from '../../money/attribution-confidence.ts';
+import { lostReasonOf } from '../../leads/lead-lost-reason.ts';
+import { SCORE_VERSION, scoreLead } from '../../leads/lead-score.ts';
+import { parseDealName } from '../../pipeline/deal-name.ts';
+import { applyHistoryOrigins } from '../../pipeline/deal-origin.ts';
+import { currencySettings } from '../../platform/settings.ts';
 import type { MetricPoint } from '../types.ts';
 import { bulkUpsert, createdAtOf, importedEmail, meta, str } from '../persist.ts';
 

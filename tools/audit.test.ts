@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeRow, phraseAction, summariseDetail } from '../lib/audit.ts';
+import { describeRow, phraseAction, summariseDetail } from '../lib/platform/audit.ts';
 
 // The Activity log renders one row per audit_event, and these two functions are the whole
 // of its reading. They are written to degrade rather than hide: an action or a detail

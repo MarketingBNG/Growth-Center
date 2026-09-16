@@ -1,4 +1,4 @@
-import { db } from '../../prisma.ts';
+import { db } from '../../platform/prisma.ts';
 import { Prisma } from '../../generated/prisma/client.ts';
 import type { IntegrationProvider, MetricPoint } from '../types.ts';
 import { bulkUpsert, meta, str } from '../persist.ts';

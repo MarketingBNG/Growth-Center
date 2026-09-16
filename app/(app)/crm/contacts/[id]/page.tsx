@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
 import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
-import { getContact } from '@/lib/crm';
+import { getContact } from '@/lib/crm/crm';
 import { leadSourceLabel } from '@/lib/integrations/crm-mapping';
-import { hasDb } from '@/lib/prisma';
-import { fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
+import { hasDb } from '@/lib/platform/prisma';
+import { fmtMoney, fmtRelative, safeUrl } from '@/lib/shared/format';
 
 export const metadata = { title: 'Contact · Growth Center' };
 

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { getLead, setLeadOwner, setLeadStatus } from '@/lib/leads';
-import { LEAD_STATUSES } from '@/lib/enums';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { getLead, setLeadOwner, setLeadStatus } from '@/lib/leads/leads';
+import { LEAD_STATUSES } from '@/lib/shared/enums';
 
 export const GET = route<unknown, Ctx>('growth:read', async (_user, _req, ctx) => {
   const lead = await getLead((await ctx.params).id);

@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
-import { ROSTER_KEY, marketingRoster } from '@/lib/roster';
-import { canonicalEmail } from '@/lib/roles';
-import { TAGS, invalidate } from '@/lib/cache';
-import { recordAudit } from '@/lib/audit';
+import { body, route } from '@/lib/platform/api';
+import { db } from '@/lib/platform/prisma';
+import { ROSTER_KEY, marketingRoster } from '@/lib/access/roster';
+import { canonicalEmail } from '@/lib/access/roles';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 // Who the Growth Center's queue is for. D2: the task-debt rule was raising a finding per
 // person across the whole firm, eighteen of them, of whom one was on the marketing team.

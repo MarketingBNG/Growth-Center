@@ -3,9 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { Check, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * Completing was one-way: a task ticked off by mistake stayed done for good, because

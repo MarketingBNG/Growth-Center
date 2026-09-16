@@ -1,6 +1,6 @@
 import { channelPerformance, funnel, openPipeline } from '../metrics.ts';
-import { WEB_LEAD_BASIS } from '../web-leads.ts';
-import { insightHealth } from '../insight-health.ts';
+import { WEB_LEAD_BASIS } from '../analytics/web-leads.ts';
+import { insightHealth } from '../insights/insight-health.ts';
 import { int, pct, ratio, type ReportContext, type Section } from './shared.ts';
 
 export async function executive({ current, previous, money }: ReportContext): Promise<Section[]> {

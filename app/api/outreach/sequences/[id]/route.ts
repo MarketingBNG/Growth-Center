@@ -1,6 +1,6 @@
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { registryInput, setSequenceRegistry } from '@/lib/outreach';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { registryInput, setSequenceRegistry } from '@/lib/outreach/outreach';
 
 // The registry's descriptive half — purpose, segment, service line, sending domain.
 // Gated on outreach:send rather than on approve, deliberately: filling in what a campaign

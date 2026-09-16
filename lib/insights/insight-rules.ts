@@ -1,0 +1,1229 @@
+import { Prisma } from '../generated/prisma/client.ts';
+import { db } from '../platform/prisma.ts';
+import type { Thresholds } from '../shared/thresholds.ts';
+import { thresholds } from '../platform/settings.ts';
+import { attributionSufficiency } from '../money/attribution.ts';
+import { dealActivity } from '../pipeline/deal-activity.ts';
+import { marketingRoster, splitByRoster } from '../access/roster.ts';
+import { ownerFor, unboundDomains } from './insight-owners.ts';
+import { suppressionCheck } from '../outreach/suppression.ts';
+import { lintSequence, summarise } from '../outreach/outreach-lint.ts';
+import { envelopesFor, quarterOf } from '../money/budget.ts';
+import { rate } from '../shared/calc.ts';
+import type { InsightKind } from '../shared/enums.ts';
+
+// The rule library. §20.5, first release.
+//
+// §20.1's first principle: "Every insight originates in a deterministic rule over the
+// metrics table — a threshold, a trend, an anomaly, an SLA breach, a data-quality
+// failure. The model narrates, prioritises and proposes; it never computes a number, sets
+// a date, or decides whether something applies."
+//
+// So a rule here does all the deciding. It queries, compares against a stored threshold,
+// and returns its figures as `evidence`. The model is handed the evidence afterwards and
+// asked for sentences — see generateInsights in lib/ai.ts. Nothing in this file calls a
+// model, and nothing here is reachable from one.
+//
+// ── Which of the manual's 25 are here, and why the rest are not ───────────────────────
+//
+// Thirteen. The other twelve are not "not yet built": each is missing something this
+// workspace does not have, and writing them anyway would produce rules that either never
+// fire or fire on a figure that does not mean what the rule thinks.
+//
+// Two moved out of that list on 5 September, and neither because anything here changed —
+// which is the argument for re-reading the database rather than trusting these notes:
+//
+//   New technical issue         Said to need Semrush, whose subscription has no API
+//                               units. PageSpeed writes SeoPage.issues now; 50 pages
+//                               carry findings and the rule reads those.
+//   Lost-reason concentration   Said to be 42 rows of 175 lost deals. Re-read live it is
+//                               141 of 365 — the CRM has been filling the field since.
+//
+//   No field exists for it:
+//     CPQL over/under target      `qualifiedAt` means converted here; Zoho Bookings is
+//                                 not integrated, so the numerator has no signal at all.
+//     Lead quality drop           [built 5 Sep] Lead.score now carries a deterministic
+//                                 0-100 (lib/lead-score.ts), so this is live as
+//                                 `lead_quality_below_floor` — per channel, because
+//                                 campaignId is still null on every lead.
+//     Commercial keyword drop     Rankings are stored; nothing marks a term commercial.
+//     AI citation lost            No tracked-question table.
+//     Suppression breach          The columns exist now (§7.7) and nothing populates
+//                                 them: Is_Client and Is_Referral_Partner are not in the
+//                                 Zoho Contacts field list, so there is still nothing to
+//                                 read them from. A rule over a column that is false on
+//                                 every row would report perfect compliance.
+//
+//   The table is empty, so the rule would be a rule about nothing:
+//     Deliverability threshold    outreach_message holds 0 rows.
+//     Reply unassigned            Same table.
+//     Approval pending beyond 48h content_piece holds 0 rows.
+//     Profile below cadence       0 social posts in the last 14 days.
+//
+//   Blocked outside the code:
+//     Tax claim unverified        Needs the controlled corpus, which does not exist.
+//     Reconciliation variance     Nothing records what the vendor said the count was.
+//     Campaign with zero leads    campaignId is null on all 27,458 leads, so a
+//                                 per-campaign lead count is structurally uncomputable.
+//                                 Reported per channel instead, where the data is real.
+//
+// That leaves the sixteen below. Each was checked against the live database before it was
+// written, which is how the notes above are so specific — and why several of them turned
+// out to be stale on re-reading.
+//
+// Three were added on 5 September once the work they depend on existed: the duplicate
+// merge queue (§8.1), the referral partner registry (§8.5) and the lead quality score
+// (§7.3). None of them was ever blocked on anything outside the repository; they were
+// waiting on a table with rows in it.
+
+export type RuleSection =
+  | 'dashboard'
+  | 'leads'
+  | 'crm'
+  | 'pipeline'
+  | 'marketing'
+  | 'seo'
+  | 'ads'
+  | 'social'
+  | 'outreach'
+  | 'content'
+  | 'analytics'
+  | 'tasks';
+
+export type RuleSeverity = 'critical' | 'high' | 'medium' | 'info';
+
+/** Whether a rule measures a period's activity or a condition holding right now. See the
+ *  note on `Rule.scope`, which is where the distinction is argued. */
+export type RuleScope = 'period' | 'standing';
+
+/** What a rule returns when it fires. No prose: the model writes that from `evidence`. */
+export type Finding = {
+  /** Stable within a rule, so one rule may raise several distinct findings — task debt
+   *  names the person, and each person's debt is its own finding with its own owner. */
+  subject: string;
+  evidence: Record<string, unknown>;
+  /** The step to take. Written by the rule, not the model: §20.1 lets the model *propose*
+   *  from a rule template, and a template that names the action leaves nothing to invent. */
+  proposedAction: string;
+  /** Overrides the rule's own severity where the same rule spans two bands — a deal 60
+   *  days stale is not the same finding as one at 30. */
+  severity?: RuleSeverity;
+  /** Suggested owner, where the data names one. Null where it does not; the manual's
+   *  role map names six people who hold no account here and own no records. */
+  ownerEmail?: string | null;
+};
+
+export type Rule = {
+  id: string;
+  /** Bumped when the rule's logic changes, so an old finding can be told apart from what
+   *  the current rule would say. Part of Appendix B for exactly that reason. */
+  version: number;
+  section: RuleSection;
+  severity: RuleSeverity;
+  kind: InsightKind;
+  /** One line saying what the rule tests, shown next to the finding and handed to the
+   *  model as the frame for its narration. */
+  test: string;
+  /**
+   * Whether the rule measures a period's activity or a condition that holds right now.
+   *
+   * Declared rather than inferred, because the two are not distinguishable by reading a
+   * rule's query and the difference decides whether firing is correct. An overdue task is
+   * overdue whatever range the dashboard is showing; revenue attribution for Q1 is a
+   * statement about Q1. Seven of these eleven turned out to be standing rules, which was
+   * not obvious to anybody — including to me, until the eval suite asked the question by
+   * running every rule over a window in 1990 and eight of them fired.
+   *
+   * `standing` is a claim, and the claim is that firing on any window is correct.
+   */
+  scope: RuleScope;
+  run: (ctx: RuleContext) => Promise<Finding[]>;
+};
+
+export type RuleContext = {
+  from: Date;
+  to: Date;
+  now: Date;
+  thresholds: Thresholds;
+  currency: string;
+};
+
+const hoursAgo = (now: Date, hours: number) => new Date(now.getTime() - hours * 3_600_000);
+const daysAgo = (now: Date, days: number) => hoursAgo(now, days * 24);
+
+// ── The rules ─────────────────────────────────────────────────────────────────────────
+
+const attributionRule: Rule = {
+  id: 'attribution_health_below_threshold',
+  // Standing, and it changed from `period` with D11. Whether the firm's revenue reaches a
+  // channel well enough to move money on is a fact about the data, not about the month
+  // the dashboard is showing — and while it was period-scoped this rule and the refusal
+  // panel quoted two different numbers for it on one screen.
+  scope: 'standing',
+  version: 1,
+  section: 'dashboard',
+  severity: 'high',
+  kind: 'risk',
+  test: 'Share of revenue that reaches a channel, against the workspace threshold',
+  async run(ctx) {
+    // Not ctx.from/ctx.to. The window is part of the definition and belongs to
+    // `attributionSufficiency`, which §21.4's refusal reads from too, so the two cannot
+    // disagree about the answer or the figure under it.
+    const health = await attributionSufficiency(ctx.now);
+    if (health.sufficient !== false) return [];
+    return [
+      {
+        subject: 'attribution-health-below-threshold',
+        // Key names carry their own meaning here, because the model reads nothing else.
+        // Called `revenueAttributedPercent` it wrote "the channel is associated with
+        // 7.38% of revenue" — reading a workspace-wide coverage figure as one channel's
+        // share. Naming the subject in the key fixed the sentence.
+        evidence: {
+          revenueReachingAnyChannelPercent: round(health.revenue.percent),
+          revenueReachingAnyChannel: Math.round(health.revenue.covered),
+          revenueTotal: Math.round(health.revenue.total),
+          dealsWithAnyChannelPercent: round(health.deals.percent),
+          leadsWithAnyChannelPercent: round(health.leads.percent),
+          thresholdPercent: health.threshold,
+          currency: health.currency,
+          // Stated because the rule no longer measures the screen's period, and a
+          // coverage figure without its window is not checkable against anything.
+          measuredOverDays: health.windowDays,
+          basis: 'coverage across the whole workspace over the last 12 months, not one channel',
+        },
+        // D6: right diagnosis, wrong field. Lead_Source is the lead's, and setting it on
+        // the deal by hand at close will not happen across 967 open deals. The deal
+        // inherits Channel and Campaign_ID at conversion instead, and Deal_Type is what
+        // stops a renewal reading as unattributed new business.
+        proposedAction:
+          'Have the deal inherit Channel and Campaign_ID from its converting lead automatically, and record Deal_Type, so revenue carries a channel without anyone typing one.',
+      },
+    ];
+  },
+};
+
+const staleDealsRule: Rule = {
+  id: 'stale_deals',
+  scope: 'standing',
+  // Bumped with D5. The rule counted only activity linked to the deal record, which is
+  // not where this firm logs its calls, and it spoke at all while the CRM sync was down.
+  version: 2,
+  section: 'pipeline',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Open deals with no activity logged for longer than the stale threshold',
+  async run(ctx) {
+    const cutoff = daysAgo(ctx.now, ctx.thresholds['pipeline.staleDays']);
+    const activity = await dealActivity();
+    if (activity.openDeals === 0) return [];
+
+    // Silence has to mean something before it can be reported. With the CRM sync erroring
+    // this rule would be describing a broken authorisation as 966 neglected deals, and
+    // sync_stale_or_failed is already saying the true thing about it.
+    if (!activity.trustworthy) return [];
+
+    const stale = [...activity.lastTouch.entries()].filter(([, at]) => at < cutoff).length
+      + (activity.openDeals - activity.lastTouch.size);
+    if (stale === 0) return [];
+
+    // Reported as one finding about the pipeline, not one per deal. Raised per deal this
+    // would be hundreds of identical items nobody could work through.
+    const share = rate(stale, activity.openDeals);
+
+    return [
+      {
+        subject: 'stale-open-deals',
+        evidence: {
+          openDeals: activity.openDeals,
+          staleDeals: stale,
+          stalePercent: round(share),
+          basis: 'stalePercent is a share of open deals, not of all deals',
+          staleAfterDays: ctx.thresholds['pipeline.staleDays'],
+          dealsWithActivityOnTheDeal: activity.direct,
+          // Carried because it is the figure that stops this being read as a sync fault:
+          // counting the contact's activity as well as the deal's changes the answer by
+          // seven deals, so the staleness is the pipeline's and not the data's.
+          dealsWithActivityOnlyOnTheContact: activity.viaContactOnly,
+          dealsWithNoActivityAnywhere: activity.none,
+        },
+        severity: share !== null && share > 90 ? 'high' : 'medium',
+        proposedAction:
+          'Work the open pipeline or close it — activity is counted on the deal and on its contact, and almost none has either.',
+      },
+    ];
+  },
+};
+
+const leadSlaRule: Rule = {
+  id: 'lead_sla_breach',
+  scope: 'period',
+  version: 1,
+  section: 'leads',
+  severity: 'high',
+  kind: 'risk',
+  test: 'New leads with nothing logged against them past the first-contact SLA',
+  async run(ctx) {
+    const sla = ctx.thresholds['leads.slaHours'];
+    // Whichever comes first: the SLA cutoff, or the end of the window being reported on.
+    // It was the cutoff alone, which is right for a window ending today and wrong for any
+    // other — a report about January would have counted a lead that arrived last week,
+    // because `gte: ctx.from` with an upper bound of two days ago spans everything
+    // between. Found by the eval suite running every rule over a window in 1990.
+    const slaCutoff = hoursAgo(ctx.now, sla);
+    const cutoff = slaCutoff < ctx.to ? slaCutoff : ctx.to;
+
+    // Only leads old enough to have breached. A lead created an hour ago with no activity
+    // is not late, and counting it would make the figure a measure of intake rather than
+    // of response.
+    const breached = await db().lead.groupBy({
+      by: ['ownerEmail'],
+      where: {
+        createdAt: { gte: ctx.from, lt: cutoff },
+        status: 'new',
+        activities: { none: {} },
+      },
+      _count: { _all: true },
+    });
+    if (breached.length === 0) return [];
+
+    const total = breached.reduce((n, r) => n + r._count._all, 0);
+    const worst = [...breached].sort((a, b) => b._count._all - a._count._all)[0];
+
+    return [
+      {
+        subject: 'leads-untouched-past-sla',
+        evidence: {
+          untouchedLeads: total,
+          slaHours: sla,
+          owners: breached.length,
+          largestHolder: worst.ownerEmail,
+          largestHolderLeads: worst._count._all,
+        },
+        ownerEmail: worst.ownerEmail,
+        proposedAction:
+          'Rebalance the untouched leads off the largest holder using the Leads page Rebalance action.',
+      },
+    ];
+  },
+};
+
+const taskDebtRule: Rule = {
+  id: 'task_debt',
+  scope: 'standing',
+  // Bumped with D2. The rule raised one finding per person across the whole firm, which
+  // put eighteen people's task debt in front of a marketing team that could act on one.
+  version: 2,
+  section: 'tasks',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Overdue tasks per owner, against the debt floor',
+  async run(ctx) {
+    const floor = ctx.thresholds['tasks.overdueFloor'];
+
+    const overdue = await db().task.groupBy({
+      by: ['assigneeEmail'],
+      where: { dueDate: { lt: ctx.now }, status: { in: ['open', 'in_progress'] } },
+      _count: { _all: true },
+    });
+
+    const above = overdue
+      .filter((r) => r._count._all >= floor && r.assigneeEmail)
+      .sort((a, b) => b._count._all - a._count._all);
+    if (above.length === 0) return [];
+
+    const roster = await marketingRoster();
+    const { mine, rest } = splitByRoster(above, (r) => r.assigneeEmail, roster);
+
+    // Nobody has set a roster yet. Silently scoping to an empty list would delete a true
+    // finding, so the rule behaves as it did and says why, once, to whoever can fix it.
+    // §5.2's rule: a scoping gap is a configuration error shown to a person.
+    if (roster.length === 0) {
+      return [
+        {
+          subject: 'marketing-roster-unset',
+          evidence: {
+            peopleAboveTheFloor: above.length,
+            overdueTasksAboveTheFloor: above.reduce((n, r) => n + r._count._all, 0),
+            floor,
+            basis: 'no marketing roster is configured, so this counts the whole firm',
+          },
+          severity: 'high',
+          proposedAction:
+            'Add the marketing team in Settings, so this queue shows the debt this team can act on and the rest goes to Firm hygiene.',
+        },
+      ];
+    }
+
+    // One finding per person on the team, because the action is per person and each needs
+    // its own owner.
+    const findings: Finding[] = mine.map((r) => ({
+      subject: `task-debt-${slug(r.assigneeEmail!)}`,
+      evidence: {
+        assignee: r.assigneeEmail,
+        overdueTasks: r._count._all,
+        floor,
+      },
+      ownerEmail: r.assigneeEmail,
+      proposedAction: 'Close, reschedule or reassign the overdue tasks on this person.',
+    }));
+
+    // Everyone else, as one item rather than seventeen. The debt is real and somebody
+    // should see it; it is simply not this team's queue, and the manual asks for a
+    // summary raised once rather than a person-by-person list nobody here can work.
+    if (rest.length > 0) {
+      findings.push({
+        subject: 'firm-task-debt-outside-marketing',
+        evidence: {
+          people: rest.length,
+          overdueTasks: rest.reduce((n, r) => n + r._count._all, 0),
+          largestHolder: rest[0]?.assigneeEmail ?? null,
+          largestHolderOverdueTasks: rest[0]?._count._all ?? null,
+          floor,
+          basis: 'people outside the marketing roster, summarised as one finding',
+        },
+        ownerEmail: null,
+        proposedAction:
+          'Raise the firm-wide task backlog with the sales and delivery leads — it is outside this team’s queue.',
+      });
+    }
+
+    return findings;
+  },
+};
+
+const syncStaleRule: Rule = {
+  id: 'sync_stale_or_failed',
+  scope: 'standing',
+  // Bumped when the rule started reading SyncRun. G5.2 asks for two thresholds and this
+  // had one, so a night that went wrong and a system that had stopped two days ago
+  // produced the same finding at the same severity.
+  version: 2,
+  section: 'analytics',
+  severity: 'high',
+  kind: 'risk',
+  test: 'Connected integrations with no successful run inside the stale window, or errored',
+  async run(ctx) {
+    const stale = hoursAgo(ctx.now, ctx.thresholds['sync.staleHours']);
+    const brokenAfter = ctx.thresholds['sync.failedHours'];
+
+    const live = await db().integration.findMany({
+      where: { state: { in: ['connected', 'syncing', 'error'] } },
+      select: { provider: true, state: true, lastSyncAt: true, lastError: true, lastErrorAt: true },
+    });
+
+    // G5.1. Freshness is measured from the last *successful* run, not the last attempt.
+    // `lastSyncAt` is only written on success today, but reading the run log makes that a
+    // property of the query rather than of a write somewhere else — and it is the only
+    // source that can say how often a provider has been failing rather than whether it
+    // failed last night.
+    const health = await db().syncRun.groupBy({
+      by: ['provider'],
+      where: { status: 'succeeded' },
+      _max: { finishedAt: true },
+    });
+    const lastSuccess = new Map(health.map((h) => [h.provider, h._max.finishedAt]));
+
+    const broken = live.filter(
+      (i) => i.state === 'error' || i.lastError !== null || !i.lastSyncAt || i.lastSyncAt < stale,
+    );
+    if (broken.length === 0) return [];
+
+    // Per provider: each is a different system with a different person to talk to, and
+    // "three integrations are stale" is not something anyone can act on as one item.
+    return broken.map((i) => ({
+      subject: `sync-stale-${slug(i.provider)}`,
+      evidence: {
+        provider: i.provider,
+        state: i.state,
+        lastSyncAt: i.lastSyncAt?.toISOString() ?? null,
+        hoursSinceSync: i.lastSyncAt
+          ? Math.floor((ctx.now.getTime() - i.lastSyncAt.getTime()) / 3_600_000)
+          : null,
+        staleAfterHours: ctx.thresholds['sync.staleHours'],
+        brokenAfterHours: brokenAfter,
+        lastSuccessAt: lastSuccess.get(i.provider)?.toISOString() ?? null,
+        lastError: i.lastError,
+      },
+      // A stuck sync is worse than a late one: 'syncing' with an old timestamp means a
+      // run started and never finished, so nothing will pick it up on its own.
+      //
+      // And a provider past the second threshold is high whatever its state says. One
+      // missed night is a night; two is a system that has stopped, which is the
+      // distinction G5.2 asks for and the reason there are two numbers rather than one.
+      severity:
+        i.state === 'error' ||
+        i.state === 'syncing' ||
+        !i.lastSyncAt ||
+        i.lastSyncAt < hoursAgo(ctx.now, brokenAfter)
+          ? 'high'
+          : 'medium',
+      proposedAction:
+        i.state === 'syncing'
+          ? 'Clear the stuck sync and run it again — a run started and never finished, so nothing will retry it.'
+          : 'Reconnect the integration and run a sync.',
+    }));
+  },
+};
+
+const seoCtrRule: Rule = {
+  id: 'high_impression_low_ctr_page',
+  scope: 'standing',
+  version: 1,
+  section: 'seo',
+  severity: 'medium',
+  kind: 'opportunity',
+  test: 'Pages above the impressions floor whose click-through sits under the CTR floor',
+  async run(ctx) {
+    const impressionFloor = ctx.thresholds['seo.impressionFloor'];
+    const ctrFloor = ctx.thresholds['seo.ctrFloor'];
+
+    const pages = await db().seoPage.findMany({
+      where: { impressions: { gt: impressionFloor }, ctr: { lt: ctrFloor } },
+      select: { url: true, title: true, impressions: true, clicks: true, ctr: true, avgPosition: true },
+      orderBy: { impressions: 'desc' },
+      take: 5,
+    });
+    if (pages.length === 0) return [];
+
+    return pages.map((p) => ({
+      subject: `low-ctr-${slug(p.url)}`,
+      evidence: {
+        url: p.url,
+        title: p.title,
+        impressions: p.impressions,
+        clicks: p.clicks,
+        ctrPercent: round(p.ctr),
+        basis: 'ctrPercent is this one page’s click-through, not the site’s',
+        averagePosition: round(p.avgPosition),
+        impressionFloor,
+        ctrFloor,
+      },
+      proposedAction: 'Rewrite the title and meta description on this page.',
+    }));
+  },
+};
+
+const renewalRule: Rule = {
+  id: 'renewal_without_task',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'high',
+  kind: 'risk',
+  test: 'Won retainers whose anniversary falls inside the renewal window with no open task',
+  async run(ctx) {
+    const window = ctx.thresholds['crm.renewalWindowDays'];
+
+    // The anniversary is a day of the year, so this is a modular comparison and not a
+    // date range — a retainer closed in January is due again next January, whatever year
+    // it started. Done in SQL because the arithmetic is the query.
+    const rows = await db().$queryRaw<{ count: bigint }[]>`
+      SELECT count(*) AS count
+        FROM opportunity o
+        JOIN pipeline_stage s ON s.id = o."stageId"
+       WHERE o."engagementType" = 'retainer'
+         AND s."isWon"
+         AND o."closedAt" IS NOT NULL
+         AND MOD(
+               CAST(EXTRACT(doy FROM o."closedAt") - EXTRACT(doy FROM ${ctx.now}::timestamp) + 365 AS int),
+               365
+             ) <= ${window}
+         AND NOT EXISTS (
+               SELECT 1 FROM task t
+                WHERE t."opportunityId" = o.id AND t.status IN ('open', 'in_progress')
+             )`;
+
+    const due = Number(rows[0]?.count ?? 0);
+    if (due === 0) return [];
+
+    return [
+      {
+        subject: 'retainer-renewals-without-a-task',
+        evidence: {
+          retainersDueInWindow: due,
+          windowDays: window,
+          basis: 'engagementType read from the deal name; anniversary is the day of year it closed',
+        },
+        proposedAction:
+          'Create a renewal touch task against each retainer whose anniversary falls in the window.',
+      },
+    ];
+  },
+};
+
+const dormantCustomerRule: Rule = {
+  id: 'review_or_referral_not_requested',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'opportunity',
+  test: 'Customers won past the dormancy window with nothing logged since',
+  async run(ctx) {
+    const days = ctx.thresholds['crm.dormantCustomerDays'];
+    const cutoff = daysAgo(ctx.now, days);
+
+    const [total, dormant] = await Promise.all([
+      db().customer.count({ where: { churnedAt: null } }),
+      db().customer.count({
+        where: {
+          churnedAt: null,
+          wonAt: { lt: cutoff },
+          company: { is: { activities: { none: { createdAt: { gte: cutoff } } } } },
+        },
+      }),
+    ]);
+    if (dormant === 0) return [];
+
+    return [
+      {
+        subject: 'customers-with-nothing-logged-since-winning-them',
+        evidence: {
+          dormantCustomers: dormant,
+          activeCustomers: total,
+          dormantPercent: round(rate(dormant, total)),
+          basis: 'dormantPercent is a share of active customers, not of all customers ever won',
+          dormantAfterDays: days,
+        },
+        proposedAction:
+          'Run a lifecycle campaign asking these customers for a review or a referral.',
+      },
+    ];
+  },
+};
+
+const pacingRule: Rule = {
+  id: 'spend_off_pace',
+  scope: 'period',
+  version: 1,
+  section: 'marketing',
+  severity: 'high',
+  kind: 'anomaly',
+  test: 'Month-to-date spend against the budget of the campaigns live this period',
+  async run(ctx) {
+    const tolerance = ctx.thresholds['marketing.pacingTolerance'];
+
+    // Silent where the firm has set its own envelopes for the quarter. This rule reads
+    // the ad platform's budgets, which say what Meta was told to spend; spend_over_
+    // envelope reads what the firm decided to spend. Both firing would raise two
+    // findings about one overspend, measured against two different numbers, and the
+    // reader would have no way to tell which one was the instruction.
+    const { periodStart, periodEnd } = quarterOf(ctx.to);
+    const envelopes = await envelopesFor(periodStart, periodEnd);
+    if (envelopes.length > 0) return [];
+
+    const { budgetPacing } = await import('../metrics.ts').then((m) =>
+      m.marketingKpis({ from: ctx.from, to: ctx.to }),
+    );
+    if (budgetPacing === null) return [];
+
+    const off = Math.abs(budgetPacing - 100);
+    if (off <= tolerance) return [];
+
+    const over = budgetPacing > 100;
+    return [
+      {
+        subject: over ? 'spend-over-pace' : 'spend-under-pace',
+        evidence: {
+          pacingPercent: round(budgetPacing),
+          tolerancePercent: tolerance,
+          direction: over ? 'over' : 'under',
+          // Said in the evidence because the model will otherwise call this "plan", and
+          // §22's budget envelope — a plan the firm sets — does not exist yet.
+          basis: "the ad platform's own campaign budgets, not a plan the firm set",
+        },
+        proposedAction: over
+          ? 'Review the live campaign budgets against what the firm intended to spend this month.'
+          : 'Decide whether the under-spend is deliberate before the month closes.',
+      },
+    ];
+  },
+};
+
+const envelopeRule: Rule = {
+  id: 'spend_over_envelope',
+  scope: 'period',
+  version: 1,
+  section: 'marketing',
+  severity: 'high',
+  kind: 'risk',
+  test: "Channel spend against the envelope the firm set for the period",
+  async run(ctx) {
+    // The quarter the window ends in. An envelope is a quarterly instruction, so a
+    // 90-day report window straddling two quarters is judged against the one it finishes
+    // in rather than against a blend of both, which would belong to no decision anybody
+    // made.
+    const { periodStart, periodEnd, label } = quarterOf(ctx.to);
+    const envelopes = await envelopesFor(periodStart, periodEnd);
+
+    // Over the envelope, and over the tolerance the workspace allows either side of a
+    // plan. The same tolerance the pacing rule uses: an envelope exceeded by a rupee is
+    // not an exception, and flagging it would train people to ignore the flag.
+    const tolerance = ctx.thresholds['marketing.pacingTolerance'];
+
+    return envelopes
+      .filter((e) => e.usedPercent !== null && e.usedPercent > 100 + tolerance)
+      .map((e) => ({
+        subject: `spend-over-envelope-${slug(e.channelName)}-${slug(label)}`,
+        evidence: {
+          channel: e.channelName,
+          period: label,
+          envelope: Math.round(e.envelopeInReporting ?? 0),
+          spent: Math.round(e.spent),
+          usedPercent: round(e.usedPercent),
+          overBy: Math.round(e.spent - (e.envelopeInReporting ?? 0)),
+          tolerancePercent: tolerance,
+          currency: e.reportingCurrency,
+          setBy: e.setByEmail,
+          basis: "the envelope the firm set for this channel, not the ad platform's own budget",
+        },
+        proposedAction: `Decide whether to raise the ${e.channelName} envelope for ${label} or pull the spend back.`,
+      }));
+  },
+};
+
+const placeholderRule: Rule = {
+  id: 'template_placeholder',
+  scope: 'standing',
+  version: 1,
+  section: 'outreach',
+  severity: 'critical',
+  kind: 'risk',
+  test: 'Unresolved tokens or bracketed placeholders in a sequence that is not archived',
+  async run() {
+    const sequences = await db().sequence.findMany({
+      where: { status: { not: 'archived' } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        steps: { select: { position: true, subject: true, body: true }, orderBy: { position: 'asc' } },
+      },
+    });
+
+    const broken = sequences
+      .map((s) => ({ sequence: s, lint: summarise(lintSequence(s.steps)) }))
+      .filter((r) => r.lint.critical > 0);
+    if (broken.length === 0) return [];
+
+    // Per sequence: each is a different template with a different fix, and this is the
+    // one Critical rule in the library that can actually run today.
+    return broken.map(({ sequence, lint }) => ({
+      subject: `placeholder-${slug(sequence.id)}`,
+      evidence: {
+        sequence: sequence.name,
+        status: sequence.status,
+        criticalFindings: lint.critical,
+        reviewFindings: lint.review,
+        // The distinct codes, not every finding: a template with eight instances of one
+        // placeholder needs the same fix as one with a single instance, and listing all
+        // eight would give the model eight numbers to weigh.
+        codes: [...new Set(lint.findings.map((f) => f.code))].join(', '),
+        // Stated because it changes what this means: Smartlead owns sending, so nothing
+        // here is going out right now — but nothing here can stop it either.
+        basis: 'no sequence in this workspace is active; the app cannot pause one',
+      },
+      proposedAction: 'Fix the unresolved tokens in this template before it is ever set live.',
+    }));
+  },
+};
+
+/**
+ * §20.5's "new technical issue". Unblocked by the PageSpeed integration, not by a change
+ * here: the note above used to say this needed Semrush, whose subscription has no API
+ * units. PageSpeed now writes `SeoPage.issues` — 50 pages carry findings today — so the
+ * rule has real data to read and Semrush was never the only way to get it.
+ *
+ * Raised per fault code rather than per page. Fifty separate findings saying "this page
+ * has render-blocking CSS" is a list; one saying "fifty pages share it" is a decision,
+ * and it is one fix.
+ */
+const seoTechnicalIssueRule: Rule = {
+  id: 'seo_technical_issue_widespread',
+  scope: 'standing',
+  version: 1,
+  section: 'seo',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'A high-severity page-speed fault appearing on more pages than the threshold allows',
+  async run(ctx) {
+    const floor = ctx.thresholds['seo.highSeverityIssues'];
+
+    // `not: Prisma.DbNull`, not `not: null` — Prisma distinguishes a SQL NULL from a JSON
+    // null on a Json column, and the plain literal is a type error rather than a filter.
+    const pages = await db().seoPage.findMany({
+      where: { issues: { not: Prisma.DbNull } },
+      select: { url: true, issues: true },
+    });
+    if (!pages.length) return [];
+
+    // Pages per fault code, high severity only. Lighthouse's own scoring decides the
+    // severity — this rule does not form a second opinion about how bad a fault is.
+    const byCode = new Map<string, { pages: string[]; message: string }>();
+    for (const page of pages) {
+      const list = Array.isArray(page.issues)
+        ? (page.issues as { code?: string; severity?: string; message?: string }[])
+        : [];
+      for (const issue of list) {
+        if (issue.severity !== 'high' || !issue.code) continue;
+        const entry = byCode.get(issue.code) ?? { pages: [], message: issue.message ?? issue.code };
+        entry.pages.push(page.url);
+        byCode.set(issue.code, entry);
+      }
+    }
+
+    const widespread = [...byCode.entries()]
+      .filter(([, e]) => e.pages.length >= floor)
+      .sort((a, b) => b[1].pages.length - a[1].pages.length)
+      .slice(0, 3);
+
+    return widespread.map(([code, entry]) => ({
+      subject: `seo-issue-${slug(code)}`,
+      evidence: {
+        issue: code.replaceAll('-', ' '),
+        finding: entry.message,
+        affectedPages: entry.pages.length,
+        measuredPages: pages.length,
+        // Named, because "42 pages" invites the reader to assume it is out of the whole
+        // site. It is out of the pages PageSpeed measured, which is the busiest 25-50.
+        basis: 'affectedPages is out of measuredPages, the most-visited pages PageSpeed measures — not the whole site',
+        examples: entry.pages.slice(0, 3),
+        threshold: floor,
+      },
+      proposedAction: `Fix ${code.replaceAll('-', ' ')} once in the theme or template — it affects ${entry.pages.length} of the measured pages.`,
+    }));
+  },
+};
+
+/**
+ * §20.5's "lost-reason concentration".
+ *
+ * The note above said this was blocked because only 42 of 175 lost deals carried a
+ * reason. Re-read against the live database it is 141 of 365 — the CRM has been filling
+ * the field since, which is exactly why that note said to check rather than trust it.
+ *
+ * Coverage is the whole difficulty. 224 of 365 losses give no reason at all, so a bare
+ * "Price is 25% of losses" would be a claim about the 39% who answered dressed as a claim
+ * about everybody. The share is computed over reasons GIVEN, and both numbers travel with
+ * it — the same treatment attribution coverage already gets.
+ *
+ * "Other" is excluded from being raised. It is the commonest value here at 57, and a
+ * finding saying the top reason for losing is "Other" tells nobody anything they can act
+ * on; it is a CRM hygiene problem, and the coverage figure already reports it.
+ */
+const lostReasonRule: Rule = {
+  id: 'lost_reason_concentration',
+  scope: 'period',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'One reason accounting for more than the threshold share of losses that state a reason',
+  async run(ctx) {
+    const share = ctx.thresholds['crm.lostReasonShare'];
+
+    const lost = await db().opportunity.findMany({
+      where: { stage: { isLost: true }, closedAt: { gte: ctx.from, lte: ctx.to } },
+      select: { lostReason: true },
+    });
+    if (!lost.length) return [];
+
+    const withReason = lost.filter((o) => o.lostReason);
+    // Too few stated reasons and any percentage is noise wearing a decimal point.
+    if (withReason.length < 10) return [];
+
+    const counts = new Map<string, number>();
+    for (const o of withReason) {
+      const reason = o.lostReason as string;
+      counts.set(reason, (counts.get(reason) ?? 0) + 1);
+    }
+
+    const ranked = [...counts.entries()]
+      .filter(([reason]) => reason.toLowerCase() !== 'other')
+      .sort((a, b) => b[1] - a[1]);
+    const top = ranked[0];
+    if (!top) return [];
+
+    // rate() returns null when it cannot divide. Guarded rather than coerced: a null
+    // becoming 0 would silently mean "no concentration" on a division that never happened.
+    const percent = rate(top[1], withReason.length);
+    if (percent === null || percent < share) return [];
+
+    return [
+      {
+        subject: `lost-reason-${slug(top[0])}`,
+        evidence: {
+          reason: top[0],
+          deals: top[1],
+          reasonsGiven: withReason.length,
+          decidedLosses: lost.length,
+          sharePercent: round(percent),
+          // Both halves stated. Without this the share reads as a fact about every loss.
+          basis: `sharePercent is out of the ${withReason.length} losses that state a reason, not the ${lost.length} losses in the period`,
+          coveragePercent: round(rate(withReason.length, lost.length)),
+          threshold: share,
+        },
+        proposedAction: `Review how "${top[0]}" losses are being handled, and why ${lost.length - withReason.length} losses record no reason at all.`,
+      },
+    ];
+  },
+};
+
+// §8's monthly rule: "duplicate candidates above threshold".
+//
+// The pair count, not the merge count. A queue growing is a statement about the customer
+// count drifting; a queue being worked is not a finding at all.
+const duplicateBacklogRule: Rule = {
+  id: 'duplicate_backlog',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Duplicate pairs waiting in the merge queue, above the stored threshold',
+  async run(ctx) {
+    const floor = ctx.thresholds['crm.duplicateBacklog'];
+
+    const [pending, oldest, resolvedRecently] = await Promise.all([
+      db().duplicateCandidate.count({ where: { status: 'pending' } }),
+      db().duplicateCandidate.findFirst({
+        where: { status: 'pending' },
+        orderBy: { detectedAt: 'asc' },
+        select: { detectedAt: true },
+      }),
+      db().duplicateCandidate.count({
+        where: { status: { in: ['merged', 'dismissed'] }, resolvedAt: { gte: daysAgo(ctx.now, 30) } },
+      }),
+    ]);
+
+    if (pending <= floor) return [];
+
+    return [
+      {
+        subject: 'duplicate-merge-queue-backlog',
+        evidence: {
+          pendingPairs: pending,
+          threshold: floor,
+          oldestWaitingDays: oldest
+            ? Math.floor((ctx.now.getTime() - oldest.detectedAt.getTime()) / 86_400_000)
+            : null,
+          // Whether anybody is working it at all, which is the difference between a busy
+          // month and an abandoned queue.
+          resolvedLast30Days: resolvedRecently,
+        },
+        // High once nothing has been resolved in a month: a queue nobody touches is not a
+        // backlog, it is a feature switched off by neglect.
+        severity: resolvedRecently === 0 ? 'high' : 'medium',
+        proposedAction:
+          'Work the duplicate queue on the CRM page. Every unresolved pair is a customer counted twice in CAC and in every per-account average.',
+      },
+    ];
+  },
+};
+
+// §8.5's monthly rule: "referral partners silent beyond 60 days".
+//
+// Two findings, not one, and the second is the sharper: a partner who sent work and was
+// never thanked is a specific debt, where a partner nobody has rung is a lapse.
+const silentPartnerRule: Rule = {
+  id: 'referral_partner_silent',
+  scope: 'standing',
+  version: 1,
+  section: 'crm',
+  severity: 'medium',
+  kind: 'opportunity',
+  test: 'Active referral partners with no contact inside the window, and referrals never acknowledged',
+  async run(ctx) {
+    const days = ctx.thresholds['crm.partnerSilentDays'];
+    const cutoff = daysAgo(ctx.now, days);
+
+    const partners = await db().referralPartner.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        ownerEmail: true,
+        lastTouchAt: true,
+        acknowledgementSentAt: true,
+        createdAt: true,
+        leads: { select: { createdAt: true } },
+      },
+    });
+    if (partners.length === 0) return [];
+
+    // Measured from when the partner was added where there has never been a touch. A
+    // partner entered six months ago and never rung is exactly the case §8.5 is about,
+    // and measuring from a null would have excluded them.
+    const silent = partners.filter((p) => (p.lastTouchAt ?? p.createdAt) < cutoff);
+    const unacknowledged = (p: (typeof partners)[number]) =>
+      p.leads.filter((l) => !p.acknowledgementSentAt || l.createdAt > p.acknowledgementSentAt).length;
+    const owed = partners.filter((p) => unacknowledged(p) > 0);
+
+    const findings: Finding[] = [];
+
+    if (silent.length > 0) {
+      findings.push({
+        subject: 'referral-partners-not-spoken-to',
+        evidence: {
+          silentPartners: silent.length,
+          activePartners: partners.length,
+          windowDays: days,
+          neverContacted: silent.filter((p) => p.lastTouchAt === null).length,
+        },
+        proposedAction: `Ring the ${silent.length} referral partner${silent.length === 1 ? '' : 's'} nobody has spoken to in ${days} days. Referral is the highest-trust channel the firm has and it goes quiet without being worked.`,
+      });
+    }
+
+    // Per partner, because a thank-you is owed by a person to a person, and "four
+    // partners are owed" is not something anybody can act on as one item.
+    for (const partner of owed) {
+      const count = unacknowledged(partner);
+      findings.push({
+        subject: `referral-unacknowledged-${slug(partner.id)}`,
+        evidence: {
+          partner: partner.name,
+          unacknowledgedReferrals: count,
+          lastAcknowledgedAt: partner.acknowledgementSentAt?.toISOString() ?? null,
+        },
+        severity: 'high',
+        ownerEmail: partner.ownerEmail,
+        proposedAction: `Thank ${partner.name} for ${count} referral${count === 1 ? '' : 's'} and record it on the partner registry.`,
+      });
+    }
+
+    return findings;
+  },
+};
+
+// §7.3's daily rule: "campaigns whose lead quality median falls below floor".
+//
+// Per channel rather than per campaign, and the rule says so in its own evidence rather
+// than letting the substitution pass unnoticed: `campaignId` is null on all 27,575 leads,
+// so there is no campaign to group by. The CRM's channel is the finest grain the data
+// actually supports.
+const leadQualityFloorRule: Rule = {
+  id: 'lead_quality_below_floor',
+  scope: 'period',
+  version: 1,
+  section: 'leads',
+  severity: 'medium',
+  kind: 'risk',
+  test: 'Channels whose median lead quality in the period sits under the stored floor',
+  async run(ctx) {
+    const floor = ctx.thresholds['leads.qualityFloor'];
+
+    // Median per channel, in SQL — the arithmetic is the query, as it is for the renewal
+    // rule. Scored leads only: a row with a null scoreVersion carries the column's
+    // placeholder zero, and folding those in would report every channel as collapsed on
+    // the day the score shipped.
+    //
+    // Twenty leads is a floor of meaningfulness rather than a tuning knob: below it a
+    // median moves several points on one lead and the rule fires on noise.
+    const rows = await db().$queryRaw<{ channel: string; median: number; leads: bigint }[]>`
+      SELECT c.name AS channel,
+             percentile_cont(0.5) WITHIN GROUP (ORDER BY l.score)::float AS median,
+             count(*) AS leads
+        FROM lead l
+        JOIN channel c ON c.id = l."channelId"
+       WHERE l."createdAt" >= ${ctx.from} AND l."createdAt" <= ${ctx.to}
+         AND l."scoreVersion" IS NOT NULL
+       GROUP BY c.name
+      HAVING count(*) >= 20`;
+
+    return rows
+      .filter((r) => r.median < floor)
+      .map((r) => ({
+        subject: `lead-quality-${slug(r.channel)}`,
+        evidence: {
+          channel: r.channel,
+          medianScore: Math.round(r.median),
+          floor,
+          leads: Number(r.leads),
+          groupedBy: 'channel, because no lead in this CRM carries a campaign',
+        },
+        proposedAction: `Review what ${r.channel} is being asked to deliver. Its leads score ${Math.round(r.median)} against a floor of ${floor} — mostly no company email, no stated segment and no stated intent.`,
+      }));
+  },
+};
+
+const suppressionBreachRule: Rule = {
+  id: 'suppression_breach',
+  scope: 'standing',
+  version: 1,
+  section: 'outreach',
+  severity: 'critical',
+  kind: 'risk',
+  test: 'Clients or referral partners sitting on a list that is not marked as theirs',
+  async run() {
+    // Critical, and it is one of the three the manual reserves that severity for. §7.7:
+    // "a client receiving a cold sequence is a relationship event, not a metric" — the
+    // person who notices is the client, and nothing on a dashboard undoes it.
+    const sequences = await db().sequence.findMany({
+      where: { status: { in: ['draft', 'active', 'paused'] }, prospects: { some: {} } },
+      select: { id: true, name: true, status: true, purpose: true },
+    });
+
+    const findings: Finding[] = [];
+    for (const sequence of sequences) {
+      const hits = await suppressionCheck(sequence.id);
+      if (hits.length === 0) continue;
+      findings.push({
+        subject: `suppression-${slug(sequence.id)}`,
+        evidence: {
+          sequence: sequence.name,
+          status: sequence.status,
+          purpose: sequence.purpose,
+          suppressedRecipients: hits.length,
+          // Named, not counted. "Three suppressed" is not something anyone can act on;
+          // an address is. Capped because the finding is a prompt to open the list.
+          examples: hits.slice(0, 5).map((h) => `${h.email} (${h.reason})`),
+          basis: 'matched against client flags, the referral registry and contacts at customer accounts',
+        },
+        proposedAction:
+          'Remove these recipients before the list is sent again, or mark the sequence as a client reminder if it is meant for them.',
+      });
+    }
+    return findings;
+  },
+};
+
+export const RULES: Rule[] = [
+  attributionRule,
+  placeholderRule,
+  suppressionBreachRule,
+  envelopeRule,
+  syncStaleRule,
+  leadSlaRule,
+  renewalRule,
+  pacingRule,
+  staleDealsRule,
+  taskDebtRule,
+  dormantCustomerRule,
+  seoCtrRule,
+  seoTechnicalIssueRule,
+  lostReasonRule,
+  duplicateBacklogRule,
+  silentPartnerRule,
+  leadQualityFloorRule,
+];
+
+export const RULE_IDS = RULES.map((r) => r.id);
+
+/** Ordered worst first, so the model is asked to narrate what matters in that order and
+ *  the page reads top-down. */
+const SEVERITY_ORDER: Record<RuleSeverity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  info: 3,
+};
+
+export type RaisedFinding = Finding & {
+  ruleId: string;
+  ruleVersion: number;
+  section: RuleSection;
+  kind: InsightKind;
+  severity: RuleSeverity;
+  test: string;
+  /** Carried out of the rule so a stored finding can say what window it describes — or
+   *  say that it describes no window at all. See the note on `Rule.scope`. */
+  scope: RuleScope;
+};
+
+/**
+ * Runs every rule and returns what fired, worst first.
+ *
+ * A rule that throws is skipped with its id logged rather than failing the run. One
+ * broken query should not silence the other nine — and a run that returns nothing is
+ * indistinguishable on screen from a workspace with no problems, which is the worst
+ * possible way for this to fail.
+ */
+export async function runRules(
+  window: { from: Date; to: Date },
+  now = new Date(),
+): Promise<RaisedFinding[]> {
+  const [limits, currency, owners] = await Promise.all([
+    thresholds(),
+    import('../platform/settings.ts').then((s) => s.currencySettings().then((c) => c.reporting)),
+    import('../platform/settings.ts').then((s) => s.ownerBindings()),
+  ]);
+
+  const ctx: RuleContext = { from: window.from, to: window.to, now, thresholds: limits, currency };
+
+  const results = await Promise.all(
+    RULES.map(async (rule) => {
+      try {
+        const findings = await rule.run(ctx);
+        return findings.map((f) => ({
+          ...f,
+          ruleId: rule.id,
+          ruleVersion: rule.version,
+          section: rule.section,
+          kind: rule.kind,
+          severity: f.severity ?? rule.severity,
+          test: rule.test,
+          scope: rule.scope,
+          // §5.2's map, applied where the rule did not name somebody from its own data.
+          // A lead's own owner is a better answer than their desk's, so a rule that found
+          // a person keeps them: routing an SLA breach to a manager instead of to whoever
+          // holds the lead is how the queue stops being workable.
+          ownerEmail: f.ownerEmail ?? ownerFor(rule.id, owners),
+        }));
+      } catch (e) {
+        console.error(`[rules] ${rule.id} failed: ${(e as Error).message}`);
+        return [];
+      }
+    }),
+  );
+
+  const raised = results.flat();
+
+  // §5.2: "an insight with no owner in this map is a configuration error, shown to
+  // Abhuday as such, and never left sitting unowned in a queue." Reported once, naming
+  // the desks, rather than as a silent null on every finding that routes to one.
+  const unbound = unboundDomains(owners);
+  if (unbound.length > 0 && raised.some((f) => !f.ownerEmail)) {
+    raised.push({
+      ruleId: 'owner_map_incomplete',
+      ruleVersion: 1,
+      section: 'analytics',
+      kind: 'risk',
+      severity: 'high',
+      scope: 'standing',
+      test: 'Insight domains with nobody assigned to them',
+      subject: 'owner-map-incomplete',
+      // Unowned itself, and it has to be: this is the finding that says nobody is bound,
+      // so binding it to somebody would be answering its own complaint.
+      ownerEmail: null,
+      evidence: {
+        unassignedDomains: unbound,
+        findingsWithNoOwner: raised.filter((f) => !f.ownerEmail).length,
+        basis: 'the domains some rule routes to that nobody is bound to',
+      },
+      proposedAction:
+        'Bind each insight domain to a person in Settings, so findings arrive on a desk instead of in a queue nobody owns.',
+    });
+  }
+
+  return raised.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────────────
+
+/** Two decimal places, or null. Rounded here rather than in the sentence, so the figure
+ *  the model is given is exactly the figure it may quote. */
+function round(n: number | null | undefined): number | null {
+  return n === null || n === undefined ? null : Number(n.toFixed(2));
+}
+
+/** A subject fragment safe to put in a fingerprint. Long values are hashed down by
+ *  normaliseSubject afterwards; this only removes what would make two subjects differ on
+ *  punctuation alone. */
+function slug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}

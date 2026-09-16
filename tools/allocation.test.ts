@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { UNASSIGNED, planMoves, type Holding } from '../lib/allocation.ts';
+import { UNASSIGNED, planMoves, type Holding } from '../lib/leads/allocation.ts';
 
 // The planner is the whole feature: everything else is a Zoho write and a confirm button.
 // These cover the properties a person losing leads is entitled to rely on — nobody drops

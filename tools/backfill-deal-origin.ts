@@ -26,10 +26,10 @@
 // writes the same values.
 
 import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
-import { parseDealName } from '../lib/deal-name.ts';
-import type { DealOrigin } from '../lib/deal-name.ts';
-import { deriveFromHistory } from '../lib/deal-origin.ts';
-import type { OriginSource } from '../lib/deal-origin.ts';
+import { parseDealName } from '../lib/pipeline/deal-name.ts';
+import type { DealOrigin } from '../lib/pipeline/deal-name.ts';
+import { deriveFromHistory } from '../lib/pipeline/deal-origin.ts';
+import type { OriginSource } from '../lib/pipeline/deal-origin.ts';
 
 const client = await connect();
 

@@ -1,5 +1,5 @@
-import { route, type Ctx } from '@/lib/api';
-import { partnerEvent, recordPartnerEvent } from '@/lib/referrals';
+import { route, type Ctx } from '@/lib/platform/api';
+import { partnerEvent, recordPartnerEvent } from '@/lib/crm/referrals';
 
 /**
  * Records a touch or an acknowledgement.

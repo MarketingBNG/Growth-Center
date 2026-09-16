@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ruleFindings } from '../lib/ai.ts';
-import type { GrowthContext } from '../lib/ai.ts';
+import { ruleFindings } from '../lib/ai/ai.ts';
+import type { GrowthContext } from '../lib/ai/ai.ts';
 
 // A context with just enough on it to trigger each money-bearing finding. Cast because
 // GrowthContext is inferred from a query and carries far more than these rules read.

@@ -11,23 +11,23 @@ import {
   newCustomer,
   qualifiedLead,
   semiQualifiedLead,
-} from '../definitions.ts';
-import { type Range } from '../range.ts';
-import { db } from '../prisma.ts';
-import { cac, costPer, num, rate, roas } from '../calc.ts';
-import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from '../kpi.ts';
-import { DEMO_SOURCE, INTERNAL_SOURCE } from '../sources.ts';
-import { convert, convertOrDrop, sumInReporting, warnUnconverted } from '../currency.ts';
-import { fmtMoney } from '../format.ts';
-import { currencySettings } from '../settings.ts';
-import { DUPLICATE_MERGED_SUMMARY } from '../leads.ts';
+} from '../analytics/definitions.ts';
+import { type Range } from '../shared/range.ts';
+import { db } from '../platform/prisma.ts';
+import { cac, costPer, num, rate, roas } from '../shared/calc.ts';
+import { KPI_SERIES, SERIES_LABEL, kpiIsComparable, type Kpi, type KpiSeries } from '../shared/kpi.ts';
+import { DEMO_SOURCE, INTERNAL_SOURCE } from '../shared/sources.ts';
+import { convert, convertOrDrop, sumInReporting, warnUnconverted } from '../shared/currency.ts';
+import { fmtMoney } from '../shared/format.ts';
+import { currencySettings } from '../platform/settings.ts';
+import { DUPLICATE_MERGED_SUMMARY } from '../leads/leads.ts';
 import { cache } from 'react';
-import { OPEN_DEAL } from '../pipeline.ts';
-import { ACQUISITION_CAMPAIGN, isAcquisition } from '../campaign-objective.ts';
-import { attributionHealth } from '../attribution.ts';
-import { decay } from '../decay.ts';
-import { WEB_ARRIVING_LEAD } from '../web-leads.ts';
-import { TAGS, cached } from '../cache.ts';
+import { OPEN_DEAL } from '../pipeline/pipeline.ts';
+import { ACQUISITION_CAMPAIGN, isAcquisition } from '../money/campaign-objective.ts';
+import { attributionHealth } from '../money/attribution.ts';
+import { decay } from '../pipeline/decay.ts';
+import { WEB_ARRIVING_LEAD } from '../analytics/web-leads.ts';
+import { TAGS, cached } from '../platform/cache.ts';
 import { bucketKey, liveDays, windowFor } from './window.ts';
 
 

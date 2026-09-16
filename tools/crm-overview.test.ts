@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { recordId } from '../lib/id.ts';
+import { recordId } from '../lib/platform/id.ts';
 import { test } from 'node:test';
-import { stateOf } from '../lib/crm-overview.ts';
+import { stateOf } from '../lib/crm/crm-overview.ts';
 
 // The CRM screen groups on the wording the CRM itself uses, so these are that account's
 // real Lead_Status values rather than invented ones.

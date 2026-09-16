@@ -1,4 +1,4 @@
-import { db } from '../../prisma.ts';
+import { db } from '../../platform/prisma.ts';
 import type { IntegrationProvider, MetricPoint } from '../types.ts';
 import { meta, str, WRITE_CHUNK } from '../persist.ts';
 

@@ -5,7 +5,7 @@ import { TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ErrorBanner } from '@/components/patterns/state';
-import { ALLOWED_DOMAINS } from '@/lib/roles';
+import { ALLOWED_DOMAINS } from '@/lib/access/roles';
 
 /** AccessDenied is what the roster check returns for a valid Google account that is
  *  not on the roster — worth naming, because it is not a broken login. */

@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorText } from '@/components/patterns/state';
-import { LEAD_STATUSES } from '@/lib/enums';
+import { LEAD_STATUSES } from '@/lib/shared/enums';
 
 export function LeadActions({
   leadId,

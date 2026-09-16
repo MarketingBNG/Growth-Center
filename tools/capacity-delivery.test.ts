@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { capacityInput, CAPACITY_KEY } from '../lib/capacity.ts';
-import { PARTNER_PARAM, PARTNER_VALUE, isPartnerView } from '../lib/partner-view.ts';
+import { capacityInput, CAPACITY_KEY } from '../lib/crm/capacity.ts';
+import { PARTNER_PARAM, PARTNER_VALUE, isPartnerView } from '../lib/shared/partner-view.ts';
 
 // ── §6.2 delivery capacity ───────────────────────────────────────────────────────────
 

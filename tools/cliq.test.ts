@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cliqConfigured, renderCliqDigest, sendToCliq } from '../lib/cliq.ts';
+import { cliqConfigured, renderCliqDigest, sendToCliq } from '../lib/outreach/cliq.ts';
 
 const withEnv = async (value: string | undefined, fn: () => unknown) => {
   const before = process.env.CLIQ_WEBHOOK_URL;

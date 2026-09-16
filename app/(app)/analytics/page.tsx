@@ -12,13 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { StateBadge, stateLabel } from '@/components/patterns/integration-state';
-import { db, hasDb } from '@/lib/prisma';
-import { TAGS, cached } from '@/lib/cache';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { TAGS, cached } from '@/lib/platform/cache';
 import { channelPerformance, windowFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
-import { resolveRange, type PageParams } from '@/lib/range';
-import { analyticsBand } from '@/lib/band';
-import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/format';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { analyticsBand } from '@/lib/analytics/band';
+import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/shared/format';
 
 export const metadata = { title: 'Analytics · Growth Center' };
 

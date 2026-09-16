@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { route, type Ctx } from '@/lib/api';
-import { dismissDuplicate, mergeDuplicate, unmergeDuplicate } from '@/lib/duplicate-queue';
-import { TAGS, invalidate } from '@/lib/cache';
+import { route, type Ctx } from '@/lib/platform/api';
+import { dismissDuplicate, mergeDuplicate, unmergeDuplicate } from '@/lib/crm/duplicate-queue';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * Resolve one pair: merge it, or say why it is not a duplicate.

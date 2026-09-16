@@ -7,11 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
-import { CONTENT_STATUSES } from '@/lib/enums';
-import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content-fields';
+import { api } from '@/lib/shared/fetcher';
+import { CONTENT_STATUSES } from '@/lib/shared/enums';
+import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content/content-fields';
 import { ErrorText } from '@/components/patterns/state';
-import { useBooleanApiAction } from '@/lib/use-api-action';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function NewContentButton() {
   const router = useRouter();

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { customRange, rangeParam, resolveRange } from '../lib/range.ts';
-import { RANGE_OPTIONS } from '../lib/enums.ts';
+import { customRange, rangeParam, resolveRange } from '../lib/shared/range.ts';
+import { RANGE_OPTIONS } from '../lib/shared/enums.ts';
 
 // rangeParam reads ?range= straight off the URL, so it is an input-validation boundary:
 // a hand-edited or crafted value must not reach a query.

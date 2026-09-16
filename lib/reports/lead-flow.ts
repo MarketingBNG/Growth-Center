@@ -1,5 +1,5 @@
-import { db } from '../prisma.ts';
-import { fairShare } from '../calc.ts';
+import { db } from '../platform/prisma.ts';
+import { fairShare } from '../shared/calc.ts';
 import { int, pct, type ReportContext, type Section } from './shared.ts';
 
 export async function leadFlow({ current }: ReportContext): Promise<Section[]> {

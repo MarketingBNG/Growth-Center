@@ -1,5 +1,5 @@
-import { body, listQuery, paged, parseQuery, route } from '@/lib/api';
-import { companyInput, createCompany, listCompanies } from '@/lib/crm';
+import { body, listQuery, paged, parseQuery, route } from '@/lib/platform/api';
+import { companyInput, createCompany, listCompanies } from '@/lib/crm/crm';
 
 export const GET = route('growth:read', async (_user, req) => {
   const q = parseQuery(req, listQuery);

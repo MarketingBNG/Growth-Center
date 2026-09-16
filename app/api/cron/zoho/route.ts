@@ -1,5 +1,5 @@
-import { providerCron } from '@/lib/cron-auth';
-import { TAGS } from '@/lib/cache';
+import { providerCron } from '@/lib/platform/cron-auth';
+import { TAGS } from '@/lib/platform/cache';
 
 /**
  * Nightly Zoho CRM import. Scheduled in vercel.json.

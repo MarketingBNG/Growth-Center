@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { body, route, type Ctx } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { signOffSequence } from '@/lib/outreach';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { signOffSequence } from '@/lib/outreach/outreach';
 
 const input = z.object({
   kind: z.enum(['copy', 'numbers']),

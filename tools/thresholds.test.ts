@@ -6,7 +6,7 @@ import {
   THRESHOLD_KEYS,
   isThresholdKey,
   parseThresholdValue,
-} from '../lib/thresholds.ts';
+} from '../lib/shared/thresholds.ts';
 
 test('every threshold declares a label, unit, default and hint', () => {
   for (const key of THRESHOLD_KEYS) {

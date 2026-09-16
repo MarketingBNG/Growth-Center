@@ -6,13 +6,13 @@
  *
  * lib/content-calendar.ts re-exports both halves, so nothing that imports it changes.
  */
-import { db } from '../prisma.ts';
-import { recordAudit } from '../audit.ts';
-import { csvDocument, csvRow } from '../csv.ts';
-import { CONTENT_STATUSES } from '../enums.ts';
+import { db } from '../platform/prisma.ts';
+import { recordAudit } from '../platform/audit.ts';
+import { csvDocument, csvRow } from '../shared/csv.ts';
+import { CONTENT_STATUSES } from '../shared/enums.ts';
 import {
   formatSlot,
-} from '../content-fields.ts';
+} from '../content/content-fields.ts';
 import { daysInMonth, monthKey, monthLabel, monthRange, type MonthKey, type SheetRead } from './parse.ts';
 
 /**

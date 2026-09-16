@@ -3,7 +3,7 @@ import { libSource } from './source.ts';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { splitByRoster } from '../lib/roster.ts';
+import { splitByRoster } from '../lib/access/roster.ts';
 
 // D2. The task-debt rule raised one finding per person across the whole firm — eighteen
 // above the floor, of whom one was on the marketing team. Raising the threshold does not

@@ -6,11 +6,11 @@ import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { hasDb } from '@/lib/prisma';
-import type { PageParams } from '@/lib/range';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
-import { contentBoard } from '@/lib/content';
+import { hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
+import { contentBoard } from '@/lib/content/content';
 import {
   addMonths,
   contentCalendar,
@@ -18,7 +18,7 @@ import {
   monthKey,
   parseMonth,
 } from '@/lib/content-calendar';
-import { fmtCompact, fmtDate, fmtNumber } from '@/lib/format';
+import { fmtCompact, fmtDate, fmtNumber } from '@/lib/shared/format';
 import { NewContentButton } from './NewContentButton';
 import { AutofillButton } from './AutofillButton';
 import { ContentCard } from './ContentCard';

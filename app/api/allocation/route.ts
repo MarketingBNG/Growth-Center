@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { applyAllocation, previewAllocation } from '@/lib/allocation';
+import { body, route } from '@/lib/platform/api';
+import { applyAllocation, previewAllocation } from '@/lib/leads/allocation';
 
 // Equal split of untouched leads. Two methods on purpose: GET works out the plan and
 // changes nothing, POST runs it. Nothing here decides anything a GET did not already show,

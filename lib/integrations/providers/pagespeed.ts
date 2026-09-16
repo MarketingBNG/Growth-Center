@@ -568,7 +568,7 @@ export const pagespeed: IntegrationProvider = {
  * rely on.
  */
 async function pagesToMeasure(limit: number): Promise<string[]> {
-  const { db } = await import('../../prisma.ts');
+  const { db } = await import('../../platform/prisma.ts');
   const rows = await db().seoPage.findMany({
     orderBy: [{ clicks: 'desc' }, { impressions: 'desc' }],
     take: limit,

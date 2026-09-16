@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
-import { SOURCE_TYPES } from '@/lib/enums';
+import { SOURCE_TYPES } from '@/lib/shared/enums';
 
 export function NewLeadButton() {
   const router = useRouter();

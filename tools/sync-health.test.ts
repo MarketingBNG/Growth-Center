@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { libSource } from './source.ts';
-import { THRESHOLDS } from '../lib/thresholds.ts';
+import { THRESHOLDS } from '../lib/shared/thresholds.ts';
 
 const service = libSource('integrations/service');
 const health = libSource('sync-health');

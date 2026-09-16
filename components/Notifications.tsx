@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { api } from '@/lib/fetcher';
-import { fmtRelative } from '@/lib/format';
+import { api } from '@/lib/shared/fetcher';
+import { fmtRelative } from '@/lib/shared/format';
 
 type Item = {
   id: string;
