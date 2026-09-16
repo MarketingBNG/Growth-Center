@@ -54,9 +54,18 @@ test('the partner preset lives in the URL', () => {
 });
 
 test('owner names are what the preset hides', () => {
+  // The dashboard used to gate these on `!partnerView &&` inline. K25 moved the mode into
+  // the client so the toggle repaints instead of refetching, so the gate is now the
+  // PartnerHidden wrapper — asserted on the wrapper rather than the old idiom, which this
+  // test went on grepping for through four releases of it not being there.
   const page = readFileSync('app/(app)/page.tsx', 'utf8');
-  assert.match(page, /!partnerView && t\.assigneeEmail/);
-  assert.match(page, /!partnerView && l\.ownerEmail/);
+  assert.match(page, /<PartnerHidden>[^<]*\{l\.ownerEmail/);
+
+  // ...and that the wrapper actually withholds. A PartnerHidden that rendered its children
+  // unconditionally would satisfy the grep above and leak every name on the screen.
+  const view = readFileSync('app/(app)/PartnerView.tsx', 'utf8');
+  assert.match(view, /export function PartnerHidden/);
+  assert.match(view, /usePartnerView\(\) \? null :/);
 });
 
 // ── §6.4 hiding hiring ───────────────────────────────────────────────────────────────
