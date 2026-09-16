@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { libSource } from './source.ts';
 
-const source = readFileSync('lib/scorecard.ts', 'utf8');
+const source = libSource('scorecard');
 
 // §7.5 exists to "end the argument about whether lead quality or lead handling is the
 // problem". A table of conversion rates without the quality of what each person was

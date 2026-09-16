@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
 import { articleFromUrl, titleFromSlug } from '../lib/content-autofill.ts';
 
@@ -65,7 +66,7 @@ test('the title is readable, and the firm’s acronyms survive it', () => {
 // service line, attaches the brief. Overwriting on a later run would undo that every
 // night, which is exactly how an auto-populated board teaches people to stop editing it.
 test('the fill only ever creates, and never updates', () => {
-  const source = readFileSync('lib/content-autofill.ts', 'utf8');
+  const source = libSource('content-autofill');
   assert.match(source, /createMany/);
   assert.doesNotMatch(source, /contentPiece\.update/);
   assert.doesNotMatch(source, /contentPiece\.upsert/);
@@ -74,14 +75,14 @@ test('the fill only ever creates, and never updates', () => {
 // Reported rather than quietly omitted: the self-relation the webinar case needs was added
 // for it, and would otherwise look like a feature nobody wired up.
 test('the missing webinar source is named in the result', () => {
-  const source = readFileSync('lib/content-autofill.ts', 'utf8');
+  const source = libSource('content-autofill');
   assert.match(source, /Zoho Backstage is not connected/);
 });
 
 // A page reachable with and without a trailing slash arrives twice. Deduplicated inside
 // the run as well as against the board, or the first run creates the pair.
 test('one run cannot create the same page twice', () => {
-  assert.match(readFileSync('lib/content-autofill.ts', 'utf8'), /seen\.has\(page\.url\) \|\| known\.has\(page\.url\)/);
+  assert.match(libSource('content-autofill'), /seen\.has\(page\.url\) \|\| known\.has\(page\.url\)/);
 });
 
 // A board that did not fill is a smaller problem than a night of syncing reported as

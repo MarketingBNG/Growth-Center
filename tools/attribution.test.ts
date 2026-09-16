@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
@@ -103,19 +104,19 @@ test('the caveat says what it is safe to do with the ranking', () => {
 // idea and stops believing either.
 
 test('the sufficiency window is a definition, not a caller’s choice', () => {
-  const source = readFileSync('lib/attribution.ts', 'utf8');
+  const source = libSource('attribution');
   assert.equal(SUFFICIENCY_WINDOW_DAYS, 365);
   assert.match(source, /rangeFor\(SUFFICIENCY_WINDOW_DAYS, now\)/);
 });
 
 test('§21.4’s refusal asks the shared function, and picks no window of its own', () => {
-  const source = readFileSync('lib/review-card.ts', 'utf8');
+  const source = libSource('review-card');
   assert.match(source, /await attributionSufficiency\(now\)/);
   assert.doesNotMatch(source, /rangeFor\(/);
 });
 
 test('the coverage rule asks the same function, and states the window it got', () => {
-  const source = readFileSync('lib/insight-rules.ts', 'utf8');
+  const source = libSource('insight-rules');
   assert.match(source, /await attributionSufficiency\(ctx\.now\)/);
   // Not ctx.from/ctx.to: that was the drift.
   assert.doesNotMatch(source, /attributionSufficiency\(ctx\.from/);
@@ -125,7 +126,7 @@ test('the coverage rule asks the same function, and states the window it got', (
 // D6. "Right diagnosis, wrong field" — Lead_Source belongs to the lead, and nobody is
 // going to set it by hand on 967 open deals at close.
 test('the coverage rule proposes inheritance, not a field nobody will type', () => {
-  const source = readFileSync('lib/insight-rules.ts', 'utf8');
+  const source = libSource('insight-rules');
   assert.doesNotMatch(source, /Set Lead_Source on the deal/);
   assert.match(source, /inherit Channel and Campaign_ID/);
 });
@@ -154,7 +155,7 @@ test('the run refuses a window the picker does not offer', () => {
 // Stamping the run's window on "1,637 customers have nothing logged for 90 days" would
 // claim the count belongs to a month it was merely computed during.
 test('a standing finding is stored with no period, and renders as current state', () => {
-  const ai = readFileSync('lib/ai.ts', 'utf8');
+  const ai = libSource('ai');
   assert.match(ai, /periodStart: f\.scope === 'period' \? current\.from : null/);
   const page = readFileSync('app/(app)/ai/page.tsx', 'utf8');
   assert.match(page, /if \(!from \|\| !to\) return 'current state';/);
@@ -173,7 +174,7 @@ test('a standing finding is stored with no period, and renders as current state'
 // its own — so for the rest the CRM records nothing to inherit from.
 
 test('the ceiling separates a data-entry problem from an absent one', () => {
-  const source = readFileSync('lib/attribution-ceiling.ts', 'utf8');
+  const source = libSource('attribution-ceiling');
   // Three buckets, because "not attributed" covers two situations that call for opposite
   // decisions: one is worth a week of data entry and the other cannot be fixed at all.
   for (const bucket of ['attributed', 'inferable', 'unreachable']) {
@@ -185,7 +186,7 @@ test('the ceiling separates a data-entry problem from an absent one', () => {
 // over twelve months is 45.0% against a 70% threshold — so the honest sentence is not
 // "fix the data" but "this window cannot clear the bar; judge a captured one".
 test('a refusal that cannot be satisfied says so', () => {
-  const source = readFileSync('lib/review-card.ts', 'utf8');
+  const source = libSource('review-card');
   assert.match(source, /const reachable = ceiling !== null && ceiling >= floor;/);
   assert.match(source, /has no channel recorded anywhere/);
   assert.match(source, /Fix the data first/);
@@ -195,6 +196,6 @@ test('a refusal that cannot be satisfied says so', () => {
 // would otherwise read as a coverage shortfall, which is the failure this whole module
 // exists to report accurately.
 test('revenue with no exchange rate is left out of every bucket', () => {
-  const source = readFileSync('lib/attribution-ceiling.ts', 'utf8');
+  const source = libSource('attribution-ceiling');
   assert.match(source, /if \(amount === null\) continue;/);
 });

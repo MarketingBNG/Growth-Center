@@ -34,6 +34,7 @@
 
 import process from 'node:process';
 
+import { libSource } from './source.ts';
 import {
   arithmeticVerdict,
   figuresIn,
@@ -50,10 +51,7 @@ import { db } from '../lib/prisma.ts';
 const FREE_ONLY = process.argv.includes('--free');
 
 // Read once, at startup, so the regression probe is checking the file that shipped.
-const THRESHOLD_SOURCE = await (await import('node:fs/promises')).readFile(
-  new URL('../lib/settings.ts', import.meta.url),
-  'utf8',
-);
+const THRESHOLD_SOURCE = libSource('settings');
 
 type Result = {
   family: string;

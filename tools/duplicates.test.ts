@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
 import { chooseSurvivor, findCandidates, pairKey, pairsByKey, RULE_CONFIDENCE } from '../lib/duplicates.ts';
 import { isMachineAddress } from '../lib/dedupe.ts';
@@ -122,7 +123,7 @@ test('machine addresses are kept out of the queue', () => {
 // through leaves the deals of a deleted lead pointing at nothing, and `onDelete: SetNull`
 // severs them quietly rather than failing loudly.
 test('children are re-pointed before the duplicate is deleted, in one transaction', () => {
-  const source = readFileSync('lib/duplicate-queue.ts', 'utf8');
+  const source = libSource('duplicate-queue');
   const move = source.indexOf('opportunity.updateMany({ where: { leadId: duplicateId }');
   const remove = source.indexOf('tx.lead.delete');
   assert.ok(move > -1 && remove > -1);
@@ -134,7 +135,7 @@ test('children are re-pointed before the duplicate is deleted, in one transactio
 // unique — so two customers cannot become one without deciding which won date and which
 // revenue survives. That is a business decision, not a data operation.
 test('company merges are refused rather than guessed', () => {
-  const source = readFileSync('lib/duplicate-queue.ts', 'utf8');
+  const source = libSource('duplicate-queue');
   assert.match(source, /entityType === 'company'/);
   assert.match(source, /not automated/);
 });
@@ -142,7 +143,7 @@ test('company merges are refused rather than guessed', () => {
 // Without this every scan would re-propose a pair somebody has already looked at and
 // rejected, and the queue would never empty.
 test('a resolved pair is never proposed again', () => {
-  const source = readFileSync('lib/duplicate-queue.ts', 'utf8');
+  const source = libSource('duplicate-queue');
   assert.match(source, /skipDuplicates: true/);
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   assert.match(schema, /@@unique\(\[entityType, primaryId, duplicateId\]\)/);

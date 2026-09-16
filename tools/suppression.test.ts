@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 
 import { needsSuppressionCheck } from '../lib/suppression.ts';
 
@@ -31,7 +31,7 @@ test('a list that says it is for clients is exempt', () => {
 
 // ── the three sources ────────────────────────────────────────────────────────────────
 
-const source = readFileSync('lib/suppression.ts', 'utf8');
+const source = libSource('suppression');
 
 // Against the live database only the third carries anything: isClient is false on all
 // 27,575 leads and no referral partner has an address. Both columns were added for this
@@ -61,7 +61,7 @@ test('one hit per address, and the more serious reason wins', () => {
 // A sign-off is the moment somebody takes responsibility for the list, so it is where the
 // refusal belongs — not only on a page somebody might read.
 test('signing off a list with suppressed recipients is refused', () => {
-  const outreach = readFileSync('lib/outreach.ts', 'utf8');
+  const outreach = libSource('outreach');
   assert.match(outreach, /const hits = await suppressionCheck\(id\);/);
   assert.match(outreach, /already has a relationship with/);
 });
@@ -69,7 +69,7 @@ test('signing off a list with suppressed recipients is refused', () => {
 // Named, not counted. "Three suppressed" is not something anyone can act on; an address
 // is.
 test('the finding names addresses rather than counting them', () => {
-  const rules = readFileSync('lib/insight-rules.ts', 'utf8');
+  const rules = libSource('insight-rules');
   assert.match(rules, /ruleId is set by the runner|id: 'suppression_breach'/);
   assert.match(rules, /examples: hits\.slice\(0, 5\)/);
   // One of the three the manual reserves `critical` for.

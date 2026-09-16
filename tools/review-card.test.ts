@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
 import { refusals, reviewCard } from '../lib/review-card.ts';
 import { INSIGHTS_PROMPT_VERSION } from '../lib/ai.ts';
@@ -112,7 +113,7 @@ test('a stop proposal on a week of data is held, not refused', async () => {
 // identifier check while the rest of the run stands, and a rejected one badged 'openai'
 // would claim a provenance it does not have.
 test('narrated insights carry the prompt version, and rule-written ones do not', () => {
-  const source = readFileSync('lib/ai.ts', 'utf8');
+  const source = libSource('ai');
   assert.ok(INSIGHTS_PROMPT_VERSION.length > 0);
   assert.match(source, /promptVersion: f\.narrated \? INSIGHTS_PROMPT_VERSION : null/);
   assert.match(source, /provider: f\.narrated \? 'openai' : 'rules'/);
@@ -122,7 +123,7 @@ test('narrated insights carry the prompt version, and rule-written ones do not',
 // different order on two runs would hash identical figures differently — and every
 // insight would report itself as edited, every night.
 test('the context hash is stable against key order', () => {
-  const source = readFileSync('lib/ai.ts', 'utf8');
+  const source = libSource('ai');
   assert.match(source, /Object\.keys\(evidence\)\s*\n?\s*\.sort\(\)/);
 });
 
