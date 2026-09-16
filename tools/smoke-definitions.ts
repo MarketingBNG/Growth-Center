@@ -16,7 +16,7 @@
 //
 // So the hand calculation passes ISO strings with the zone cut off, which is what Prisma
 // sends. Any future tool reaching for raw SQL over a date range has the same problem.
-import pg from 'pg';
+import { connect } from './script.ts';
 import { consultations, funnel } from '../lib/metrics.ts';
 import { rangeFor } from '../lib/range.ts';
 import { costPer } from '../lib/calc.ts';
@@ -31,8 +31,7 @@ const to = naive(current.to);
 
 const [app, held] = await Promise.all([funnel(current), consultations(current)]);
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 const count = async (sql: string) => Number((await client.query(sql, [from, to])).rows[0].n);
 
 const checks: [string, number, number][] = [

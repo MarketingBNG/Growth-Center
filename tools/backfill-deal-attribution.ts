@@ -9,14 +9,11 @@
 // Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-deal-attribution.ts
 //       …the same with --apply to write.
 
-import pg from 'pg';
+import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
 import { inheritedConfidence, resolveAttribution, type AttributionConfidence } from '../lib/attribution-confidence.ts';
 import { leadSourceType } from '../lib/integrations/crm-mapping.ts';
 
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const { rows } = await client.query<{
   id: string;
@@ -56,33 +53,21 @@ for (const [k, v] of [...tally].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${String(v).padStart(6)}  ${k}  (${((v / rows.length) * 100).toFixed(1)}%)`);
 }
 
-if (!apply) {
-  console.log(`\nDry run. ${changes.length} rows would change. Re-run with --apply.`);
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(
+  client,
+  `\nDry run. ${changes.length} rows would change. Re-run with --apply.`,
+);
 
 const CHUNK = 500;
-await client.query('BEGIN');
-try {
-  for (let i = 0; i < changes.length; i += CHUNK) {
-    const slice = changes.slice(i, i + CHUNK);
-    const values: unknown[] = [];
-    const tuples = slice.map((c, n) => {
-      values.push(c.id, c.to);
-      return `($${n * 2 + 1}, $${n * 2 + 2})`;
-    });
+await transact(client, async () => {
+  for (const slice of chunks(changes, CHUNK)) {
     await client.query(
       `UPDATE opportunity AS o SET "attributionConfidence" = v.confidence
-         FROM (VALUES ${tuples.join(', ')}) AS v(id, confidence) WHERE o.id = v.id`,
-      values,
+         FROM (VALUES ${placeholders(slice.length, [null, null])}) AS v(id, confidence) WHERE o.id = v.id`,
+      slice.flatMap((c) => [c.id, c.to]),
     );
   }
-  await client.query('COMMIT');
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+});
 
 console.log(`\nWrote ${changes.length} rows.`);
 await client.end();

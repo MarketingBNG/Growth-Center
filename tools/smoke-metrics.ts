@@ -23,6 +23,7 @@ import {
   unassignedLeads,
   winRate,
 } from '../lib/metrics.ts';
+import { checker } from './script.ts';
 import { campaignPerformance, campaignTotals } from '../lib/campaigns.ts';
 import { cards } from '../lib/integrations/service.ts';
 import { providerList } from '../lib/integrations/registry.ts';
@@ -33,11 +34,7 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
-const failures: string[] = [];
-function check(ok: boolean, message: string) {
-  console.log(`${ok ? '  ok  ' : ' FAIL '} ${message}`);
-  if (!ok) failures.push(message);
-}
+const { check, report } = checker();
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
 const { current } = rangeFor(365);
@@ -286,8 +283,4 @@ for (const [name, set] of Object.entries(sets)) {
 
 await db().$disconnect();
 
-if (failures.length) {
-  console.error(`\n${failures.length} check(s) failed.`);
-  process.exit(1);
-}
-console.log('\nAll checks passed.');
+report();

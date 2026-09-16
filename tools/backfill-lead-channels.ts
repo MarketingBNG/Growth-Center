@@ -9,25 +9,16 @@
 // mapping, and writes the channel where the mapping now finds one. It invents nothing: a
 // lead whose source still maps nowhere is left alone.
 //
-// Run:  node --experimental-strip-types tools/backfill-lead-channels.ts          (dry run)
-//       node --experimental-strip-types tools/backfill-lead-channels.ts --apply  (writes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-channels.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-channels.ts --apply  (writes)
 //
 // Safe to re-run, and safe to run again after the mapping learns more sources.
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
+import { connect, stopUnlessApplying, transact } from './script.ts';
 import { channelSlugFor } from '../lib/integrations/crm-mapping.ts';
 import type { SourceType } from '../lib/enums.ts';
 
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const channels = await client.query<{ id: string; slug: string }>('select id, slug from channel');
 const idBySlug = new Map(channels.rows.map((c) => [c.slug, c.id]));
@@ -65,27 +56,19 @@ for (const [detail, n] of [...stillUnmapped].sort((a, b) => b[1] - a[1])) {
   console.log(`  ${String(n).padStart(5)}  ${detail}`);
 }
 
-if (!apply) {
-  console.log('\nDry run. Re-run with --apply to write.');
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(client, '\nDry run. Re-run with --apply to write.');
 
-await client.query('BEGIN');
-try {
-  let written = 0;
+const written = await transact(client, async () => {
+  let n = 0;
   for (const [channelId, ids] of byChannel) {
     const r = await client.query('update lead set "channelId" = $1 where id = any($2::text[])', [
       channelId,
       ids,
     ]);
-    written += r.rowCount ?? 0;
+    n += r.rowCount ?? 0;
   }
-  await client.query('COMMIT');
-  console.log(`\nAttributed ${written} leads.`);
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+  return n;
+});
+console.log(`\nAttributed ${written} leads.`);
 
 await client.end();

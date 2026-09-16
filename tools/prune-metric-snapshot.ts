@@ -20,21 +20,12 @@
 //
 // writePoints() no longer writes them, so this is a one-off. Nothing regenerates them.
 //
-// Run:  node --experimental-strip-types tools/prune-metric-snapshot.ts          (dry run)
-//       node --experimental-strip-types tools/prune-metric-snapshot.ts --apply  (deletes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/prune-metric-snapshot.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/prune-metric-snapshot.ts --apply  (deletes)
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
+import { connect, stopUnlessApplying } from './script.ts';
 
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const show = async (label: string) => {
   const { rows } = await client.query(
@@ -72,12 +63,11 @@ const { rows: doomed } = await client.query(
   `select count(*)::int n from metric_snapshot where "metricKey" = 'record'`,
 );
 
-if (!apply) {
-  console.log(`\nDry run. ${doomed[0].n} \`record\` rows would be deleted.`);
-  console.log('Every time-series row is kept. Re-run with --apply to delete.');
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(
+  client,
+  `\nDry run. ${doomed[0].n} \`record\` rows would be deleted.\n` +
+    'Every time-series row is kept. Re-run with --apply to delete.',
+);
 
 await client.query(`delete from metric_snapshot where "metricKey" = 'record'`);
 // The space is only returned to the OS after a VACUUM FULL, which locks the table.

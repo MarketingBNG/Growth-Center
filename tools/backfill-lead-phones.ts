@@ -14,20 +14,12 @@
 // Leaves alone any lead that already has a phone stored — a number a human entered
 // beats one parsed out of a name field.
 //
-// Run:  node --experimental-strip-types tools/backfill-lead-phones.ts          (dry run)
-//       node --experimental-strip-types tools/backfill-lead-phones.ts --apply  (writes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-phones.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-phones.ts --apply  (writes)
 //
 // Safe to re-run: a lead fixed once no longer matches.
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
-
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
+import { apply, connect } from './script.ts';
 
 /**
  * A name that is really a phone number: optional +, then digits and the punctuation
@@ -47,8 +39,7 @@ function normalize(raw: string): string | null {
   return (plus ? '+' : '') + digits;
 }
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const { rows } = await client.query<{ id: string; firstName: string }>(
   `select id, "firstName" from lead

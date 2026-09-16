@@ -13,24 +13,15 @@
 // "[MERGED]" prefix goes. Square brackets are part of real names in this data
 // ("Paramasivam [He/Him/His] PhD", "[AK] Anand") and are left untouched.
 //
-// Run:  node --experimental-strip-types tools/backfill-lead-names.ts          (dry run)
-//       node --experimental-strip-types tools/backfill-lead-names.ts --apply  (writes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-names.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-lead-names.ts --apply  (writes)
 //
 // Safe to re-run: a lead fixed once no longer matches.
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
+import { apply, connect } from './script.ts';
 import { cleanImportedName } from '../lib/integrations/crm-mapping.ts';
 
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 type Row = { id: string; firstName: string; lastName: string | null };
 
