@@ -548,28 +548,13 @@ async function runPaged(
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
   const since = cursor ? null : integration.syncedThrough;
 
-  const total = { rows: 0, vitalsRows: 0, workTaskRows: 0, campaignDays: 0, socialRows: 0, seoRows: 0, crmRows: 0, linkedRows: 0, activityRows: 0, revenueRows: 0, outreachRows: 0 };
+  const total = noCounts();
 
   do {
     const slice = await provider.syncPaged!(credential, config, { cursor, since, deadline, range });
     const counts = await persist(provider, integration.id, config, slice.points);
 
-    total.rows += counts.rows;
-    total.vitalsRows += counts.vitalsRows;
-    total.workTaskRows += counts.workTaskRows;
-    total.campaignDays += counts.campaignDays;
-    total.socialRows += counts.socialRows;
-    total.seoRows += counts.seoRows;
-    total.crmRows += counts.crmRows;
-    total.outreachRows += counts.outreachRows;
-    // Accumulated for the same reason as the eight above, and missed until `rows` began
-    // counting them: a paged provider's activities, conversions and revenue were written
-    // slice by slice and then reported as none, because only the last slice's numbers
-    // reached the total — and `describe` omits a zero, so the detail line simply left
-    // them out.
-    total.linkedRows += counts.linkedRows;
-    total.activityRows += counts.activityRows;
-    total.revenueRows += counts.revenueRows;
+    for (const key of COUNT_KEYS) total[key] += counts[key];
 
     cursor = slice.cursor;
     await db().integration.update({
@@ -596,20 +581,40 @@ async function runPaged(
   return { rows: totalRows(total), detail, done };
 }
 
-type Counts = {
-  /** metric_snapshot rows only. Every other field below is a table of its own. */
-  rows: number;
-  vitalsRows: number;
-  workTaskRows: number;
-  campaignDays: number;
-  socialRows: number;
-  seoRows: number;
-  crmRows: number;
-  linkedRows: number;
-  activityRows: number;
-  revenueRows: number;
-  outreachRows: number;
-};
+/**
+ * Every counter a run keeps. `rows` is metric_snapshot alone; each of the others is a
+ * table of its own.
+ *
+ * One list, because it used to be four. The type, the zeroed total, the loop that added
+ * each slice to it and the sum that reports the lot were all written out by hand, and the
+ * accumulation missed three of them: a paged provider's conversions, activities and
+ * revenue were written slice by slice and then reported as none, because only the last
+ * slice's numbers survived. Nothing failed — describe() omits a zero, so the detail line
+ * simply left them out, and the card read like a smaller sync than had happened.
+ *
+ * Adding a counter here now adds it to all four at once, and persist() stops compiling
+ * until it produces one.
+ */
+const COUNT_KEYS = [
+  'rows',
+  'vitalsRows',
+  'workTaskRows',
+  'campaignDays',
+  'socialRows',
+  'seoRows',
+  'crmRows',
+  'linkedRows',
+  'activityRows',
+  'revenueRows',
+  'outreachRows',
+] as const;
+
+type Counts = Record<(typeof COUNT_KEYS)[number], number>;
+
+/** A fresh set of counters, all zero. */
+function noCounts(): Counts {
+  return Object.fromEntries(COUNT_KEYS.map((k) => [k, 0])) as Counts;
+}
 
 /**
  * Every row a run wrote, across every table it writes to.
@@ -627,19 +632,7 @@ type Counts = {
  * both were written. `describe()` keeps the breakdown for anyone who wants it.
  */
 function totalRows(c: Counts): number {
-  return (
-    c.rows +
-    c.vitalsRows +
-    c.workTaskRows +
-    c.campaignDays +
-    c.socialRows +
-    c.seoRows +
-    c.crmRows +
-    c.linkedRows +
-    c.activityRows +
-    c.revenueRows +
-    c.outreachRows
-  );
+  return COUNT_KEYS.reduce((n, key) => n + c[key], 0);
 }
 
 /** metric_snapshot first — the honest archive of what the provider reported — then the
