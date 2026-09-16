@@ -2,7 +2,6 @@
 
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -140,14 +139,5 @@ export function ProgressLink({
       {children}
       <LinkProgress />
     </Link>
-  );
-}
-
-/** For non-Link navigations (router.push after a form submit, say). */
-export function useNavProgress() {
-  const ctx = useContext(NavProgressContext);
-  return useCallback(
-    (running: boolean) => (running ? ctx?.start() : ctx?.stop()),
-    [ctx],
   );
 }

@@ -40,7 +40,7 @@ import {
  * column's placeholder 0, and folding those in would report a collapse in quality on the
  * day the feature shipped.
  */
-export async function medianLeadScore(range: Range): Promise<number | null> {
+async function medianLeadScore(range: Range): Promise<number | null> {
   const rows = await db().$queryRaw<{ median: number | null }[]>`
     SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY score)::float AS median
       FROM lead

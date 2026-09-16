@@ -212,12 +212,12 @@ export async function comparableDeltas(cards: Kpi[], current: Range, previous: R
  * every call and buy nothing — those need their queries batched instead, not memoised.
  */
 export const excludeDemo = cache(
-  async (metricKey: string): Promise<{ not: 'demo' } | undefined> => {
+  async (metricKey: string): Promise<{ not: typeof DEMO_SOURCE } | undefined> => {
     const live = await db().metricSnapshot.findFirst({
-      where: { metricKey, source: { not: 'demo' } },
+      where: { metricKey, source: { not: DEMO_SOURCE } },
       select: { id: true },
     });
-    return live ? { not: 'demo' } : undefined;
+    return live ? { not: DEMO_SOURCE } : undefined;
   },
 );
 
@@ -278,7 +278,7 @@ export async function siteMetrics(
   const [liveKeys, rows] = await Promise.all([
     db().metricSnapshot.groupBy({
       by: ['metricKey'],
-      where: { metricKey: { in: keys }, source: { not: 'demo' } },
+      where: { metricKey: { in: keys }, source: { not: DEMO_SOURCE } },
     }),
     db().metricSnapshot.groupBy({
       by: ['metricKey', 'source'],
@@ -291,7 +291,7 @@ export async function siteMetrics(
   const totals: Record<string, number> = Object.fromEntries(keys.map((k) => [k, 0]));
   for (const row of rows) {
     // Same rule `excludeDemo` applies, decided per row now that source is in hand.
-    if (hasLive.has(row.metricKey) && row.source === 'demo') continue;
+    if (hasLive.has(row.metricKey) && row.source === DEMO_SOURCE) continue;
     totals[row.metricKey] += num(row._sum.value);
   }
   for (const k of keys) totals[k] = Math.round(totals[k]);
@@ -827,7 +827,7 @@ async function readTrend(range: Range, bucket: 'day' | 'month', channelId?: stri
           `SELECT ${at('date')} AS bucket, SUM(value) AS total
              FROM metric_snapshot
             WHERE "metricKey" = 'sessions' AND date >= $1 AND date <= $2
-              ${demo ? `AND source <> 'demo'` : ''}
+              ${demo ? `AND source <> '${DEMO_SOURCE}'` : ''}
             GROUP BY 1`,
           range.from,
           range.to,
