@@ -1,7 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { useSearchParamUpdate } from '@/components/patterns/use-search-param-update';
 import { ArrowDown, ArrowUp, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/shared/utils';
 import { TH_CLASS } from '@/components/ui/table';
@@ -32,9 +31,7 @@ export function SortHeader({
   /** Right-aligned for numeric and date columns, so the control sits under the values. */
   align?: 'left' | 'right';
 }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const { params, pending, update } = useSearchParamUpdate();
 
   const active = params.get('sort') === name;
   const dir = params.get('dir') === 'asc' ? 'asc' : 'desc';
@@ -44,12 +41,12 @@ export function SortHeader({
   const nextDir = active && dir === 'desc' ? 'asc' : 'desc';
 
   function go() {
-    const next = new URLSearchParams(params.toString());
-    next.set('sort', name);
-    next.set('dir', nextDir);
-    // The old page number belongs to the old ordering.
-    next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
+    update((next) => {
+      next.set('sort', name);
+      next.set('dir', nextDir);
+      // The old page number belongs to the old ordering.
+      next.delete('page');
+    });
   }
 
   const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ArrowUp : ArrowDown;

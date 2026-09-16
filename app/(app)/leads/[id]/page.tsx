@@ -1,11 +1,9 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BackLink, Detail, DetailHeader, NotesCard } from '@/components/patterns/detail';
+import { BackLink, Detail, DetailHeader, HistoryCard, LinkedRow, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
 import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
-import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
 import { getLead } from '@/lib/leads/leads';
 import { hasDb } from '@/lib/platform/prisma';
@@ -125,17 +123,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               </CardHeader>
               <CardContent className="space-y-2">
                 {lead.opportunities.map((o) => (
-                  <Link
-                    key={o.id}
-                    href={`/pipeline/${o.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={o.id} href={`/pipeline/${o.id}`}>
                     <span>{o.name}</span>
                     <span className="flex items-center gap-2 text-muted-foreground">
                       <Badge tone="info">{o.stage.name}</Badge>
                       {fmtMoney(Number(o.value), false, o.currency)}
                     </span>
-                  </Link>
+                  </LinkedRow>
                 ))}
               </CardContent>
             </Card>
@@ -147,12 +141,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         <div className="space-y-4">
           <TaskList tasks={lead.tasks} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>History</CardTitle>
-            </CardHeader>
-            <Timeline entries={lead.activities} />
-          </Card>
+          <HistoryCard entries={lead.activities} />
         </div>
       </div>
     </>

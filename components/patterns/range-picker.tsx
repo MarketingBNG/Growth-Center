@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
+import { useSearchParamUpdate } from '@/components/patterns/use-search-param-update';
 import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/shared/utils';
 import { RANGE_OPTIONS } from '@/lib/shared/enums';
@@ -57,9 +57,7 @@ function pickedFromUrl(params: URLSearchParams): PickedRange | null {
  * answer the question itself and let the header be static.
  */
 export function RangePicker({ current }: { current?: string }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const { params, pending, update } = useSearchParamUpdate();
   const [open, setOpen] = useState(false);
 
   const picked = pickedFromUrl(params);
@@ -77,12 +75,11 @@ export function RangePicker({ current }: { current?: string }) {
   /** The page number belongs to the old range's row count. Narrowing from 365 days to 7
    *  while on page 40 landed on an empty table with a working pager above it, the same
    *  reason FilterBar drops it. */
-  const go = (mutate: (next: URLSearchParams) => void) => {
-    const next = new URLSearchParams(params.toString());
-    mutate(next);
-    next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
-  };
+  const go = (mutate: (next: URLSearchParams) => void) =>
+    update((next) => {
+      mutate(next);
+      next.delete('page');
+    });
 
   /** A preset and a hand-picked window are the same setting, so choosing one clears the
    *  other. Leaving `from`/`to` behind would have the URL say 7 days while the server,

@@ -1,7 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { useSearchParamUpdate } from '@/components/patterns/use-search-param-update';
 import { Search, X } from 'lucide-react';
 import { Input, Select } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,28 +33,25 @@ export function FilterBar({
   filters: FilterDef[];
   searchPlaceholder?: string;
 }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const { params, pending, update } = useSearchParamUpdate();
 
-  function update(key: string, value: string) {
-    const next = new URLSearchParams(params.toString());
-    if (value) next.set(key, value);
-    else next.delete(key);
-    next.delete('page');
-    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
+  function set(key: string, value: string) {
+    update((next) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+      next.delete('page');
+    });
   }
 
   // Clear drops the filters and the search term — and nothing else. It used to replace the
   // whole query string, which also threw away the date range and, on the CRM screen, the
   // tab: clearing a search while reading Contacts bounced you back to Companies.
   function clear() {
-    const next = new URLSearchParams(params.toString());
-    next.delete('q');
-    next.delete('page');
-    for (const f of filters) next.delete(f.name);
-    const query = next.toString();
-    startTransition(() => router.replace(query ? `?${query}` : '?', { scroll: false }));
+    update((next) => {
+      next.delete('q');
+      next.delete('page');
+      for (const f of filters) next.delete(f.name);
+    });
   }
 
   const active = filters.some((f) => params.get(f.name)) || params.get('q');
@@ -73,7 +69,7 @@ export function FilterBar({
           placeholder={searchPlaceholder}
           className="pl-9"
           onKeyDown={(e) => {
-            if (e.key === 'Enter') update('q', (e.target as HTMLInputElement).value.trim());
+            if (e.key === 'Enter') set('q', (e.target as HTMLInputElement).value.trim());
           }}
         />
       </div>
@@ -84,7 +80,7 @@ export function FilterBar({
           aria-label={f.label}
           className="w-auto min-w-32"
           value={params.get(f.name) ?? ''}
-          onChange={(e) => update(f.name, e.target.value)}
+          onChange={(e) => set(f.name, e.target.value)}
         >
           <option value="">{f.allLabel ?? `${f.label}: all`}</option>
           {f.options.map((o) => (

@@ -1,8 +1,7 @@
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BackLink, Detail, DetailHeader, NotesCard } from '@/components/patterns/detail';
+import { BackLink, Detail, DetailHeader, HistoryCard, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
-import { Timeline } from '@/components/patterns/timeline';
 import { db, hasDb } from '@/lib/platform/prisma';
 import { convert } from '@/lib/shared/currency';
 import { currencySettings } from '@/lib/platform/settings';
@@ -149,12 +148,7 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
           <NotesCard parent={{ opportunityId: deal.id }} notes={deal.noteEntries} />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>History</CardTitle>
-          </CardHeader>
-          <Timeline entries={deal.activities} />
-        </Card>
+        <HistoryCard entries={deal.activities} />
       </div>
     </>
   );

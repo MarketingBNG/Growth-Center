@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ClipboardList, Download } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/platform/prisma';
@@ -19,12 +19,7 @@ export default async function ReportsPage({
   searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Reports" subtitle="Built from the same numbers as the dashboard." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Reports', 'Built from the same numbers as the dashboard.');
   }
 
   const params = await searchParams;

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, Columns3, FileText } from 'lucide-react';
 import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -63,12 +63,7 @@ export default async function ContentPage({
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Content" subtitle="From idea to published, with what it produced." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Content', 'From idea to published, with what it produced.');
   }
 
   // §21.2's approving identity. The owner alone holds `approve`, so an admin can write

@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
+import { useSearchParamUpdate } from '@/components/patterns/use-search-param-update';
 import { Calendar } from 'lucide-react';
 import { cn } from '@/lib/shared/utils';
 import { RANGE_OPTIONS } from '@/lib/shared/enums';
@@ -34,9 +34,7 @@ export function DateRangePicker({
   /** The resolved window, rendered as-is so the control cannot disagree with the page. */
   label: string;
 }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const { pending, update } = useSearchParamUpdate();
   const [open, setOpen] = useState(false);
 
   const custom = Boolean(from && to);
@@ -52,27 +50,27 @@ export function DateRangePicker({
   })();
 
   function preset(value: string) {
-    const next = new URLSearchParams(params.toString());
-    next.set('range', value);
-    // A preset and a custom window are the same setting; leaving the old dates behind
-    // would let them win and the buttons would appear to do nothing.
-    next.delete('from');
-    next.delete('to');
-    next.delete('page');
     setOpen(false);
-    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
+    update((next) => {
+      next.set('range', value);
+      // A preset and a custom window are the same setting; leaving the old dates behind
+      // would let them win and the buttons would appear to do nothing.
+      next.delete('from');
+      next.delete('to');
+      next.delete('page');
+    });
   }
 
-  function apply(next: PickedRange) {
-    const q = new URLSearchParams(params.toString());
-    q.set('from', isoDay(next.from));
-    q.set('to', isoDay(next.to));
-    q.delete('range');
-    // The page number belongs to the old window's row count, the same reason the presets
-    // drop it.
-    q.delete('page');
+  function apply(picked: PickedRange) {
     setOpen(false);
-    startTransition(() => router.replace(`?${q.toString()}`, { scroll: false }));
+    update((q) => {
+      q.set('from', isoDay(picked.from));
+      q.set('to', isoDay(picked.to));
+      q.delete('range');
+      // The page number belongs to the old window's row count, the same reason the presets
+      // drop it.
+      q.delete('page');
+    });
   }
 
   /** The blue the whole app now uses for "this is your selection". */

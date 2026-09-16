@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProgressLink } from '@/components/NavProgress';
 import { NoteBox } from '@/app/(app)/leads/[id]/NoteBox';
+import { Timeline } from '@/components/patterns/timeline';
 import { fmtRelative } from '@/lib/shared/format';
 
 /**
@@ -93,6 +94,43 @@ export function NotesCard({ parent, notes }: { parent: NoteParent; notes: NoteEn
           </div>
         ))}
       </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * A row in a card that links to another record — a company's contacts and deals, a
+ * contact's leads.
+ *
+ * Six of these across the three pages, each carrying the same class string by hand. What
+ * goes inside differs every time, so only the row itself is here.
+ */
+export function LinkedRow({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * The activity timeline, carded.
+ *
+ * The four record pages each wrote these six lines out, identical but for which record's
+ * activities they handed over — and they did it while importing Detail, BackLink and
+ * NotesCard from here, which is how a card gets left behind: nothing about it looked
+ * worth extracting on its own.
+ */
+export function HistoryCard({ entries }: { entries: React.ComponentProps<typeof Timeline>['entries'] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>History</CardTitle>
+      </CardHeader>
+      <Timeline entries={entries} />
     </Card>
   );
 }

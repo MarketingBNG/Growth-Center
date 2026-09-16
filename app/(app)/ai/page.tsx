@@ -1,7 +1,7 @@
 import { Brain } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { db, hasDb } from '@/lib/platform/prisma';
@@ -56,12 +56,7 @@ export default async function AiPage({
   searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="AI Insights" subtitle="Analysis over Growth Center's own data." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('AI Insights', "Analysis over Growth Center's own data.");
   }
 
   const { value: rangeValue, days } = rangeParam(await searchParams);

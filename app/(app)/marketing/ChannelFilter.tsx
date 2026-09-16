@@ -1,7 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { useSearchParamUpdate } from '@/components/patterns/use-search-param-update';
 import { cn } from '@/lib/shared/utils';
 
 /**
@@ -20,15 +19,15 @@ export function ChannelFilter({
   sources: { id: string; name: string }[];
   currentSource: string;
 }) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const [pending, startTransition] = useTransition();
+  const { pending, update } = useSearchParamUpdate();
 
+  // Deliberately keeps `page`, where the list filters drop it: this pair sits above cards
+  // and a chart rather than a paged table, so there is no page number to invalidate.
   function set(key: 'channelId' | 'source', id: string) {
-    const next = new URLSearchParams(params.toString());
-    if (id) next.set(key, id);
-    else next.delete(key);
-    startTransition(() => router.replace(`?${next.toString()}`, { scroll: false }));
+    update((next) => {
+      if (id) next.set(key, id);
+      else next.delete(key);
+    });
   }
 
   return (

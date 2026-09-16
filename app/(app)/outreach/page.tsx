@@ -1,6 +1,6 @@
 import { Send, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
@@ -39,12 +39,7 @@ export default async function OutreachPage({
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Outreach" subtitle="Sequences, prospects and replies." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Outreach', 'Sequences, prospects and replies.');
   }
 
   // Ten to a page, not the shared default of twenty-five: a row on this page is a whole

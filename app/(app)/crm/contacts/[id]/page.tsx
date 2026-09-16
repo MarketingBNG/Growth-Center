@@ -1,10 +1,9 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BackLink, Detail, NotesCard } from '@/components/patterns/detail';
+import { BackLink, Detail, HistoryCard, LinkedRow, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
-import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
 import { getContact } from '@/lib/crm/crm';
 import { leadSourceLabel } from '@/lib/integrations/crm-mapping';
@@ -80,17 +79,13 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               </CardHeader>
               <CardContent className="space-y-2">
                 {contact.opportunities.map((o) => (
-                  <Link
-                    key={o.id}
-                    href={`/pipeline/${o.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={o.id} href={`/pipeline/${o.id}`}>
                     <span>{o.name}</span>
                     <span className="flex items-center gap-2">
                       <Badge tone="info">{o.stage.name}</Badge>
                       <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value), false, o.currency)}</span>
                     </span>
-                  </Link>
+                  </LinkedRow>
                 ))}
               </CardContent>
             </Card>
@@ -103,11 +98,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               </CardHeader>
               <CardContent className="space-y-2">
                 {contact.leads.map((l) => (
-                  <Link
-                    key={l.id}
-                    href={`/leads/${l.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={l.id} href={`/leads/${l.id}`}>
                     <span className="text-muted-foreground">
                       {leadSourceLabel(l.sourceDetail, l.sourceType)}
                     </span>
@@ -117,7 +108,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                         {fmtRelative(l.createdAt)}
                       </span>
                     </span>
-                  </Link>
+                  </LinkedRow>
                 ))}
               </CardContent>
             </Card>
@@ -129,12 +120,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         <div className="min-w-0 space-y-4">
           <TaskList tasks={contact.tasks} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>History</CardTitle>
-            </CardHeader>
-            <Timeline entries={contact.activities} />
-          </Card>
+          <HistoryCard entries={contact.activities} />
         </div>
       </div>
     </>
