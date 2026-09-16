@@ -4,16 +4,18 @@ import dynamic from 'next/dynamic';
 import { Skeleton } from '@/components/ui/skeleton';
 
 /**
- * Recharts, loaded when the chart is, not when the page is.
+ * Split out and loaded on demand, like its neighbours — but not for their reason.
  *
- * The library is around a hundred kilobytes and every screen that draws anything pulled
- * it into its first-load bundle — /pipeline was 276kB, /leads and /crm not far behind —
- * even though the charts sit below the fold and the page is readable without them.
+ * The other wrappers in this directory carry an argument about Recharts: a hundred
+ * kilobytes that every screen drawing anything pulled into its first-load bundle. That
+ * argument was copied here, and it is not true of this chart. SparklineImpl draws its own
+ * SVG and imports no chart library at all, so there is no library being deferred.
  *
- * `ssr: false` because these render nothing useful on the server anyway: Recharts
- * measures its container before it can lay an axis out, so the server pass produced
- * markup the client immediately threw away. The skeleton holds the same box, so nothing
- * below it jumps when the chart arrives.
+ * What the split still does is keep the component out of the server pass and hold its box
+ * while it arrives. Whether `ssr: false` earns its place on a component that renders
+ * perfectly well on the server is a live question — SparklineImpl's own header argues it
+ * does not — and changing it changes what the first paint contains, so it is left as it
+ * is rather than quietly flipped.
  */
 export const Sparkline = dynamic(() => import('./SparklineImpl').then((m) => m.Sparkline), {
   ssr: false,

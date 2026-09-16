@@ -24,7 +24,11 @@ export function useApiAction<Busy = boolean>(idle: Busy) {
     try {
       await action();
     } catch (e) {
-      setError((e as Error).message);
+      // Not `(e as Error).message`: a thrown non-Error has no `message`, so that set the
+      // error to undefined and ErrorText rendered nothing — a failed write that looked
+      // like a successful one. Same fallback sentence as [[use-mutation]], which is the
+      // other half of these components and already said it.
+      setError(e instanceof Error ? e.message : 'Could not save.');
     } finally {
       setBusy(idle);
     }
