@@ -247,7 +247,7 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
     <Table>
       <THead>
         <TR>
-          {/* SortHeader renders its own th; only the columns lib/crm.ts allows are
+          {/* SortHeader renders its own th; only the columns lib/crm/crm.ts allows are
               clickable, so a header cannot ask for an order the query will ignore. */}
           <SortHeader name="name">Company</SortHeader>
           {/* Phone, not Industry. Zoho carries no Industry on any of the 2,953 accounts,

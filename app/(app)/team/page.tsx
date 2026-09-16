@@ -70,7 +70,7 @@ async function TeamBody() {
               Role tiers are switched off: every signed-in person can manage integrations, mint
               API keys and edit any record, whatever role they hold. Roles set here are recorded
               and audited now so they are already correct on the day tiers are switched on in{' '}
-              <code className="font-mono">lib/roles.ts</code> — until then, treat the Role column
+              <code className="font-mono">lib/access/roles.ts</code> — until then, treat the Role column
               as a plan, and revoking access as the only control that bites.
             </p>
           </CardHeader>

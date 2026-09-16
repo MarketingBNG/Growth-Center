@@ -10,7 +10,7 @@ import {
   type InsightStatus,
 } from './insight-lifecycle.ts';
 
-// Writing a finding's state. The machine itself lives in lib/insight-lifecycle.ts, which
+// Writing a finding's state. The machine itself lives in lib/insights/insight-lifecycle.ts, which
 // is pure and safe to import from a client component; everything here needs a database.
 
 export class TransitionError extends Error {}

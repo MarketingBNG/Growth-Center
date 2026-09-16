@@ -61,7 +61,7 @@ export type SpeedToLead = {
   slaHours: number;
 };
 
-// 0 rather than lib/calc.ts's rate()'s null on an empty period: this feeds a percentage
+// 0 rather than lib/shared/calc.ts's rate()'s null on an empty period: this feeds a percentage
 // bar in a distribution, and a period with nothing to distribute has every band at 0%,
 // not an unmeasured figure.
 const share = (n: number, of: number) => (of === 0 ? 0 : Number(((n / of) * 100).toFixed(1)));

@@ -1,6 +1,6 @@
 // §8.5's vocabulary, split out so a client component can read it.
 //
-// lib/referrals.ts imports lib/prisma, and lib/prisma imports the `pg` driver. A client
+// lib/crm/referrals.ts imports lib/platform/prisma, and lib/platform/prisma imports the `pg` driver. A client
 // component that reads a constant from there drags the whole driver into the browser
 // bundle — which is exactly what happened here: PartnerRegistry.tsx imported
 // PARTNER_TYPES and the production build died on "Can't resolve fs", after the type

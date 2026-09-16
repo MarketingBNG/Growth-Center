@@ -30,7 +30,7 @@ import type { Range } from '../shared/range.ts';
  * such event: `qualifiedAt` is stamped when a lead converts, so 1,028 of the 1,031 leads
  * carrying one are conversions. Counting it as the manual's qualified lead prints the
  * conversion figure twice under two names. The signal arrives with Zoho Bookings and not
- * before — see lib/glossary.ts, which says the same thing to the reader.
+ * before — see lib/shared/glossary.ts, which says the same thing to the reader.
  *
  * `consultationHeld` is a deal being opened, which is the nearest real event and
  * under-counts every consultation that led nowhere. It is therefore a *lower* bound on

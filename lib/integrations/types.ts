@@ -235,7 +235,7 @@ export type ConnectInput =
   | { kind: 'apiKey'; apiKey: string; config?: Record<string, unknown> };
 
 export type ConnectResult = {
-  /** Sealed by lib/crypto before it touches the database. */
+  /** Sealed by lib/access/crypto before it touches the database. */
   secret: string;
   config?: Record<string, unknown>;
   expiresAt?: Date;

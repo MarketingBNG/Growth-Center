@@ -12,13 +12,13 @@ import { canonicalEmail } from './roles.ts';
  * team. The Growth Center's queue was showing a marketing team the whole firm's task debt,
  * and a queue that cannot be worked is abandoned inside a fortnight.
  *
- * Raising the floor does not fix it: lib/settings.ts records that a floor of 99,999 still
+ * Raising the floor does not fix it: lib/platform/settings.ts records that a floor of 99,999 still
  * produced fifteen findings, because the debt is genuinely that large. The queue needs to
  * know whose debt is its business, and nothing in this application knew.
  *
  * ── Why it did not already exist ──────────────────────────────────────────────────────
  *
- * lib/roles.ts had a roster once and it was deliberately removed: access is by email
+ * lib/access/roles.ts had a roster once and it was deliberately removed: access is by email
  * domain, and a hard-coded list of colleagues is a list that goes stale the first time
  * somebody joins. That reasoning holds for *access* and does not hold for *scope* — who
  * may sign in is a security question with a good domain-shaped answer, while whose work

@@ -6,7 +6,7 @@ import { delta } from './calc.ts';
 // lib/metrics.ts imports lib/prisma. `MetricsBand` is a client component and renders
 // `KpiCard`, so anything KpiCard imports as a VALUE lands in the client graph — and a
 // value import of lib/metrics would follow the chain into the `pg` driver and break the
-// build. Only lib/calc.ts is imported here, which imports nothing.
+// build. Only lib/shared/calc.ts is imported here, which imports nothing.
 
 export type Kpi = {
   key: string;
@@ -22,7 +22,7 @@ export type Kpi = {
   hint?: string;
   /** Source ids that actually wrote the data behind this figure — resolved against the
    *  live tables, not assumed, so a card can say where its number really came from.
-   *  Rendered through lib/sources.ts, which imports nothing. */
+   *  Rendered through lib/shared/sources.ts, which imports nothing. */
   sources?: string[];
   /** Why there is no change chip, when the reason is that the data does not reach back
    *  far enough. Without it the card said "No prior period", which reads as "nothing

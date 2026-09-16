@@ -1,8 +1,8 @@
 // The numbers the rules compare against: what each one is, and what it defaults to.
 //
 // Pure, and importable from a client component — the settings card renders every label,
-// unit and hint from here. The reading and writing live in lib/settings.ts, for the
-// reason lib/kpi.ts documents: a value import of a database-touching module from a client
+// unit and hint from here. The reading and writing live in lib/platform/settings.ts, for the
+// reason lib/shared/kpi.ts documents: a value import of a database-touching module from a client
 // component follows the chain into the `pg` driver and breaks the build. It did, and
 // /settings returned 500 until this was split.
 //

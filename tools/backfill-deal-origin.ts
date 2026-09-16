@@ -3,7 +3,7 @@
 // Pass 1 reads the deal name, which answers for 5,874 of 8,072. Pass 2 takes the deals
 // the name left as 'unknown' and asks account history instead — did this account already
 // have a deal? — which answers for most of the rest. Both passes write `originSource` so
-// the two can be told apart afterwards; see lib/deal-origin.ts for why that matters and
+// the two can be told apart afterwards; see lib/pipeline/deal-origin.ts for why that matters and
 // why the first day's import is deliberately left unclassified.
 //
 // The passes run in this order and not the other: a name is a statement by the person who

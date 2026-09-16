@@ -258,7 +258,7 @@ export async function ask(question: string, context: GrowthContext): Promise<Ans
         reasoning: { effort: EFFORT },
         text: { verbosity: VERBOSITY },
         // Nothing here should outlive the request. Client names, contact details and free
-        // text are withheld by lib/ai-redaction.ts and never reach this call at all, but
+        // text are withheld by lib/ai/ai-redaction.ts and never reach this call at all, but
         // what does reach it — staff addresses, revenue, the pipeline, the rows a query
         // returns — is still the firm's business and belongs in no vendor's dashboard once
         // the question is answered.
@@ -575,7 +575,7 @@ export type GeneratedInsights = {
  * first, model second" existed in this file and were never connected — and it was the
  * model half that was stored and shown.
  *
- * Now lib/insight-rules.ts decides. Each rule queries, compares against a stored
+ * Now lib/insights/insight-rules.ts decides. Each rule queries, compares against a stored
  * threshold, and returns its figures as evidence. The model receives the evidence and
  * writes a title and two sentences per finding. It is not asked which findings matter, it
  * is not asked for a confidence in someone else's decision, and it cannot introduce a

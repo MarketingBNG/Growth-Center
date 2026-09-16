@@ -45,7 +45,7 @@ test('a reviewed finding cannot be assigned without being approved', () => {
 });
 
 // Withdrawing a signature. An approved finding sent back is waiting on the approver
-// again, and lib/insight-actions.ts clears the approver's name when it goes.
+// again, and lib/insights/insight-actions.ts clears the approver's name when it goes.
 test('approval can be withdrawn back to reviewed', () => {
   assert.ok(canTransition('approved', 'reviewed'));
 });

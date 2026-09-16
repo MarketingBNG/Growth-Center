@@ -24,7 +24,7 @@ const DOMAIN_422 = [BudgetError, ApprovalError, WorkflowError, MergeError, Trans
 
 // The pure list/pagination contract lives in list-query.ts so it can be unit-tested
 // without next/server. Re-exported here because 22 route handlers import it from
-// '@/lib/api'.
+// '@/lib/platform/api'.
 export {
   listQuery,
   orderBy,

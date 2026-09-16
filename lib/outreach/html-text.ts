@@ -1,6 +1,6 @@
 // Turning stored email HTML into readable text.
 //
-// Lives on its own rather than inside lib/outreach.ts because two things need it and they
+// Lives on its own rather than inside lib/outreach/outreach.ts because two things need it and they
 // must not import each other: outreach.ts reads sequences from the database, and
 // outreach-lint.ts is framework-free so a test can import it directly. Having the lint
 // reach into outreach.ts for this made a cycle between them.

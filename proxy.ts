@@ -18,7 +18,7 @@ export async function proxy(req: NextRequest) {
   const token = await getToken({
     req,
     secret: process.env.NEXTAUTH_SECRET,
-    // Must match `cookies.sessionToken.name` in lib/auth.ts — the default name would
+    // Must match `cookies.sessionToken.name` in lib/access/auth.ts — the default name would
     // never be found, and every request would look signed out.
     cookieName: 'growth-center.session-token',
   });

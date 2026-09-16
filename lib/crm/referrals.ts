@@ -9,7 +9,7 @@ import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow, type 
 // recorded at all, as free text inside the CRM's source string — "Ref by NG", 137 leads.
 // That string cannot be counted, cannot be thanked, and cannot be asked again.
 
-// The vocabulary lives in lib/referral-types.ts, which imports nothing, so the registry
+// The vocabulary lives in lib/crm/referral-types.ts, which imports nothing, so the registry
 // table can read it without dragging the `pg` driver into the browser bundle. Re-exported
 // here so a server caller has one place to import from.
 export {

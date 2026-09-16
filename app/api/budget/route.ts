@@ -40,7 +40,7 @@ export const PUT = route('settings:manage', async (user, req) => {
     }),
   );
 
-  // BudgetError (an over-committed envelope, say) becomes a 422 in lib/api.ts's route() —
+  // BudgetError (an over-committed envelope, say) becomes a 422 in lib/platform/api.ts's route() —
   // a rejected write is an answer to the request, not a server fault.
   const saved = await setEnvelope(
     {

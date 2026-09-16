@@ -1,7 +1,7 @@
 // Appendix C: what each word means in this application, and who decides.
 //
 // Pure, and importable from a client component — the page renders every field from here.
-// The owner override is read and written in lib/settings.ts, for the reason lib/kpi.ts
+// The owner override is read and written in lib/platform/settings.ts, for the reason lib/shared/kpi.ts
 // documents: a value import of a database-touching module from a client component
 // follows the chain into the `pg` driver and breaks the build.
 //
@@ -116,7 +116,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     agreement: 'differs',
     note:
       'There is no Deal_Type field in this CRM. Reading it as the manual describes is what produced ₹277m of "new business" for twelve months when the real figure is ₹135m — the filter matched the whole book. The naming convention is where this organisation actually records it.',
-    where: 'lib/deal-name.ts:101, lib/deal-origin.ts',
+    where: 'lib/pipeline/deal-name.ts:101, lib/pipeline/deal-origin.ts',
     defaultOwner: 'Akshay',
   },
   {
@@ -127,7 +127,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     manual: 'Acquisition spend (excluding hiring) ÷ qualified leads, by channel',
     agreement: 'not-computed',
     note:
-      'The denominator half is now done: hiring spend is excluded (G4, lib/campaign-objective.ts) and CPL is reported per channel rather than blended. The numerator is still blocked — nothing in this CRM records a consultation being booked.',
+      'The denominator half is now done: hiring spend is excluded (G4, lib/money/campaign-objective.ts) and CPL is reported per channel rather than blended. The numerator is still blocked — nothing in this CRM records a consultation being booked.',
     where: 'lib/metrics.ts — costPer inside readChannelPerformance',
     defaultOwner: 'Metrics layer',
   },
@@ -140,7 +140,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     agreement: 'differs',
     note:
       'Campaign_ID is null on all 27,458 leads, so the manual’s definition would report 0% for ever and be read as a broken metric rather than a missing Zoho field. Leads alone would also read 99.6% and be mistaken for the health of the channel table, which is drawn from a tenth of the revenue.',
-    where: 'lib/attribution.ts',
+    where: 'lib/money/attribution.ts',
     defaultOwner: 'Metrics layer',
   },
   {
@@ -174,7 +174,7 @@ export const GLOSSARY: GlossaryTerm[] = [
       'A rule firing: a deterministic query, compared against a stored threshold, returning its figures as evidence, with a proposed action. The model writes only the title and two sentences and may not use a figure that is not in the evidence. Eleven of the manual’s twenty-five rules are live.',
     manual: 'A rule firing, with bound evidence and a proposed action',
     agreement: 'agrees',
-    where: 'lib/insight-rules.ts, lib/ai.ts',
+    where: 'lib/insights/insight-rules.ts, lib/ai/ai.ts',
     defaultOwner: 'Growth Reviewer',
   },
   {
@@ -186,7 +186,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     agreement: 'differs',
     note:
       'No due date and no Zoho Projects task: there is no Projects integration, so a task written here would exist nowhere the work is actually tracked. The owner and the state machine are real.',
-    where: 'lib/insight-lifecycle.ts',
+    where: 'lib/insights/insight-lifecycle.ts',
     defaultOwner: 'Shweta',
   },
   {
@@ -198,7 +198,7 @@ export const GLOSSARY: GlossaryTerm[] = [
     agreement: 'not-computed',
     note:
       'A pre-review of the manual’s kind needs a controlled corpus to check claims against, and there is none. The linter is the half that can be done without one, because it checks shape rather than truth.',
-    where: 'lib/outreach-lint.ts',
+    where: 'lib/outreach/outreach-lint.ts',
     defaultOwner: 'Growth Reviewer',
   },
 ];

@@ -2,9 +2,9 @@ import { hasDb } from './prisma.ts';
 
 /**
  * The pure decision behind every `/api/cron/*` route's auth check: no NextResponse, so it
- * can be unit-tested with bare Node the way `route()` in lib/api.ts cannot be (see
+ * can be unit-tested with bare Node the way `route()` in lib/platform/api.ts cannot be (see
  * tools/api.test.ts's comment on that same limitation — next/server does not resolve
- * outside a Next.js build). `cronGuard` in lib/cron-auth.ts wraps this for actual routes.
+ * outside a Next.js build). `cronGuard` in lib/platform/cron-auth.ts wraps this for actual routes.
  *
  * Refuses to run when CRON_SECRET is unset, rather than running openly. The alternative —
  * treating a missing secret as "no auth configured, allow it" — turns one forgotten env

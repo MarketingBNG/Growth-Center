@@ -28,7 +28,7 @@
  * check belongs with the pre-review passes in K8, built against the eval set, where a
  * false rejection shows up as a failing probe instead of as a silently dropped insight.
  *
- * A failure is not fatal. lib/ai.ts already falls back to the rule's own wording when the
+ * A failure is not fatal. lib/ai/ai.ts already falls back to the rule's own wording when the
  * model is unreachable, and that fallback is the right answer here too: worse prose,
  * exactly as true.
  */

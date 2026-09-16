@@ -75,7 +75,7 @@ export type AssetUnderReview = {
 /**
  * An unresolved token, an empty subject, or a bracketed placeholder. §21.4's second item.
  *
- * Deliberately the same shapes lib/outreach-lint.ts already refuses, because a placeholder
+ * Deliberately the same shapes lib/outreach/outreach-lint.ts already refuses, because a placeholder
  * that passes one gate and fails the other is a gate somebody learns to route around.
  */
 const PLACEHOLDER = /\{\{[^}]*\}\}|\[[A-Z][A-Za-z ]{2,}\]|\bTBD\b|\bXXX+\b|\bLorem ipsum\b/;
@@ -320,7 +320,7 @@ export async function canScale(now = new Date()): Promise<{ allowed: boolean; re
  * Appendix C's third refusal: "no cold send to a client or referral partner."
  *
  * Exported beside `canScale` for the same reason — the outreach screens need to check it
- * before offering the button, not only after it is pressed. lib/outreach.ts enforces it
+ * before offering the button, not only after it is pressed. lib/outreach/outreach.ts enforces it
  * at sign-off; this is the reading of it.
  */
 export async function sequencesBreachingSuppression() {

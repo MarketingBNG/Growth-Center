@@ -23,7 +23,7 @@ import { GLOSSARY_SLUGS, ownerKey, parseOwner } from '../shared/glossary.ts';
 
 // Workspace preferences. One row per key in app_setting, read as a block.
 //
-// Kept apart from lib/currency.ts on purpose: that file is pure and importable from a
+// Kept apart from lib/shared/currency.ts on purpose: that file is pure and importable from a
 // client component, this one touches the database.
 
 const CURRENCY_KEY = 'currency';
@@ -101,7 +101,7 @@ export const currencySettings = cached('settings:currency', [TAGS.settings], rea
 //
 // §20.5: "Thresholds live in a config table, editable by Shweta with the change
 // recorded. They are never hard-coded and never decided by the model." What each one
-// means and what it defaults to is in lib/thresholds.ts, which is pure so the settings
+// means and what it defaults to is in lib/shared/thresholds.ts, which is pure so the settings
 // card can render it; the reading and writing are here, with the rest of app_setting.
 
 /**
@@ -188,7 +188,7 @@ export async function saveThreshold(key: ThresholdKey, value: unknown): Promise<
 /**
  * Who sits at each insight desk. §5.2, the half that is a fact about the team.
  *
- * Here rather than in lib/insight-owners.ts because that module is imported by the
+ * Here rather than in lib/insights/insight-owners.ts because that module is imported by the
  * Settings card, which is a client component: the desks and the routing are pure, and
  * anything reading them out of the database has to live on this side of the line.
  */

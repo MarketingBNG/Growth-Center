@@ -4,7 +4,7 @@
  * Split from the store half beside it because the two are different jobs behind one
  * import: everything here is pure -- headers, dates, slots, rows, the block layout the
  * firm's own sheets use -- and touches no database. That is worth keeping true. It means
- * this half can be exercised by bare node the way lib/list-query.ts is, without a Prisma
+ * this half can be exercised by bare node the way lib/platform/list-query.ts is, without a Prisma
  * client being dragged in behind it.
  *
  * lib/content-calendar.ts re-exports both halves, so nothing that imports it changes.

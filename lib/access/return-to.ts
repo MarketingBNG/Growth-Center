@@ -1,7 +1,7 @@
 /**
  * Where to send someone after they sign in, from the `?from=` the proxy set.
  *
- * Its own module rather than part of lib/auth.ts, for the reason lib/kpi.ts is separate
+ * Its own module rather than part of lib/access/auth.ts, for the reason lib/shared/kpi.ts is separate
  * from lib/metrics.ts: auth.ts builds the NextAuth config at import time, so nothing can
  * import it to test — and this is a validation boundary that has to be tested.
  *

@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 /**
  * The busy/error state around a mutation, that most client components in app/(app) built
- * by hand around lib/fetcher's api(): set busy, clear the last error, run the call, catch
+ * by hand around lib/shared/fetcher's api(): set busy, clear the last error, run the call, catch
  * a failure into the error state, always clear busy. One copy here rather than thirty —
  * see the components that use it for what still varies (the request itself, and what
  * happens on success).

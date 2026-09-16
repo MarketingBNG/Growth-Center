@@ -24,7 +24,7 @@ type Summary = {
 /**
  * Uploads a month's calendar.
  *
- * Not through `lib/fetcher`'s `api()`: that serialises a JSON body, and this sends a file
+ * Not through `lib/shared/fetcher`'s `api()`: that serialises a JSON body, and this sends a file
  * as multipart. The error shape is read the same way, so a refusal from the route reads
  * the same here as everywhere else.
  *

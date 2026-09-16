@@ -22,7 +22,7 @@ export const POST = route<unknown, Ctx>('crm:write', async (user, req, ctx) => {
   const { id } = await ctx.params;
   const input = body.parse(await req.json());
 
-  // MergeError becomes a 422 in lib/api.ts's route(): "already resolved" and "company
+  // MergeError becomes a 422 in lib/platform/api.ts's route(): "already resolved" and "company
   // merges are not automated" are both answers to the request, not server faults.
   if (input.action === 'merge') {
     const merged = await mergeDuplicate(id, user.email);

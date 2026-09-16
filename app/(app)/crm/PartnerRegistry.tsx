@@ -10,7 +10,7 @@ import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/tabl
 import { EmptyState, ErrorBanner } from '@/components/patterns/state';
 import { api } from '@/lib/shared/fetcher';
 import { fmtNumber, fmtRelative } from '@/lib/shared/format';
-// From referral-types, not referrals: the latter imports lib/prisma, and a value read
+// From referral-types, not referrals: the latter imports lib/platform/prisma, and a value read
 // from there pulls the `pg` driver into the browser bundle.
 import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/crm/referral-types';
 import { useApiAction } from '@/lib/shared/use-api-action';

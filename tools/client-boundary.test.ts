@@ -7,7 +7,7 @@ import { join } from 'node:path';
 // Guards the server/client boundary.
 //
 // This has bitten three times: a 'use client' component imported a constant from a
-// module that also imports lib/prisma, webpack followed the chain into the `pg` driver,
+// module that also imports lib/platform/prisma, webpack followed the chain into the `pg` driver,
 // and the build died on "Can't resolve 'fs'" — or worse, dev returned 500 on every
 // route while the production build passed clean.
 //
@@ -43,7 +43,7 @@ function resolve(from: string, spec: string): string | null {
  * Every lib module that can reach the database, worked out by following imports.
  *
  * This used to be a hand-written list of sixteen names, and the list is what let the next
- * one through: `lib/referrals.ts` was added, a client component imported a constant from
+ * one through: `lib/crm/referrals.ts` was added, a client component imported a constant from
  * it, and the production build died on "Can't resolve fs" — after the type checker, the
  * linter and all 725 tests had passed clean. A list that has to be remembered is a list
  * that will be wrong the day it matters.
@@ -90,7 +90,7 @@ function serverOnly(): Set<string> {
   const tainted = new Set<string>();
 
   // Fixed point. Cheap at this size and immune to import order, which a single pass is
-  // not — lib/a importing lib/b importing lib/prisma would otherwise depend on which of
+  // not — lib/a importing lib/b importing lib/platform/prisma would otherwise depend on which of
   // the two the directory listing reached first.
   let changed = true;
   while (changed) {
@@ -174,7 +174,7 @@ test("no 'use client' file imports a server-only module", () => {
 
     for (const bad of SERVER_ONLY) {
       const specifier = `@/${bad}`;
-      // Anchored on the closing quote so @/lib/api does not flag @/lib/apikeys.
+      // Anchored on the closing quote so @/lib/platform/api does not flag @/lib/apikeys.
       const pattern = new RegExp(`from ['"]${specifier}(\\.ts)?['"]`);
       if (pattern.test(source)) {
         offenders.push(`${file.slice(ROOT.length + 1)} imports ${specifier}`);
@@ -191,7 +191,7 @@ test("no 'use client' file imports a server-only module", () => {
 
 test('a client-safe module only reaches other client-safe modules', () => {
   // The list is what the other tests trust, so it has to keep being true. The invariant
-  // is not "imports nothing" — lib/kpi imports lib/calc, and that is fine — it is that
+  // is not "imports nothing" — lib/shared/kpi imports lib/shared/calc, and that is fine — it is that
   // nothing on the list can reach the database, directly or through a neighbour.
   //
   // A type-only import is exempt: it is erased before the bundle exists.
@@ -282,7 +282,7 @@ test('no client component reaches a server-only module through another component
 // A scanner that silently returned nothing would make the test above vacuous: no
 // server-only modules means no offenders, every time.
 test('the import scan actually finds the modules that reach the database', () => {
-  assert.ok(SERVER_ONLY.includes('lib/metrics'), 'lib/metrics reaches lib/prisma');
+  assert.ok(SERVER_ONLY.includes('lib/metrics'), 'lib/metrics reaches lib/platform/prisma');
   assert.ok(SERVER_ONLY.includes('lib/leads/leads'));
   // The one that got through when this list was hand-written.
   assert.ok(SERVER_ONLY.includes('lib/crm/referrals'));
@@ -295,7 +295,7 @@ test('the import scan actually finds the modules that reach the database', () =>
   // has to be a module that is nested.
   assert.ok(
     SERVER_ONLY.includes('lib/integrations/writers/crm'),
-    'a module two directories deep still reaches lib/prisma',
+    'a module two directories deep still reaches lib/platform/prisma',
   );
 
   // …and that it is not simply flagging everything.

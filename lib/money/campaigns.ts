@@ -83,7 +83,7 @@ async function readCampaignPerformance(range: Range, channelId?: string) {
   // every record — so these columns cannot be computed for any campaign, ever, from the
   // data this app receives. Reported as 0 they read as "this campaign produced nothing",
   // which is a claim about the campaign; the truth is that nothing measured it. Same rule
-  // lib/calc.ts already applies to cost: unknown is never zero.
+  // lib/shared/calc.ts already applies to cost: unknown is never zero.
   const [anyLead, anyOpportunity, anyRevenue] = await Promise.all([
     db().lead.findFirst({ where: { campaignId: { not: null } }, select: { id: true } }),
     db().opportunity.findFirst({ where: { campaignId: { not: null } }, select: { id: true } }),

@@ -175,7 +175,7 @@ test('roleLabel gives every role a display name', () => {
 });
 
 test('canAdminister names exactly the roles that can reach the Team page', () => {
-  // The self-lockout and admin guards in lib/users.ts and the settings route both key
+  // The self-lockout and admin guards in lib/access/users.ts and the settings route both key
   // off this. It asks POLICY, not can(), so it stays true when tiers are switched on.
   assert.equal(canAdminister('owner'), true);
   assert.equal(canAdminister('admin'), false);

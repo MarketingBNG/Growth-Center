@@ -334,7 +334,7 @@ export async function sendDigest(baseUrl: string, now = new Date()): Promise<Dig
   }
 
   // Who signs and who triages. Read from the accounts rather than from a constant: the
-  // policy in lib/roles.ts already says approval is the owner's alone, and a second list
+  // policy in lib/access/roles.ts already says approval is the owner's alone, and a second list
   // here would be a second answer to the same question.
   const accounts = await db().appUser.findMany({
     where: { active: true },

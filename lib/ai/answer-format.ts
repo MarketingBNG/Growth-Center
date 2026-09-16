@@ -1,6 +1,6 @@
 // Groups the light markdown the model writes into blocks a renderer can walk.
 //
-// Split from the component for the same reason lib/list-query.ts is split from lib/api.ts:
+// Split from the component for the same reason lib/platform/list-query.ts is split from lib/platform/api.ts:
 // node --experimental-strip-types cannot load JSX, so a parser living in a .tsx file cannot
 // be unit-tested at all. The decisions are all here; the .tsx file only turns these blocks
 // into elements.

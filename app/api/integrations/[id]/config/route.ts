@@ -19,7 +19,7 @@ export const PATCH = route<unknown, Ctx>('integrations:manage', async (user, req
     await invalidate(TAGS.integrations);
     return { config: updated };
   } catch (e) {
-    // 422 here, deliberately not the 502 lib/api.ts's route() gives an uncaught
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
     // IntegrationError elsewhere: there, the vendor is refusing us; here, setConfig is
     // refusing the caller's own config value before any vendor is involved.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);

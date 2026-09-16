@@ -59,7 +59,7 @@ export type AttributionHealth = {
 /**
  * The threshold, and where it lives.
  *
- * Read through lib/thresholds.ts, which owns every threshold in the application and its
+ * Read through lib/shared/thresholds.ts, which owns every threshold in the application and its
  * default. This module had its own copy first — a default, a parser and a reader — and
  * two modules parsing one stored value is how they come to disagree about it: the older
  * parser here read `{percent}` while the newer store writes `{value}`, so a threshold
@@ -67,7 +67,7 @@ export type AttributionHealth = {
  *
  * `DEFAULT_THRESHOLD` and `parseThreshold` are re-exported because the settings route and
  * its tests already import them from here. The 70% judgement, and the reasoning behind
- * it, now sit in lib/thresholds.ts alongside the other nine.
+ * it, now sit in lib/shared/thresholds.ts alongside the other nine.
  */
 export const THRESHOLD_KEY = 'attribution.threshold';
 
@@ -147,7 +147,7 @@ const cachedCoverage = cached('metrics:attribution-coverage', [TAGS.metrics], re
  * The threshold is read outside the cache deliberately. Cached alongside the coverage it
  * went stale: a saved threshold did not reach either the card or the rule, because
  * `revalidateTag` does not drop an `unstable_cache` entry here — the same bug that made
- * lib/settings.ts read thresholds straight through. The measurement is expensive and
+ * lib/platform/settings.ts read thresholds straight through. The measurement is expensive and
  * barely moves; the setting is one indexed row and moves the moment somebody changes it.
  */
 export async function attributionHealth(from: Date, to: Date): Promise<AttributionHealth> {

@@ -6,7 +6,7 @@ import { pageQuery, pick } from '../lib/platform/query.ts';
 // The input-validation boundary shared by the API routes and the server components —
 // the code that turns a caller-supplied query string into database arguments.
 //
-// `route()` and `body()` are not here: they import next/server and lib/auth, which bare
+// `route()` and `body()` are not here: they import next/server and lib/access/auth, which bare
 // Node cannot resolve. Their auth path is covered end-to-end instead — an unauthenticated
 // /api/public/v1/leads answers 401 JSON, and the e2e suite signs in with a genuinely
 // signed cookie that still has to pass the roster check.

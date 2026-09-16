@@ -5,7 +5,7 @@ import { recordAudit } from '../platform/audit.ts';
 
 // The database half of §8.1: scanning for candidates, and acting on one.
 //
-// lib/duplicates.ts holds the rules and is pure. This holds the queries, the writes and
+// lib/crm/duplicates.ts holds the rules and is pure. This holds the queries, the writes and
 // the merge — which is the part that can destroy data, and is therefore the part with the
 // ordering argument in it.
 

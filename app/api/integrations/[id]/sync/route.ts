@@ -43,7 +43,7 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req
     after(() => driveSync(id, { days: 30, actorEmail: user.email }));
     return { started: true };
   } catch (e) {
-    // 422 here, deliberately not the 502 lib/api.ts's route() gives an uncaught
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
     // IntegrationError elsewhere: this can only throw before driveSync is scheduled
     // (nothing above it can fail once the closure is handed to after()), which means the
     // caller's own request was rejected, not a vendor.

@@ -98,7 +98,7 @@ export function packsDue(now: Date): Pack[] {
 /**
  * A report as plain text.
  *
- * Text for the reason lib/digest.ts gives: this is read on a phone between meetings, every
+ * Text for the reason lib/insights/digest.ts gives: this is read on a phone between meetings, every
  * client renders it identically, and there is nothing here a layout would clarify. The PDF
  * already exists on the Reports page for anyone who wants to circulate one.
  */

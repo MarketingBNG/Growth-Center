@@ -626,7 +626,7 @@ export async function segmentMix(range: { from: Date; to: Date }) {
         segment: r.segment,
         label: segmentLabel(r.segment),
         leads: r._count._all,
-        // 0 rather than lib/calc.ts's rate()'s null on an empty period: a mix chart with
+        // 0 rather than lib/shared/calc.ts's rate()'s null on an empty period: a mix chart with
         // no leads at all draws every segment at 0%, which is what an empty period looks
         // like here, not "unmeasured" — there is no reading of "no data" that this bar
         // chart could show instead.

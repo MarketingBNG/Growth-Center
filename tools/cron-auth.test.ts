@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cronCheck } from '../lib/platform/cron-check.ts';
 
-// Every /api/cron/* route delegates to lib/cron-auth.ts's cronGuard, which wraps this in
+// Every /api/cron/* route delegates to lib/platform/cron-auth.ts's cronGuard, which wraps this in
 // NextResponse.json — not tested here because next/server does not resolve under bare
-// Node (see tools/api.test.ts's comment on the same limitation for lib/api.ts's route()).
+// Node (see tools/api.test.ts's comment on the same limitation for lib/platform/api.ts's route()).
 // The decision logic is all here, in the module cronGuard itself only wraps.
 //
 // Fail-closed is the property that matters: an unset secret must refuse, never allow.

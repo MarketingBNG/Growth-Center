@@ -1,6 +1,6 @@
 // Reading new-versus-repeat out of account history, for the deals whose names do not say.
 //
-// lib/deal-name.ts answers the question from the deal name, and answers it for 5,874 of
+// lib/pipeline/deal-name.ts answers the question from the deal name, and answers it for 5,874 of
 // 8,072 deals. The remaining 2,198 are named plainly — "TRAVEL GLIDERS LLC", "AASIM" —
 // with no counter to read. But every one of them is linked to a company or a contact, so
 // a second question is available: did this account already have a deal before this one?

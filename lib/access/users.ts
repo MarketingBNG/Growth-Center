@@ -1,5 +1,5 @@
 // The people table. Replaces the hand-maintained roster that used to live in
-// lib/roles.ts: rows appear here the first time someone signs in, so there is nothing
+// lib/access/roles.ts: rows appear here the first time someone signs in, so there is nothing
 // to keep in sync and no way for an empty list to lock the team out.
 //
 // Server-only — imports Prisma. Client components take users as props.
@@ -157,7 +157,7 @@ export async function renameUser(inputEmail: string, newName: string) {
  * Changes someone's role.
  *
  * Refuses to take the last way back in off an admin account. `role` is not enforced yet
- * (see ROLES_ENFORCED in lib/roles.ts), so this guard protects a future state rather than
+ * (see ROLES_ENFORCED in lib/access/roles.ts), so this guard protects a future state rather than
  * today's — which is the point of setting the roles up before switching tiers on, and the
  * reason the check asks POLICY rather than can().
  */

@@ -27,13 +27,13 @@ export type ReportContext = {
 export const moneyIn = (settings: CurrencySettings) => (n: number | null) =>
   n === null ? '—' : `${symbolOf(settings.reporting)}${Math.round(n).toLocaleString('en-US')}`;
 export const int = (n: number | null) => (n === null ? '—' : n.toLocaleString('en-US'));
-// Not fmtPercent from lib/format.ts: that picks its own precision (2 places under 1%,
+// Not fmtPercent from lib/shared/format.ts: that picks its own precision (2 places under 1%,
 // otherwise 1), and every call site here already names the precision it wants — a report
 // is printed once and read cold, without the adaptive rounding a live screen benefits
 // from. int and moneyIn diverge from fmtNumber/fmtMoney the same way, for the same
 // reporting-currency and no-decimals reasons documented where they are used.
 export const pct = (n: number | null, d = 1) => (n === null ? '—' : `${n.toFixed(d)}%`);
-// fmtRatio from lib/format.ts is the same rendering — "n.toFixed(2)×", "—" for null — so
+// fmtRatio from lib/shared/format.ts is the same rendering — "n.toFixed(2)×", "—" for null — so
 // this reuses it rather than keeping a second copy.
 export const ratio = fmtRatio;
 

@@ -6,7 +6,7 @@
 // Separate from `npm test` on purpose, and the reason is money rather than tidiness. Two
 // of the six probe families need a real model call, so the full set costs a fraction of a
 // rupee per run — trivial once before a release, wrong to charge for on every save. The
-// deterministic checks underneath live in lib/eval-checks.ts and are unit-tested in
+// deterministic checks underneath live in lib/ai/eval-checks.ts and are unit-tested in
 // `npm test` like anything else, so the checkers themselves are covered for free and the
 // paid run exercises the model against them.
 //

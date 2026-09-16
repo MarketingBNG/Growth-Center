@@ -26,8 +26,8 @@
  * as such, and never left sitting unowned in a queue."
  *
  * Pure, and importable from a client component — the Settings card renders every desk
- * from here. `ownerBindings` reads the stored half and lives in lib/settings.ts, for the
- * reason lib/insight-lifecycle.ts is kept apart from lib/insight-actions.ts: a value
+ * from here. `ownerBindings` reads the stored half and lives in lib/platform/settings.ts, for the
+ * reason lib/insights/insight-lifecycle.ts is kept apart from lib/insights/insight-actions.ts: a value
  * import of a database-touching module from a client component follows the chain into the
  * `pg` driver and breaks the build.
  */

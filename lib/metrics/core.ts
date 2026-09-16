@@ -50,7 +50,7 @@ import { bucketKey, liveDays, windowFor } from './window.ts';
  * null for it and the card simply omits the chip. The value itself is never touched —
  * only the claim about how it changed.
  *
- * Which series feeds which card lives in lib/kpi.ts, where it can be unit-tested.
+ * Which series feeds which card lives in lib/shared/kpi.ts, where it can be unit-tested.
  */
 /**
  * When each series begins, and which systems wrote it.
@@ -204,7 +204,7 @@ export async function comparableDeltas(cards: Kpi[], current: Range, previous: R
  * distinct keys still cost seven queries; it is the repeats that go.
  *
  * Note this dedupes per render, not across requests — that is what the tag cache in
- * lib/cache.ts is for. The two stack: `cache` collapses the duplicates within one page,
+ * lib/platform/cache.ts is for. The two stack: `cache` collapses the duplicates within one page,
  * `cached` keeps the result between pages.
  *
  * Only the reads taking no arguments or a primitive one are wrapped. React's cache keys
@@ -497,7 +497,7 @@ export async function funnel(range: Range, channelId?: string) {
     visitors,
     leads,
     /** Of those, the ones that arrived through the measured website. The numerator
-     *  `visitorToLead` divides by sessions; see lib/web-leads.ts for why every lead is
+     *  `visitorToLead` divides by sessions; see lib/analytics/web-leads.ts for why every lead is
      *  the wrong one. */
     webLeads,
     semiQualified,
@@ -549,7 +549,7 @@ export async function funnel(range: Range, channelId?: string) {
     // had earned ₹0 from ₹406,737 and won nobody. Reports showed both figures at once
     // and contradicted itself.
     //
-    // This is the rule lib/calc.ts already applies in the other direction: revenue that
+    // This is the rule lib/shared/calc.ts already applies in the other direction: revenue that
     // no spend can be shown to have produced is not a return on that spend, the same way
     // leads with no tracked spend have an unknown cost rather than a zero one. When paid
     // revenue is zero the ratio is an honest 0x; when nothing was won `cac` returns null
@@ -629,7 +629,7 @@ export async function openPipeline(now = new Date()) {
 /**
  * What the New business card leaves out, said in money.
  *
- * The split is read from the deal-naming convention (lib/deal-name.ts), and a quarter of
+ * The split is read from the deal-naming convention (lib/pipeline/deal-name.ts), and a quarter of
  * the deals do not carry it. Naming that share here is the difference between a figure a
  * partner can quote and one they will be caught out by.
  */
@@ -1074,7 +1074,7 @@ export type ChannelRow = Awaited<ReturnType<typeof channelPerformance>>[number];
 
 /** An outbound touch. A status flip to `contacted` is not one — someone can change a
  *  dropdown without ever having contacted the lead. */
-// Exported so lib/speed-to-lead.ts measures the same event this does. Two definitions of
+// Exported so lib/analytics/speed-to-lead.ts measures the same event this does. Two definitions of
 // "an outbound touch" would put two different response figures on two screens.
 export const CONTACT_TYPES = ['email', 'call', 'meeting'] as const;
 

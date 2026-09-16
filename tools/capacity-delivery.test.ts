@@ -34,7 +34,7 @@ test('nothing infers a ceiling from the load', () => {
   const source = libSource('capacity');
   assert.match(source, /const ceiling = setting\.monthlyConsultations;/);
   // Utilisation is null with no ceiling rather than being computed against the load.
-  // rate() (lib/calc.ts) already returns null for a zero denominator, so only the
+  // rate() (lib/shared/calc.ts) already returns null for a zero denominator, so only the
   // "nobody has set one" case needs its own guard here.
   assert.match(source, /ceiling === null \? null : rate\(booked, ceiling\)/);
 });

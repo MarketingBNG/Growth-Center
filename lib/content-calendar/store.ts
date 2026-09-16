@@ -294,7 +294,7 @@ export async function importCalendar(input: {
   // and neither fits a hosted Postgres: acquiring a connection from a serverless compute
   // that has been idle takes longer than two seconds, which is how this first failed —
   // P2028, "unable to start a transaction in the given time", before a single row was
-  // read. The same numbers lib/ai.ts arrived at for the same reason.
+  // read. The same numbers lib/ai/ai.ts arrived at for the same reason.
   { timeout: 30_000, maxWait: 10_000 });
 
   await recordAudit({

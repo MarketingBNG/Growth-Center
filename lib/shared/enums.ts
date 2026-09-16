@@ -1,6 +1,6 @@
 // Values shared by client components and server code.
 //
-// Kept out of lib/leads.ts on purpose: that module imports lib/prisma, so a client
+// Kept out of lib/leads/leads.ts on purpose: that module imports lib/platform/prisma, so a client
 // component importing a constant from it pulled the `pg` driver into the browser
 // bundle and the build failed on node:net. Anything a 'use client' file needs belongs
 // here, where there are no imports at all.
@@ -19,7 +19,7 @@ export const TASK_STATUSES = ['open', 'in_progress', 'done', 'cancelled'] as con
  * §15.3, in order: "Idea -> Brief -> Draft -> Technical check -> Proofread and brand ->
  * Partner approval -> Scheduled -> Published -> Repurposed."
  *
- * The order is the point. It is what `canMoveTo` in lib/content.ts enforces, and the
+ * The order is the point. It is what `canMoveTo` in lib/content/content.ts enforces, and the
  * three states that were missing are the three the manual cares about most: the technical
  * check and the proofread are two separately recorded steps rather than one habit called
  * "review", and `repurposed` marks an item that has produced children.
@@ -83,8 +83,8 @@ export const RANGE_OPTIONS = [
   { value: '365', label: 'Last 12 months' },
 ] as const;
 
-/** Prompts offered on the AI Insights page. Here rather than in lib/ai because AskBox
- *  is a client component and lib/ai imports the database. */
+/** Prompts offered on the AI Insights page. Here rather than in lib/ai/ai because AskBox
+ *  is a client component and lib/ai/ai imports the database. */
 export const SUGGESTED_QUESTIONS = [
   'Which channel produces our highest-quality customers, and what is the evidence?',
   'Which campaigns have the best and worst return, and by how much?',
@@ -94,7 +94,7 @@ export const SUGGESTED_QUESTIONS = [
 ] as const;
 
 /** The four kinds an insight can be, matching the InsightKind enum in the schema. Here so
- *  the structured-output schema in lib/ai.ts and the badges that render them cannot drift
+ *  the structured-output schema in lib/ai/ai.ts and the badges that render them cannot drift
  *  apart from each other. */
 export const INSIGHT_KINDS = ['opportunity', 'risk', 'anomaly', 'recommendation'] as const;
 

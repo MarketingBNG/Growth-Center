@@ -1,7 +1,7 @@
 // The insight lifecycle: the states, and what may follow what.
 //
-// Pure, and importable from a client component. Kept apart from lib/insight-actions.ts
-// for the same reason lib/kpi.ts is kept apart from lib/metrics.ts: that file touches the
+// Pure, and importable from a client component. Kept apart from lib/insights/insight-actions.ts
+// for the same reason lib/shared/kpi.ts is kept apart from lib/metrics.ts: that file touches the
 // database, so a value import of it from a client component follows the chain into the
 // `pg` driver and breaks the build — which is exactly what happened when the buttons on
 // /ai first read their labels from there.

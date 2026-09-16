@@ -97,7 +97,7 @@ export default async function AdsPage({
   ]
     .map((p) => ({
       ...p,
-      // Through lib/calc's `rate`, not by hand: it returns percentage units, which is
+      // Through lib/shared/calc's `rate`, not by hand: it returns percentage units, which is
       // what fmtPercent here expects. Divided raw, Meta Ads read 0.00% CTR beside a
       // total of 0.37% computed from the same two numbers.
       ctr: rate(p.clicks, p.impressions),

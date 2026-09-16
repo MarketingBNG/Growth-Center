@@ -34,7 +34,7 @@ configured" state rather than a stack trace, and `/api/health` reports exactly w
 missing.
 
 Sign-in requires a Google account on an allowed domain **and** on the roster in
-[lib/roles.ts](lib/roles.ts). There is no password and no local bypass.
+[lib/access/roles.ts](lib/access/roles.ts). There is no password and no local bypass.
 
 ```
 npm run dev        # dev server
@@ -103,14 +103,14 @@ Two rules keep this navigable: **route handlers contain no logic**, and **`lib/*
 imports from `next`**.
 
 A third rule the build enforces: anything a `'use client'` component imports must not
-reach `lib/prisma`. Shared constants live in [lib/enums.ts](lib/enums.ts) and pure
-arithmetic in [lib/calc.ts](lib/calc.ts) — both import nothing. Importing a constant
+reach `lib/platform/prisma`. Shared constants live in [lib/shared/enums.ts](lib/shared/enums.ts) and pure
+arithmetic in [lib/shared/calc.ts](lib/shared/calc.ts) — both import nothing. Importing a constant
 from a db-touching module once pulled the Postgres driver into the browser bundle.
 
 ## Access control
 
 Single-tenant. This is BNG's own tool, so there is no organisation or workspace layer —
-[lib/roles.ts](lib/roles.ts) is the roster, the permission source **and** the sign-in
+[lib/access/roles.ts](lib/access/roles.ts) is the roster, the permission source **and** the sign-in
 allow-list. Deleting a line revokes that person's access on their next request.
 
 Permissions resolve through one `POLICY` table, so adding a role or a capability is an

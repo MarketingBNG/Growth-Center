@@ -2,10 +2,10 @@ import { z } from 'zod';
 
 // The list/pagination/sort contract, split out of lib/api.ts.
 //
-// Everything here is pure and imports nothing but zod. lib/api.ts imports `next/server`
+// Everything here is pure and imports nothing but zod. lib/platform/api.ts imports `next/server`
 // for NextResponse, which bare Node cannot resolve — so while these lived there, neither
-// they nor lib/query.ts could be unit-tested, despite being the boundary that turns
-// caller-supplied query strings into database arguments. lib/api.ts re-exports all of it,
+// they nor lib/platform/query.ts could be unit-tested, despite being the boundary that turns
+// caller-supplied query strings into database arguments. lib/platform/api.ts re-exports all of it,
 // so route handlers keep importing from '@/lib/platform/api' unchanged.
 
 export const listQuery = z.object({

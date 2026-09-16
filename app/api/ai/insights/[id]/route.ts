@@ -25,14 +25,14 @@ export const PATCH = route<unknown, Ctx>('ai:run', async (user, req, ctx) => {
 
   // The one transition that is a signature rather than a move. `ai:run` is what the rest
   // of the lifecycle needs — anyone working the queue may review, assign and close — but
-  // §5.1 gives approval to one identity, and lib/roles.ts has carried an `approve`
+  // §5.1 gives approval to one identity, and lib/access/roles.ts has carried an `approve`
   // permission since the policy was written with a note saying nothing called it. This is
   // the call site.
   if (input.status === APPROVAL_STATE && !can(user.role, 'approve')) {
     throw new HttpError(403, 'Only the approver can sign a finding off.');
   }
 
-  // TransitionError becomes a 422 in lib/api.ts's route(): a refused transition is the
+  // TransitionError becomes a 422 in lib/platform/api.ts's route(): a refused transition is the
   // domain working, and the message is the one the rule wrote — it says which
   // requirement was missed.
   const result = await setInsightStatus(

@@ -25,7 +25,7 @@ export const POST = route<unknown, Ctx>('approve', async (user, req, ctx) => {
     ]),
   );
 
-  // ApprovalError becomes a 422 in lib/api.ts's route(): approving or returning a piece
+  // ApprovalError becomes a 422 in lib/platform/api.ts's route(): approving or returning a piece
   // that is not awaiting approval is a refusal, not a server fault.
   const result =
     input.decision === 'approve'

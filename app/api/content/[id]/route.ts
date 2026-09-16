@@ -22,7 +22,7 @@ export const PATCH = route<unknown, Ctx>('content:write', async (user, req, ctx)
   const { id } = await ctx.params;
   const { status, ...fields } = await body(req, patchBody);
 
-  // ApprovalError and WorkflowError become 422s in lib/api.ts's route(): publishing an
+  // ApprovalError and WorkflowError become 422s in lib/platform/api.ts's route(): publishing an
   // unapproved piece, or skipping a step, is a refusal the caller can act on, not a
   // server fault. The message names which of the two reasons it was — "edited since
   // approval" and "never approved" call for different next steps.

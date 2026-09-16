@@ -114,7 +114,7 @@ export function resolveRange(params: PageParams): ResolvedRange {
 /**
  * A period, as every metric function takes one.
  *
- * Here rather than in lib/metrics.ts because lib/attribution.ts needs the window
+ * Here rather than in lib/metrics.ts because lib/money/attribution.ts needs the window
  * arithmetic and lib/metrics.ts already imports lib/attribution.ts. Date maths has no
  * business creating an import cycle, and a second copy of it in the other module is how
  * two parts of one product come to disagree about where a year starts.

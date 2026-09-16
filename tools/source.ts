@@ -2,7 +2,7 @@
 //
 // Twenty-five tests in this directory read a module as text and assert on what is in it —
 // that a rule still reads the threshold it claims to, that a page still hides owner names.
-// Every one of them located its target with a literal like readFileSync('lib/ai.ts'),
+// Every one of them located its target with a literal like readFileSync('lib/ai/ai.ts'),
 // which the type checker cannot see and which stops being true the moment a file moves.
 //
 // The failure that matters is not the loud one. A missing file throws, and somebody fixes
@@ -44,7 +44,7 @@ let index: Index | null = null;
 /**
  * Every module under lib/, indexed twice: by its path relative to lib/, and by basename.
  *
- * Kept apart rather than in one map, because they collide. `lib/leads.ts` and
+ * Kept apart rather than in one map, because they collide. `lib/leads/leads.ts` and
  * `lib/reports/leads.ts` both have the basename "leads", but "leads" is also the exact
  * path of the first — so a single map would call an unambiguous name ambiguous.
  */

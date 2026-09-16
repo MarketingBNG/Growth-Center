@@ -43,7 +43,7 @@ import type { InsightKind } from '../shared/enums.ts';
 //     CPQL over/under target      `qualifiedAt` means converted here; Zoho Bookings is
 //                                 not integrated, so the numerator has no signal at all.
 //     Lead quality drop           [built 5 Sep] Lead.score now carries a deterministic
-//                                 0-100 (lib/lead-score.ts), so this is live as
+//                                 0-100 (lib/leads/lead-score.ts), so this is live as
 //                                 `lead_quality_below_floor` — per channel, because
 //                                 campaignId is still null on every lead.
 //     Commercial keyword drop     Rankings are stored; nothing marks a term commercial.

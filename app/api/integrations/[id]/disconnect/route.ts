@@ -11,7 +11,7 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req
     await invalidate(TAGS.integrations);
     return result;
   } catch (e) {
-    // 422 here, deliberately not the 502 lib/api.ts's route() gives an uncaught
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
     // IntegrationError elsewhere: disconnecting an id nothing recognises is the caller
     // asking for something that does not exist, not a vendor refusing a write.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);

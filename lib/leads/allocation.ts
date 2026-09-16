@@ -1,6 +1,6 @@
 // Equal distribution of untouched leads across the people who work them.
 //
-// Deterministic on purpose, for the same reason pickOwner() in lib/automation.ts is:
+// Deterministic on purpose, for the same reason pickOwner() in lib/leads/automation.ts is:
 // dividing leads between people is arithmetic, and arithmetic somebody has to be able to
 // check when they are the one losing forty leads. A model asked the same question answers
 // differently each run, cannot be unit-tested, and bills tokens for long division.
@@ -421,7 +421,7 @@ export async function ownerWorkload(): Promise<OwnerWorkload[]> {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   // Four grouped counts in one round trip rather than four sequential ones — the same
-  // reason pickOwner() in lib/automation.ts pairs its two reads.
+  // reason pickOwner() in lib/leads/automation.ts pairs its two reads.
   const [untouched, openLeads, notReachable, active] = await Promise.all([
     client.lead.groupBy({
       by: ['ownerEmail'],

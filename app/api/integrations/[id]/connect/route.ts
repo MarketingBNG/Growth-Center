@@ -33,7 +33,7 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, req,
     await invalidate(TAGS.integrations);
     return { ok: true };
   } catch (e) {
-    // 422 here, deliberately not the 502 lib/api.ts's route() gives an uncaught
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
     // IntegrationError elsewhere: a missing or malformed API key is the caller's own
     // input being rejected, not a vendor refusing a write.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);
