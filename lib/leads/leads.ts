@@ -20,12 +20,13 @@ import { LEAD_SEGMENTS, segmentLabel } from './lead-segment.ts';
 import { LOST_REASONS, lostReasonLabel } from './lead-lost-reason.ts';
 import { INTERNAL_SOURCE } from '../shared/sources.ts';
 import { phoneMatches } from '../crm/phone.ts';
+import { email } from '../platform/fields.ts';
 
 
 export const leadInput = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().max(80).optional(),
-  email: z.string().trim().email().max(200).optional(),
+  email: email().optional(),
   phone: z.string().trim().max(40).optional(),
   companyName: z.string().trim().max(160).optional(),
   title: z.string().trim().max(120).optional(),
@@ -33,7 +34,7 @@ export const leadInput = z.object({
   sourceType: z.enum(SOURCE_TYPES).default('manual'),
   campaignId: recordId.optional(),
   channelId: recordId.optional(),
-  ownerEmail: z.string().trim().email().optional(),
+  ownerEmail: email().optional(),
   utmSource: z.string().trim().max(120).optional(),
   utmMedium: z.string().trim().max(120).optional(),
   utmCampaign: z.string().trim().max(160).optional(),

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { SPEC } from './timeouts';
 
 // The calendar writes ?from=&to= and six pages had to be taught to honour them. A picker
 // that quietly changes nothing on five of the pages it appears on is worse than no picker,
@@ -12,6 +13,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 
 test('picking a start and an end puts both dates in the URL', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics');
   await page.click(PILL);
 
@@ -52,6 +54,7 @@ test('picking a start and an end puts both dates in the URL', async ({ page }) =
 });
 
 test('choosing a preset afterwards clears the hand-picked dates', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics?from=2026-07-01&to=2026-07-15');
   await page.getByRole('button', { name: '7 days' }).click();
 
@@ -61,6 +64,7 @@ test('choosing a preset afterwards clears the hand-picked dates', async ({ page 
 });
 
 test('the pill shows the hand-picked window, not the preset', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics?from=2026-07-01&to=2026-07-15');
   await expect(page.locator(PILL)).toContainText('Jul 1 – Jul 15, 2026');
 });

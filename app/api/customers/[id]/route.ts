@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { route, type Ctx } from '@/lib/platform/api';
+import { body as readBody, route, type Ctx } from '@/lib/platform/api';
 import { db } from '@/lib/platform/prisma';
 import { TAGS, invalidate } from '@/lib/platform/cache';
 
@@ -24,7 +24,7 @@ const date = (v: string | null | undefined) => (v === undefined ? undefined : v 
 
 export const PATCH = route<unknown, Ctx>('crm:write', async (_user, req, ctx) => {
   const { id } = await ctx.params;
-  const input = body.parse(await req.json());
+  const input = await readBody(req, body);
 
   const updated = await db().customer.update({
     where: { id },

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { route, type Ctx } from '@/lib/platform/api';
+import { body as readBody, route, type Ctx } from '@/lib/platform/api';
 import { dismissDuplicate, mergeDuplicate, unmergeDuplicate } from '@/lib/crm/duplicate-queue';
 import { TAGS, invalidate } from '@/lib/platform/cache';
 
@@ -20,7 +20,7 @@ const body = z.discriminatedUnion('action', [
 
 export const POST = route<unknown, Ctx>('crm:write', async (user, req, ctx) => {
   const { id } = await ctx.params;
-  const input = body.parse(await req.json());
+  const input = await readBody(req, body);
 
   // MergeError becomes a 422 in lib/platform/api.ts's route(): "already resolved" and "company
   // merges are not automated" are both answers to the request, not server faults.

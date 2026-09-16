@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The channel filter is supposed to scope the whole page, not just the campaign table.
 // It used to narrow the table while the band above it still showed the whole business, so
@@ -18,8 +19,8 @@ test('the channel filter scopes the band and the trend, not just the table', asy
   });
   page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
 
-  await page.goto('/marketing', { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForSelector('nav a', { timeout: 60_000 });
+  await page.goto('/marketing', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
 
   const main = page.locator('main');

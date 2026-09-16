@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // Refining the view you are on must not throw you back to the page heading. Next scrolls
 // to the top on every navigation unless told otherwise, and the filters navigate.
@@ -9,8 +10,8 @@ import { signIn } from './auth';
 // page, so a clicked filter would report a scroll reset that the app did not cause.
 
 async function scrolledTasksPage(page: import('@playwright/test').Page) {
-  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 120_000 });
+  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(1200);
   await page.getByPlaceholder(/task title/i).fill('a');
   await page.mouse.wheel(0, 1200);
@@ -38,8 +39,8 @@ test('applying a filter keeps your place on the page', async ({ page, context, b
 test('sorting a column keeps your place too', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/leads', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 120_000 });
+  await page.goto('/leads', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(1200);
   await page.mouse.wheel(0, 1200);
   await page.waitForTimeout(500);

@@ -1,4 +1,4 @@
-import { route, type Ctx } from '@/lib/platform/api';
+import { body, route, type Ctx } from '@/lib/platform/api';
 import { partnerEvent, recordPartnerEvent } from '@/lib/crm/referrals';
 
 /**
@@ -10,7 +10,7 @@ import { partnerEvent, recordPartnerEvent } from '@/lib/crm/referrals';
  */
 export const POST = route<unknown, Ctx>('crm:write', async (_user, req, ctx) => {
   const { id } = await ctx.params;
-  const { event, at } = partnerEvent.parse(await req.json());
+  const { event, at } = await body(req, partnerEvent);
   await recordPartnerEvent(id, event, at ? new Date(at) : undefined);
   return { id, event };
 });

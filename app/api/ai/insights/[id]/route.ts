@@ -4,6 +4,7 @@ import { HttpError } from '@/lib/access/auth';
 import { APPROVAL_STATE, INSIGHT_STATUSES } from '@/lib/insights/insight-lifecycle';
 import { setInsightStatus } from '@/lib/insights/insight-actions';
 import { can } from '@/lib/access/roles';
+import { email } from '@/lib/platform/fields';
 
 // Moving a finding through its lifecycle: proposed → reviewed → approved → assigned →
 // in progress → done, or dismissed with a reason at almost any point.
@@ -18,7 +19,7 @@ export const PATCH = route<unknown, Ctx>('ai:run', async (user, req, ctx) => {
     req,
     z.object({
       status: z.enum(INSIGHT_STATUSES),
-      ownerEmail: z.string().trim().email().optional().nullable(),
+      ownerEmail: email().optional().nullable(),
       reviewNote: z.string().trim().max(1000).optional().nullable(),
     }),
   );

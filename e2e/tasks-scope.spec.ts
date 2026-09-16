@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The Tasks page shows work owned by people who have opened Growth Center. Zoho carries
 // far more, owned by accounts that never sign in here, and the page must both hold those
@@ -25,13 +26,13 @@ test('tasks are scoped to people who have signed in', async ({ page, context, ba
       return { count: pager ? Number(pager[1].replace(/,/g, '')) : null, owners, notice };
     });
 
-  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(1200);
   const scoped = await read();
 
-  await page.goto('/tasks?assigneeEmail=everyone', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/tasks?assigneeEmail=everyone', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(1200);
   const all = await read();
 

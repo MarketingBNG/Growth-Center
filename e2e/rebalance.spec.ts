@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // Preview only. Never clicks Apply: that writes to the live Zoho account and reassigns
 // real leads belonging to real people.
@@ -18,9 +19,9 @@ test('the Rebalance preview renders the real split', async ({ page, context, bas
   });
 
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' }).catch(() => {});
-  await page.goto('/leads', { waitUntil: 'domcontentloaded', timeout: 120_000 });
+  await page.goto('/leads', { waitUntil: 'domcontentloaded', timeout: GOTO });
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
 
   const button = page.getByRole('button', { name: 'Rebalance' });
   await expect(button).toBeVisible({ timeout: 30_000 });

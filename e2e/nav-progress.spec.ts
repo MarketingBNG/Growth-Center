@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { SPEC } from './timeouts';
 
 // The top bar is the only acknowledgement a click gets on /crm and /pipeline, which
 // cannot carry a loading.tsx without turning their detail routes' 404s into 200s. If it
@@ -13,6 +14,7 @@ test('the top bar appears while a tab is loading and clears on arrival', async (
   context,
   baseURL,
 }) => {
+  test.setTimeout(SPEC);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
   await page.goto('/');
 
@@ -55,6 +57,7 @@ test('the bar also appears when opening a record from a table', async ({
   context,
   baseURL,
 }) => {
+  test.setTimeout(SPEC);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
   await page.goto('/leads');
   await page.waitForSelector('nav a');

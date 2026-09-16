@@ -4,10 +4,11 @@ import { HttpError } from '@/lib/access/auth';
 import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/access/roles';
 import { renameUser, setActive, setRole } from '@/lib/access/users';
 import { recordAudit } from '@/lib/platform/audit';
+import { email } from '@/lib/platform/fields';
 
 const input = z
   .object({
-    email: z.string().trim().email(),
+    email: email(),
     active: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
     role: z.enum(ROLE_VALUES as [Role, ...Role[]]).optional(),

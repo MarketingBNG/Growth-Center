@@ -3,6 +3,7 @@ import { body, route, type Ctx } from '@/lib/platform/api';
 import { HttpError } from '@/lib/access/auth';
 import { getLead, setLeadOwner, setLeadStatus } from '@/lib/leads/leads';
 import { LEAD_STATUSES } from '@/lib/shared/enums';
+import { email } from '@/lib/platform/fields';
 
 export const GET = route<unknown, Ctx>('growth:read', async (_user, _req, ctx) => {
   const lead = await getLead((await ctx.params).id);
@@ -13,7 +14,7 @@ export const GET = route<unknown, Ctx>('growth:read', async (_user, _req, ctx) =
 const patch = z
   .object({
     status: z.enum(LEAD_STATUSES).optional(),
-    ownerEmail: z.string().trim().email().nullable().optional(),
+    ownerEmail: email().nullable().optional(),
   })
   .refine((v) => v.status !== undefined || v.ownerEmail !== undefined, {
     message: 'Provide status or ownerEmail',

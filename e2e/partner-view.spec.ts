@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // Partner view is held in the browser, so the toggle must repaint without a navigation.
 // This times it and checks the three things that made it worth moving: the copy changes,
@@ -7,8 +8,8 @@ import { signIn } from './auth';
 test('partner view toggles without a round trip', async ({ page, context, baseURL }) => {
   test.setTimeout(300_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(2500);
 
   // Nothing may be fetched from the server while toggling.
@@ -65,8 +66,8 @@ test('partner view toggles without a round trip', async ({ page, context, baseUR
   expect(withOwner(inPartnerView), 'partner view should name none').toBe(0);
 
   // And the param still works as the way in.
-  await page.goto('/?view=partner', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/?view=partner', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await expect(page.locator('main p').first()).toContainText('Performance only');
   console.log('    ?view=partner still seeds the mode on load');
 });

@@ -228,7 +228,7 @@ export function EditPieceModal({
 
         <ErrorText error={error} />
 
-        <ModalFooter onCancel={onClose} busy={busy} submit="Save" className="pt-1" />
+        <ModalFooter onCancel={onClose} busy={busy} submit="Save" />
       </form>
     </Modal>
   );

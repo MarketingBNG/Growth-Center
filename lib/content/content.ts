@@ -13,12 +13,13 @@ import { COMPANY_SEGMENTS } from '../crm/company-facts.ts';
 import { FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from '../shared/calc.ts';
 import { recordAudit } from '../platform/audit.ts';
+import { email } from '../platform/fields.ts';
 
 export const contentInput = z.object({
   title: z.string().trim().min(1).max(200),
   status: z.enum(CONTENT_STATUSES).default('idea'),
   format: z.enum(FORMATS).default('blog'),
-  authorEmail: z.string().trim().email().optional(),
+  authorEmail: email().optional(),
   channelSlug: z.string().trim().max(60).optional(),
   campaignId: z.string().min(1).optional(),
   brief: z.string().trim().max(MAX_BRIEF).optional(),
@@ -32,7 +33,7 @@ export const contentInput = z.object({
   segment: z.enum(COMPANY_SEGMENTS).nullable().optional(),
   serviceLine: z.enum(SERVICE_LINES).nullable().optional(),
   targetKeyword: z.string().trim().max(200).nullable().optional(),
-  designerEmail: z.string().trim().email().nullable().optional(),
+  designerEmail: email().nullable().optional(),
   partnerVoice: z.string().trim().max(120).nullable().optional(),
   assetUrl: z.string().trim().max(500).nullable().optional(),
   // The parent this piece was cut from. §15.4's webinar produces the clip, the blog and
@@ -68,8 +69,8 @@ export const contentPatch = z.object({
     .nullable()
     .optional(),
   assetShape: z.string().trim().max(60).nullable().optional(),
-  authorEmail: z.email().nullable().optional(),
-  designerEmail: z.email().nullable().optional(),
+  authorEmail: email().nullable().optional(),
+  designerEmail: email().nullable().optional(),
   partnerVoice: z.string().trim().max(120).nullable().optional(),
   channelSlug: z.string().trim().max(60).nullable().optional(),
   brief: z.string().trim().max(MAX_BRIEF).nullable().optional(),

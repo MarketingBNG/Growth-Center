@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { SPEC } from './timeouts';
 
 // usePersisted moved from "render the fallback, then read localStorage in an effect" to
 // useSyncExternalStore. The point of the old shape was that the server and the client
@@ -11,6 +12,7 @@ test('a collapsed sidebar section stays collapsed across a reload', async ({
   context,
   baseURL,
 }) => {
+  test.setTimeout(SPEC);
   const hydrationErrors: string[] = [];
   page.on('console', (m) => {
     if (m.type() === 'error' && /hydrat|did not match/i.test(m.text())) hydrationErrors.push(m.text());
@@ -39,6 +41,7 @@ test('a metrics band written by the old version still reads as collapsed', async
   context,
   baseURL,
 }) => {
+  test.setTimeout(SPEC);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
   await page.goto('/analytics');
   await page.waitForSelector('nav a');

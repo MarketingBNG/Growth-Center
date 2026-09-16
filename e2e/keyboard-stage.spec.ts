@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The board moves deals by dragging, which no keyboard can do. This drives the table
 // view's stage control with keys only — no click on the control itself — so it proves the
@@ -11,8 +12,8 @@ test('a deal can be moved to another stage with the keyboard alone', async ({
 }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/pipeline', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/pipeline', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
 
   await page.getByRole('button', { name: 'Table' }).click();
 

@@ -121,7 +121,6 @@ export function NewLeadButton() {
             onCancel={() => setOpen(false)}
             busy={busy}
             submit="Create lead"
-            className="pt-1"
           />
         </form>
       </Modal>

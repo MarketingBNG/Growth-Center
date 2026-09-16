@@ -4,6 +4,7 @@ import { INTERNAL_SOURCE } from '../shared/sources.ts';
 import { db } from '../platform/prisma.ts';
 import { currencySettings } from '../platform/settings.ts';
 import { dispatch } from '../platform/events.ts';
+import { email } from '../platform/fields.ts';
 
 /**
  * Editable fields on an existing deal. Deliberately excludes pipelineId and stageId:
@@ -17,7 +18,7 @@ export const opportunityPatch = z.object({
   currency: z.string().trim().length(3).optional(),
   probability: z.number().int().min(0).max(100).nullable().optional(),
   expectedCloseDate: z.string().date().nullable().optional(),
-  ownerEmail: z.string().trim().email().nullable().optional(),
+  ownerEmail: email().nullable().optional(),
 });
 
 export const opportunityInput = z.object({
@@ -31,7 +32,7 @@ export const opportunityInput = z.object({
   currency: z.string().trim().length(3).optional(),
   probability: z.number().int().min(0).max(100).optional(),
   expectedCloseDate: z.string().date().optional(),
-  ownerEmail: z.string().trim().email().optional(),
+  ownerEmail: email().optional(),
   leadId: recordId.optional(),
   contactId: recordId.optional(),
   companyId: recordId.optional(),

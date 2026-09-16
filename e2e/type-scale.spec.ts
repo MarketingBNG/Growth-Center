@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The scale lives in @theme, so the classes only exist if Tailwind generated them, and
 // they only survive if tailwind-merge knows they are font sizes rather than colours. Both
@@ -21,8 +22,8 @@ const EXPECTED = new Map(STEPS);
 test('every step of the type scale resolves', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
 
   const got = await page.evaluate((steps) => {
     const out: Record<string, string> = {};
@@ -57,8 +58,8 @@ test('elements that ask for a step actually get it', async ({ page, context, bas
   let checked = 0;
 
   for (const path of PAGES) {
-    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-    await page.waitForSelector('nav a', { timeout: 90_000 });
+    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: GOTO });
+    await page.waitForSelector('nav a', { timeout: HYDRATE });
     await page.waitForTimeout(1200);
 
     const found = await page.evaluate((steps) => {
@@ -107,8 +108,8 @@ test('nothing renders at the browser default size', async ({ page, context, base
 
   const offenders: string[] = [];
   for (const path of PAGES) {
-    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-    await page.waitForSelector('nav a', { timeout: 90_000 });
+    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: GOTO });
+    await page.waitForSelector('nav a', { timeout: HYDRATE });
     await page.waitForTimeout(1200);
 
     const bad = await page.evaluate(() => {
@@ -140,8 +141,8 @@ test('nothing renders at the browser default size', async ({ page, context, base
 test('a badge is 11px wherever it appears', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/integrations', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/integrations', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.waitForTimeout(1200);
 
   const sizes = await page.evaluate(() => {

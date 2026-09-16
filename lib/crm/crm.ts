@@ -6,6 +6,7 @@ import { normalizeCompanyName, normalizeDomain, normalizeEmail } from './dedupe.
 import { INTERNAL_SOURCE } from '../shared/sources.ts';
 import { phoneMatches } from './phone.ts';
 import type { ListQuery } from '../platform/api.ts';
+import { email } from '../platform/fields.ts';
 
 export const companyInput = z.object({
   name: z.string().trim().min(1).max(160),
@@ -16,7 +17,7 @@ export const companyInput = z.object({
   website: z.string().trim().max(300).optional(),
   phone: z.string().trim().max(40).optional(),
   notes: z.string().trim().max(4000).optional(),
-  ownerEmail: z.string().trim().email().optional(),
+  ownerEmail: email().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
 
   // §8.4: the dual-jurisdiction facts the delivery team holds and Zoho does not carry.
@@ -30,12 +31,12 @@ export const companyInput = z.object({
 export const contactInput = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().max(80).optional(),
-  email: z.string().trim().email().max(200).optional(),
+  email: email().optional(),
   phone: z.string().trim().max(40).optional(),
   title: z.string().trim().max(120).optional(),
   linkedin: z.string().trim().max(300).optional(),
   companyId: recordId.optional(),
-  ownerEmail: z.string().trim().email().optional(),
+  ownerEmail: email().optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
 
   // §8.4: the dual-jurisdiction facts the delivery team holds and Zoho does not carry.
@@ -59,7 +60,7 @@ export const taskInput = z.object({
   detail: z.string().trim().max(4000).optional(),
   priority: z.enum(['low', 'normal', 'high', 'urgent']).default('normal'),
   dueDate: z.string().date().optional(),
-  assigneeEmail: z.string().trim().email().optional(),
+  assigneeEmail: email().optional(),
   leadId: recordId.optional(),
   contactId: recordId.optional(),
   companyId: recordId.optional(),

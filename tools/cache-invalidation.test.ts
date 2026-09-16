@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { ROOT, relative, walk } from './source.ts';
 
 // Which cache tags a write drops.
 //
@@ -15,24 +16,18 @@ import { join, sep } from 'node:path';
 // Nothing failed. The route returned 200, the settings page showed the new currency, and
 // the figures underneath it were stale in a way no error could describe.
 
-const ROOT = join(import.meta.dirname, '..');
-
-function walk(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) walk(full, out);
-    else if (entry === 'route.ts') out.push(full);
-  }
-  return out;
-}
-
-const routes = walk(join(ROOT, 'app', 'api')).map((file) => ({
-  // Split on the platform separator rather than matching one: these run on Windows,
-  // where the walked paths come back with backslashes and every assertion below is
-  // written in posix.
-  path: file.slice(ROOT.length + 1).split(sep).join('/'),
-  source: readFileSync(file, 'utf8'),
-}));
+// The shared walker, which skips node_modules, .next and lib/generated. This file used to
+// carry its own copy with no skip list; under app/api there was nothing to skip today, but
+// the copy is what makes that a matter of luck rather than of design — and it also meant
+// five walkers under four names across tools/.
+const routes = walk(join(ROOT, 'app', 'api'), ['.ts'])
+  .filter((file) => basename(file) === 'route.ts')
+  .map((file) => ({
+    // Repo-relative with forward slashes: these run on Windows, where the walked paths
+    // come back with backslashes and every assertion below is written in posix.
+    path: relative(file),
+    source: readFileSync(file, 'utf8'),
+  }));
 
 /**
  * A route file split into its handlers.

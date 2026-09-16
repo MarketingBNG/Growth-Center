@@ -60,9 +60,10 @@ export function Modal({
  * which is worth having in one place, because it is the sentence that tells someone their
  * click registered.
  *
- * `className` rather than a fixed padding: three of the four carry `pt-1` and the fourth
- * does not, and that is four pixels of difference nobody chose. Passing it through keeps
- * each dialog exactly as it renders today; deciding which is right is a separate change.
+ * `pt-1` is the default rather than something each dialog repeats. Three of the four
+ * carried it and the fourth did not — four pixels nobody chose, so the three won. The
+ * odd one out (the new-content dialog) gains that gap and now matches its siblings.
+ * `className` stays for a dialog that genuinely needs different spacing.
  */
 export function ModalFooter({
   onCancel,
@@ -77,7 +78,7 @@ export function ModalFooter({
   className?: string;
 }) {
   return (
-    <div className={cn('flex justify-end gap-2', className)}>
+    <div className={cn('flex justify-end gap-2 pt-1', className)}>
       <Button type="button" variant="ghost" onClick={onCancel}>
         Cancel
       </Button>

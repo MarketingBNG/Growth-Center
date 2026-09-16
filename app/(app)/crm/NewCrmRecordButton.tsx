@@ -110,7 +110,6 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
             onCancel={() => setOpen(false)}
             busy={busy}
             submit={`Create ${kind}`}
-            className="pt-1"
           />
         </form>
       </Modal>

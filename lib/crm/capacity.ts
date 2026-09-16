@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Prisma } from '../generated/prisma/client.ts';
 import { rate } from '../shared/calc.ts';
 import { recordAudit } from '../platform/audit.ts';
+import { email } from '../platform/fields.ts';
 
 // §6.2: "Add a Delivery capacity card: open consultations against capacity, fed by Zoho
 // Projects or a monthly manual input from Simran/Kanishka."
@@ -33,7 +34,7 @@ export const capacityInput = z.object({
   monthlyConsultations: z.number().int().min(0).max(10_000).nullable(),
   /** Who said so, and when. §22's audited config: a ceiling with no author is a ceiling
    *  nobody will defend when marketing wants to exceed it. */
-  setByEmail: z.string().trim().email().nullable().optional(),
+  setByEmail: email().nullable().optional(),
   setAt: z.string().datetime().nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
 });

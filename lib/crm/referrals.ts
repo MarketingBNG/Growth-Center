@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { db } from '../platform/prisma.ts';
 import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow, type PartnerType } from './referral-types.ts';
+import { email } from '../platform/fields.ts';
 
 // §8.5: "Referral is our highest-trust channel and it has no home in any system today.
 // What is not recorded is not followed up."
@@ -23,11 +24,11 @@ export {
 export const partnerInput = z.object({
   name: z.string().trim().min(1, 'A partner needs a name.'),
   partnerType: z.enum(PARTNER_TYPES).default('other'),
-  email: z.string().trim().email().or(z.literal('')).optional(),
+  email: email().or(z.literal('')).optional(),
   phone: z.string().trim().optional(),
   company: z.string().trim().optional(),
   notes: z.string().trim().optional(),
-  ownerEmail: z.string().trim().email().or(z.literal('')).optional(),
+  ownerEmail: email().or(z.literal('')).optional(),
   active: z.boolean().optional(),
 });
 export type PartnerInput = z.infer<typeof partnerInput>;

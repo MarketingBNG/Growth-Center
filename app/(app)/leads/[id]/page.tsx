@@ -59,7 +59,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>Details</CardTitle>
@@ -138,7 +138,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           <NotesCard parent={{ leadId: lead.id }} notes={lead.noteEntries} />
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <TaskList tasks={lead.tasks} />
 
           <HistoryCard entries={lead.activities} />
