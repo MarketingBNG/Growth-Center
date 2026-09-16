@@ -18,6 +18,22 @@
  * detail that makes the message worth reading. One factory would flatten all of it.
  */
 
+/**
+ * The message a vendor put in a failed response, if it put one there.
+ *
+ * Google and Meta both answer a failure with `{ error: { message } }`, and six adapters
+ * read it with the same cast and the same `.catch(() => null)` — the catch matters, because
+ * the body of a 500 is as often an HTML error page as it is JSON, and a parse failure
+ * there would replace the vendor's status with a SyntaxError.
+ *
+ * Returns null when there is nothing to quote, which is what each caller's own fallback is
+ * for: what to say instead is provider knowledge and stays with the provider.
+ */
+export async function vendorMessage(res: Response): Promise<string | null> {
+  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+  return body?.error?.message ?? null;
+}
+
 /** A 401: the credential is no longer good and a person has to reconnect. */
 export const tokenRejected = (vendor: string): string =>
   `${vendor} rejected the token. Reconnect the integration.`;

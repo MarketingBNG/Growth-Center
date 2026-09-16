@@ -1,6 +1,6 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
-import { requestFailed } from '../messages.ts';
-import { metaExchangeForLongLived } from './oauth.ts';
+import { requestFailed, vendorMessage } from '../messages.ts';
+import { metaExchangeForLongLived, metaRefresh } from './oauth.ts';
 
 // Facebook Page and Instagram Business organic performance — the Social page's numbers.
 //
@@ -23,8 +23,7 @@ type Stored = { accessToken: string };
 const POST_LIMIT = 50;
 
 async function failed(res: Response): Promise<never> {
-  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  throw new IntegrationError(body?.error?.message ?? requestFailed('Meta', res.status));
+  throw new IntegrationError((await vendorMessage(res)) ?? requestFailed('Meta', res.status));
 }
 
 async function graph<T>(path: string, params: Record<string, string>): Promise<T> {
@@ -300,14 +299,7 @@ export const metaSocial: IntegrationProvider = {
     };
   },
 
-  async refresh(credential) {
-    const { accessToken } = JSON.parse(credential) as Stored;
-    const long = await metaExchangeForLongLived(accessToken);
-    return {
-      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
-    };
-  },
+  refresh: metaRefresh,
 
   async sync(credential, config, range) {
     const { accessToken } = JSON.parse(credential) as Stored;

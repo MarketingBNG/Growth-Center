@@ -1,7 +1,7 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint, type SyncCursor } from '../types.ts';
-import { requestFailed } from '../messages.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint, type SyncCursor } from '../types.ts';
+import { requestFailed, vendorMessage } from '../messages.ts';
 import { intAtLeast, num, startOfDay, str } from '../coerce.ts';
-import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // YouTube — the channel and its videos, into the same SocialAccount and SocialPost tables
 // Facebook and Instagram already use. `youtube` has been in the SocialNetwork enum since
@@ -48,7 +48,6 @@ const PAGE = 50;
 const MAX_VIDEOS = 200;
 
 type Stored = { refreshToken: string };
-type Json = Record<string, unknown>;
 
 async function get(url: string, token: string): Promise<Json> {
   const res = await fetch(url, {
@@ -56,8 +55,9 @@ async function get(url: string, token: string): Promise<Json> {
     signal: httpTimeout(),
   });
   if (!res.ok) {
-    const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(detail?.error?.message ?? requestFailed('YouTube', res.status));
+    throw new IntegrationError(
+      (await vendorMessage(res)) ?? requestFailed('YouTube', res.status),
+    );
   }
   return (await res.json()) as Json;
 }
@@ -149,9 +149,7 @@ export const youtube: IntegrationProvider = {
   ],
   docsUrl: 'https://developers.google.com/youtube/v3/docs',
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
     return googleAuthUrl(SCOPE, redirectUri, state);

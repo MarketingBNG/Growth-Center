@@ -1,5 +1,6 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
-import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
+import { vendorMessage } from '../messages.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // Google Search Console — the provider that populates the SEO tables. It reports
 // per-query and per-page rows from the site's own traffic rather than an estimate of it,
@@ -34,9 +35,9 @@ async function searchAnalytics(
     signal: httpTimeout(),
   });
   if (!res.ok) {
-    const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new IntegrationError(
-      detail?.error?.message ?? `Search Console query failed (${res.status}). Check the property.`,
+      (await vendorMessage(res)) ??
+        `Search Console query failed (${res.status}). Check the property.`,
     );
   }
   const json = (await res.json()) as { rows?: QueryRow[] };
@@ -89,9 +90,7 @@ export const searchConsole: IntegrationProvider = {
     },
   ],
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
     return googleAuthUrl(SCOPE, redirectUri, state);

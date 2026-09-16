@@ -4,6 +4,7 @@ import {
   type IntegrationProvider,
   type MetricPoint,
   type SyncCursor,
+  type Json,
 } from '../types.ts';
 import { requestFailed } from '../messages.ts';
 import { intAtLeast, num, startOfDay } from '../coerce.ts';
@@ -25,7 +26,6 @@ const API = 'https://server.smartlead.ai/api/v1';
 const PAGE = 100;
 
 type Stored = { apiKey: string };
-type Json = Record<string, unknown>;
 
 function url(path: string, apiKey: string, params: Record<string, string> = {}): string {
   const q = new URLSearchParams({ api_key: apiKey, ...params });

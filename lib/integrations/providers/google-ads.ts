@@ -1,7 +1,7 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint } from '../types.ts';
 import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
 import { num, str } from '../coerce.ts';
-import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // Google Ads — the second paid channel, and the reason CAC and CPL stop being blended.
 //
@@ -37,7 +37,6 @@ const API = 'https://googleads.googleapis.com/v18';
 const SCOPE = 'https://www.googleapis.com/auth/adwords';
 
 type Stored = { refreshToken: string };
-type Json = Record<string, unknown>;
 
 /**
  * Campaign-day spend, impressions and clicks.
@@ -156,11 +155,7 @@ export const googleAds: IntegrationProvider = {
   ],
 
   isConfigured() {
-    return (
-      !!process.env.GOOGLE_CLIENT_ID &&
-      !!process.env.GOOGLE_CLIENT_SECRET &&
-      !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN
-    );
+    return googleConfigured() && !!process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   },
 
   getAuthUrl(redirectUri, state) {

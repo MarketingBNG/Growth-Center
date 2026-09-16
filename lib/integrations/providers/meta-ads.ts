@@ -1,6 +1,7 @@
 import { resolveObjective } from '../../campaign-objective.ts';
+import { vendorMessage } from '../messages.ts';
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
-import { metaExchangeForLongLived } from './oauth.ts';
+import { metaExchangeForLongLived, metaRefresh } from './oauth.ts';
 
 // Meta Ads insights, written per campaign so the marketing table's spend, impressions
 // and clicks come from the platform rather than being entered by hand.
@@ -81,14 +82,7 @@ export const metaAds: IntegrationProvider = {
     };
   },
 
-  async refresh(credential) {
-    const { accessToken } = JSON.parse(credential) as Stored;
-    const long = await metaExchangeForLongLived(accessToken);
-    return {
-      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
-    };
-  },
+  refresh: metaRefresh,
 
   async sync(credential, config, range) {
     const adAccountId = config.adAccountId;
@@ -129,8 +123,9 @@ export const metaAds: IntegrationProvider = {
     for (let page = 0; url && page < 50; page++) {
       const res: Response = await fetch(url, { signal: httpTimeout() });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-        throw new IntegrationError(body?.error?.message ?? `Meta insights failed (${res.status}).`);
+        throw new IntegrationError(
+          (await vendorMessage(res)) ?? `Meta insights failed (${res.status}).`,
+        );
       }
 
       const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };

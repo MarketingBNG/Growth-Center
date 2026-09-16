@@ -1,4 +1,4 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint } from '../types.ts';
 import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
 import { num, str } from '../coerce.ts';
 
@@ -31,7 +31,6 @@ const VERSION = '202411';
 const SCOPE = 'r_ads r_ads_reporting';
 
 type Stored = { refreshToken: string; expiresAt?: string };
-type Json = Record<string, unknown>;
 
 function headers(token: string): Record<string, string> {
   return {

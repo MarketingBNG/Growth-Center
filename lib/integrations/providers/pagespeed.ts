@@ -4,6 +4,7 @@ import {
   type IntegrationProvider,
   type MetricPoint,
   type SyncCursor,
+  type Json,
 } from '../types.ts';
 import { rateLimited } from '../messages.ts';
 import { intAtLeast, str } from '../coerce.ts';
@@ -108,7 +109,6 @@ const CALL_TIMEOUT_MS = 90_000;
 const SAFETY_MS = 60_000;
 
 type Stored = { apiKey: string };
-type Json = Record<string, unknown>;
 
 /**
  * The five field metrics CrUX reports, onto the names stored.

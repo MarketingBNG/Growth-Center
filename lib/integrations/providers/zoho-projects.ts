@@ -4,6 +4,7 @@ import {
   type IntegrationProvider,
   type MetricPoint,
   type SyncCursor,
+  type Json,
 } from '../types.ts';
 import { requestFailed, tokenRejected } from '../messages.ts';
 import { intAtLeast, str } from '../coerce.ts';
@@ -41,7 +42,6 @@ const PER_PAGE = 200;
 const MAX_PAGES = 200;
 
 type Stored = { refreshToken: string };
-type Json = Record<string, unknown>;
 
 /** This provider's own label for zohoAccessToken's shared retry logic — see
  *  lib/integrations/providers/oauth.ts. Projects gains the retry the CRM already had:

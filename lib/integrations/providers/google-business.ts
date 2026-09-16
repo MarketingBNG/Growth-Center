@@ -1,7 +1,7 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
-import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint } from '../types.ts';
+import { rateLimited, requestFailed, tokenRejected, vendorMessage } from '../messages.ts';
 import { num, str } from '../coerce.ts';
-import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // Google Business Profile — the listing, what people did with it, and what they said.
 //
@@ -51,7 +51,6 @@ const METRICS: Record<string, string> = {
 };
 
 type Stored = { refreshToken: string };
-type Json = Record<string, unknown>;
 
 /**
  * A 403 from these APIs almost never means the OAuth is wrong.
@@ -79,8 +78,7 @@ async function get(url: string, token: string): Promise<Json> {
     signal: httpTimeout(),
   });
   if (!res.ok) {
-    const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(describeFailure(res.status, detail?.error?.message ?? null));
+    throw new IntegrationError(describeFailure(res.status, await vendorMessage(res)));
   }
   return (await res.json()) as Json;
 }
@@ -163,9 +161,7 @@ export const googleBusiness: IntegrationProvider = {
     },
   ],
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
     return googleAuthUrl(SCOPE, redirectUri, state);

@@ -1,4 +1,5 @@
 import { IntegrationError, httpTimeout } from '../types.ts';
+import { vendorMessage } from '../messages.ts';
 
 // The OAuth token-refresh and code-exchange code every provider needs, once. Five Google
 // providers (analytics, ads, search console, YouTube, business) had byte-identical
@@ -42,6 +43,17 @@ export async function googleAccessToken(refreshToken: string): Promise<string> {
   const json = (await res.json()) as { access_token?: string };
   if (!json.access_token) throw new IntegrationError('Google returned no access token.');
   return json.access_token;
+}
+
+/**
+ * Whether the Google OAuth client exists at all.
+ *
+ * One client serves all five Google providers, so this is the same question five times —
+ * four of them spelled it identically and Google Ads asks it plus its developer token.
+ * Named here so renaming either variable is one edit rather than four.
+ */
+export function googleConfigured(): boolean {
+  return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
 }
 
 /** The consent-screen URL every Google provider sends the browser to. `scope` is the one
@@ -120,15 +132,34 @@ export async function metaExchangeForLongLived(token: string): Promise<{ token: 
 
   const res = await fetch(`${META_TOKEN_URL}?${params}`, { signal: httpTimeout() });
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new IntegrationError(
-      body?.error?.message ?? `Meta refused to extend the token (${res.status}). Reconnect.`,
+      (await vendorMessage(res)) ??
+        `Meta refused to extend the token (${res.status}). Reconnect.`,
     );
   }
 
   const json = (await res.json()) as { access_token?: string; expires_in?: number };
   if (!json.access_token) throw new IntegrationError('Meta returned no long-lived token.');
   return { token: json.access_token, expiresIn: json.expires_in ?? META_ASSUMED_LIFETIME_SECONDS };
+}
+
+/**
+ * Rolling renewal for both Meta providers.
+ *
+ * meta_ads and meta_social had this byte for byte, expiry arithmetic included. Both store
+ * a long-lived user token and both push its expiry out the same way, because it is one
+ * Meta app behind them — the two differ in what they then ask the Graph for, not in how
+ * they stay signed in.
+ */
+export async function metaRefresh(
+  credential: string,
+): Promise<{ secret: string; expiresAt: Date }> {
+  const { accessToken } = JSON.parse(credential) as { accessToken: string };
+  const long = await metaExchangeForLongLived(accessToken);
+  return {
+    secret: JSON.stringify({ accessToken: long.token }),
+    expiresAt: new Date(Date.now() + long.expiresIn * 1000),
+  };
 }
 
 // ── Zoho ──────────────────────────────────────────────────────────────────────────────

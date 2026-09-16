@@ -1,5 +1,5 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
-import { googleAccessToken, googleAuthUrl, googleExchangeCode } from './oauth.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // GA4 via the Data API. Sessions, users and conversions land in MetricSnapshot under
 // entityType 'site', which is exactly what the dashboard's visitor count reads.
@@ -38,9 +38,7 @@ export const googleAnalytics: IntegrationProvider = {
     },
   ],
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
     return googleAuthUrl(SCOPE, redirectUri, state);
