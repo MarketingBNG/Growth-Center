@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formValues } from '@/components/patterns/form';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalFooter } from '@/components/ui/modal';
 import { api } from '@/lib/shared/fetcher';
 import { CONTENT_STATUSES } from '@/lib/shared/enums';
 import { FORMAT_LABELS, FORMATS, MAX_BRIEF } from '@/lib/content/content-fields';
@@ -20,11 +21,7 @@ export function NewContentButton() {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const value = (k: string) => {
-      const v = (form.get(k) as string | null)?.trim();
-      return v ? v : undefined;
-    };
+    const value = formValues(e.currentTarget);
     await run(async () => {
       await api('/api/content', {
         method: 'POST',
@@ -65,10 +62,7 @@ export function NewContentButton() {
             <Textarea name="brief" rows={3} maxLength={MAX_BRIEF} />
           </Field>
           <ErrorText error={error} />
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Create'}</Button>
-          </div>
+          <ModalFooter onCancel={() => setOpen(false)} busy={busy} submit="Create" />
         </form>
       </Modal>
     </>

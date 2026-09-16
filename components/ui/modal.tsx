@@ -3,6 +3,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/shared/utils';
+import { Button } from '@/components/ui/button';
 
 export function Modal({
   open,
@@ -49,5 +50,40 @@ export function Modal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/**
+ * A dialog's Cancel / submit pair.
+ *
+ * Four dialogs wrote this out, down to the same "Saving…" while a write is in flight —
+ * which is worth having in one place, because it is the sentence that tells someone their
+ * click registered.
+ *
+ * `className` rather than a fixed padding: three of the four carry `pt-1` and the fourth
+ * does not, and that is four pixels of difference nobody chose. Passing it through keeps
+ * each dialog exactly as it renders today; deciding which is right is a separate change.
+ */
+export function ModalFooter({
+  onCancel,
+  busy,
+  submit,
+  className,
+}: {
+  onCancel: () => void;
+  busy: boolean;
+  /** What the submit button says when it is not busy. */
+  submit: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex justify-end gap-2', className)}>
+      <Button type="button" variant="ghost" onClick={onCancel}>
+        Cancel
+      </Button>
+      <Button type="submit" disabled={busy}>
+        {busy ? 'Saving…' : submit}
+      </Button>
+    </div>
   );
 }

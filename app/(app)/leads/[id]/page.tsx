@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BackLink, Detail, DetailHeader, HistoryCard, LinkedRow, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
-import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
+import { LeadSourceBadge, LeadStatusBadge } from '@/components/patterns/badges';
 import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
 import { TaskList } from '@/components/patterns/task-list';
 import { getLead } from '@/lib/leads/leads';
@@ -68,7 +68,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <Detail label="Email" value={lead.email} />
               <Detail label="Phone" value={lead.phone} />
               <Detail label="Owner" value={lead.ownerEmail ?? 'Unassigned'} />
-              <Detail label="Source" value={<SourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />} />
+              <Detail label="Source" value={<LeadSourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />} />
               {/* The CRM's own two words for this lead, stored on import and shown
                   nowhere until now: `sourceDetail` is where it actually came from ("fb",
                   "Incorporation LinkdIn") and `sourceStatus` is the team's own status

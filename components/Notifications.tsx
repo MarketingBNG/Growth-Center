@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDismiss } from '@/components/use-dismiss';
 import { Bell } from 'lucide-react';
 import { api } from '@/lib/shared/fetcher';
 import { fmtRelative } from '@/lib/shared/format';
@@ -55,23 +56,11 @@ export function Notifications() {
   }, [load]);
 
   // Close on an outside click or Escape, the two ways anyone dismisses a popover.
-  useEffect(() => {
-    if (!open) return;
-
-    function onPointerDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  useDismiss({
+    active: open,
+    contains: (t) => !!ref.current?.contains(t),
+    onDismiss: () => setOpen(false),
+  });
 
   async function toggle() {
     const next = !open;

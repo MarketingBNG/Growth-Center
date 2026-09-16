@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formValues } from '@/components/patterns/form';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalFooter } from '@/components/ui/modal';
 import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
 import { useBooleanApiAction } from '@/lib/shared/use-api-action';
@@ -19,11 +20,7 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const form = new FormData(e.currentTarget);
-    const value = (k: string) => {
-      const v = (form.get(k) as string | null)?.trim();
-      return v ? v : undefined;
-    };
+    const value = formValues(e.currentTarget);
 
     const path = kind === 'company' ? '/api/crm/companies' : '/api/crm/contacts';
     const json =
@@ -109,14 +106,12 @@ export function NewCrmRecordButton({ kind }: { kind: 'company' | 'contact' }) {
 
           <ErrorBanner error={error} />
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : `Create ${kind}`}
-            </Button>
-          </div>
+          <ModalFooter
+            onCancel={() => setOpen(false)}
+            busy={busy}
+            submit={`Create ${kind}`}
+            className="pt-1"
+          />
         </form>
       </Modal>
     </>

@@ -6,8 +6,8 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { SortHeader } from '@/components/patterns/sort-header';
-import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
-import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
+import { LeadSourceBadge, LeadStatusBadge } from '@/components/patterns/badges';
+import { SourceBadge } from '@/components/patterns/source-badge';
 import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -281,7 +281,7 @@ async function LeadsTable({
                           {/* Which system wrote the row, distinct from the `sourceType`
                               column beside it — that says how the lead found us, this
                               says whether the record is real or the seeder's. */}
-                          <ProvenanceBadge source={lead.source ?? DEMO_SOURCE} />
+                          <SourceBadge source={lead.source ?? DEMO_SOURCE} />
                         </span>
                         {lead.email ? (
                           <p className="text-xs text-muted-foreground">{lead.email}</p>
@@ -302,7 +302,7 @@ async function LeadsTable({
                           `leadSourceGroup` decides both — so the column was the same word
                           printed twice on every row. */}
                       <TD>
-                        <SourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />
+                        <LeadSourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />
                         {lead.sourceDetail && lead.sourceDetail !== leadSourceLabel(lead.sourceDetail, lead.sourceType) ? (
                           <p className="mt-0.5 text-xs text-muted-foreground">{lead.sourceDetail}</p>
                         ) : null}

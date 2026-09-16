@@ -1,10 +1,9 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalFooter } from '@/components/ui/modal';
 import { api } from '@/lib/shared/fetcher';
 import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/shared/enums';
 import {
@@ -229,10 +228,7 @@ export function EditPieceModal({
 
         <ErrorText error={error} />
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
-        </div>
+        <ModalFooter onCancel={onClose} busy={busy} submit="Save" className="pt-1" />
       </form>
     </Modal>
   );

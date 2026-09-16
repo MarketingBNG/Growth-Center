@@ -1,12 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formValues } from '@/components/patterns/form';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
+import { Modal, ModalFooter } from '@/components/ui/modal';
 import { api } from '@/lib/shared/fetcher';
 import { ErrorBanner } from '@/components/patterns/state';
 import { SOURCE_TYPES } from '@/lib/shared/enums';
@@ -24,11 +25,7 @@ export function NewLeadButton() {
     setError(null);
     setDuplicateOf(null);
 
-    const form = new FormData(e.currentTarget);
-    const value = (k: string) => {
-      const v = (form.get(k) as string | null)?.trim();
-      return v ? v : undefined;
-    };
+    const value = formValues(e.currentTarget);
 
     try {
       const result = await api<{ created: boolean; leadId: string }>('/api/leads', {
@@ -120,14 +117,12 @@ export function NewLeadButton() {
 
           <ErrorBanner error={error} />
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Create lead'}
-            </Button>
-          </div>
+          <ModalFooter
+            onCancel={() => setOpen(false)}
+            busy={busy}
+            submit="Create lead"
+            className="pt-1"
+          />
         </form>
       </Modal>
     </>
