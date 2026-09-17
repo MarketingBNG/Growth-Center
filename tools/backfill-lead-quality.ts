@@ -15,16 +15,13 @@
 //
 // Safe to re-run: pure functions of unchanged fields write unchanged values.
 
-import pg from 'pg';
-import { resolveAttribution } from '../lib/attribution-confidence.ts';
-import { lostReasonOf } from '../lib/lead-lost-reason.ts';
-import { scoreLead, SCORE_VERSION } from '../lib/lead-score.ts';
+import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
+import { resolveAttribution } from '../lib/money/attribution-confidence.ts';
+import { lostReasonOf } from '../lib/leads/lead-lost-reason.ts';
+import { scoreLead, SCORE_VERSION } from '../lib/leads/lead-score.ts';
 import type { SourceType } from '../lib/generated/prisma/client.ts';
 
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 type Row = {
   id: string;
@@ -122,27 +119,18 @@ const changed = rows.filter((r) => {
   );
 });
 
-if (!apply) {
-  console.log(`\nDry run. ${changed.length} rows would change. Re-run with --apply.`);
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(
+  client,
+  `\nDry run. ${changed.length} rows would change. Re-run with --apply.`,
+);
 
 // Batched, because 27,575 individual UPDATEs over a pooled connection to Neon is minutes
 // of round trips. One transaction: a half-scored lead base would put two leads on
 // different formulas, and the comparison between them is the thing the score is for.
 const CHUNK = 500;
-await client.query('BEGIN');
-try {
-  for (let i = 0; i < changed.length; i += CHUNK) {
-    const slice = changed.slice(i, i + CHUNK);
-    const values: unknown[] = [];
-    const tuples = slice.map((r, n) => {
-      const w = wanted.get(r.id)!;
-      values.push(r.id, w.score, SCORE_VERSION, w.segment, w.lostReason, w.confidence);
-      return `($${n * 6 + 1}, $${n * 6 + 2}::int, $${n * 6 + 3}::int, $${n * 6 + 4}, $${n * 6 + 5}, $${n * 6 + 6})`;
-    });
-
+await transact(client, async () => {
+  let done = 0;
+  for (const slice of chunks(changed, CHUNK)) {
     await client.query(
       `UPDATE lead AS l
           SET score = v.score,
@@ -150,17 +138,17 @@ try {
               segment = v.segment,
               "lostReason" = v.reason,
               "attributionConfidence" = v.confidence
-         FROM (VALUES ${tuples.join(', ')}) AS v(id, score, version, segment, reason, confidence)
+         FROM (VALUES ${placeholders(slice.length, [null, 'int', 'int', null, null, null])}) AS v(id, score, version, segment, reason, confidence)
         WHERE l.id = v.id`,
-      values,
+      slice.flatMap((r) => {
+        const w = wanted.get(r.id)!;
+        return [r.id, w.score, SCORE_VERSION, w.segment, w.lostReason, w.confidence];
+      }),
     );
-    process.stdout.write(`\r  ${Math.min(i + CHUNK, changed.length)}/${changed.length}`);
+    done += slice.length;
+    process.stdout.write(`\r  ${done}/${changed.length}`);
   }
-  await client.query('COMMIT');
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+});
 
 console.log(`\nWrote ${changed.length} rows.`);
 await client.end();

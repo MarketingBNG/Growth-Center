@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blocksSending, lintSequence, lintStep, summarise } from '../lib/outreach-lint.ts';
+import { blocksSending, lintSequence, lintStep, summarise } from '../lib/outreach/outreach-lint.ts';
 
 // Every fixture below is a real string from this workspace's 121 imported steps, or the
 // shape of one. The token rules in particular were written from an inventory of what the

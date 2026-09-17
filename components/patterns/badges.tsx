@@ -27,7 +27,7 @@ export function LeadStatusBadge({ status }: { status: keyof typeof LEAD_TONE }) 
  * LinkedIn and WhatsApp lead in the workspace. Callers pass `leadSourceLabel(...)` now,
  * and "WhatsApp" and "LinkedIn" have to survive it — so nothing here rewrites the text.
  */
-export function SourceBadge({ source }: { source: string }) {
+export function LeadSourceBadge({ source }: { source: string }) {
   return <Badge tone="neutral">{source}</Badge>;
 }
 

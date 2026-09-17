@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { body, listQuery, paged, parseQuery, route } from '@/lib/api';
-import { createTask, taskInput } from '@/lib/crm';
-import { TASK_STATUSES } from '@/lib/enums';
-import { db } from '@/lib/prisma';
+import { body, listQuery, paged, parseQuery, route } from '@/lib/platform/api';
+import { createTask, taskInput } from '@/lib/crm/crm';
+import { TASK_STATUSES } from '@/lib/shared/enums';
+import { db } from '@/lib/platform/prisma';
 
 const filters = listQuery.extend({
   status: z.enum(TASK_STATUSES).optional(),

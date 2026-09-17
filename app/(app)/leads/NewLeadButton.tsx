@@ -1,14 +1,16 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { formValues } from '@/components/patterns/form';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
-import { SOURCE_TYPES } from '@/lib/enums';
+import { Modal, ModalFooter } from '@/components/ui/modal';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
+import { SOURCE_TYPES } from '@/lib/shared/enums';
 
 export function NewLeadButton() {
   const router = useRouter();
@@ -23,11 +25,7 @@ export function NewLeadButton() {
     setError(null);
     setDuplicateOf(null);
 
-    const form = new FormData(e.currentTarget);
-    const value = (k: string) => {
-      const v = (form.get(k) as string | null)?.trim();
-      return v ? v : undefined;
-    };
+    const value = formValues(e.currentTarget);
 
     try {
       const result = await api<{ created: boolean; leadId: string }>('/api/leads', {
@@ -117,20 +115,13 @@ export function NewLeadButton() {
             </p>
           ) : null}
 
-          {error ? (
-            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
+          <ErrorBanner error={error} />
 
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Create lead'}
-            </Button>
-          </div>
+          <ModalFooter
+            onCancel={() => setOpen(false)}
+            busy={busy}
+            submit="Create lead"
+          />
         </form>
       </Modal>
     </>

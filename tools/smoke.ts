@@ -10,21 +10,18 @@
 //
 //   DATABASE_URL=… node --experimental-strip-types tools/smoke.ts
 
-import { createLead, getLead, listLeads, setLeadStatus } from '../lib/leads.ts';
-import { board, convertLead, moveOpportunity } from '../lib/pipeline.ts';
-import { getCompany, getContact, listCompanies, listContacts } from '../lib/crm.ts';
-import { db } from '../lib/prisma.ts';
+import { checker } from './script.ts';
+import { createLead, getLead, listLeads, setLeadStatus } from '../lib/leads/leads.ts';
+import { board, convertLead, moveOpportunity } from '../lib/pipeline/pipeline.ts';
+import { getCompany, getContact, listCompanies, listContacts } from '../lib/crm/crm.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set.');
   process.exit(1);
 }
 
-const failures: string[] = [];
-function check(ok: boolean, message: string) {
-  console.log(`${ok ? '  ok  ' : ' FAIL '} ${message}`);
-  if (!ok) failures.push(message);
-}
+const { check, report } = checker();
 
 const q = { q: undefined, page: 1, perPage: 25, sort: undefined, dir: 'desc' as const };
 const stamp = Date.now();
@@ -202,8 +199,4 @@ console.log('  removed the smoke-test rows');
 
 await db().$disconnect();
 
-if (failures.length) {
-  console.error(`\n${failures.length} check(s) failed.`);
-  process.exit(1);
-}
-console.log('\nAll checks passed.');
+report();

@@ -52,6 +52,15 @@ export type SyncResult = {
  */
 export type SyncCursor = Record<string, unknown>;
 
+/**
+ * A decoded JSON response body, before a provider narrows it.
+ *
+ * Seven providers declared this identically. It is the shape every vendor's REST response
+ * arrives as, and naming it once is the difference between seven files agreeing by
+ * coincidence and seven files agreeing because they say the same thing.
+ */
+export type Json = Record<string, unknown>;
+
 export type SyncContext = {
   /** null to start a pull from the beginning; otherwise resume from here. */
   cursor: SyncCursor | null;
@@ -226,7 +235,7 @@ export type ConnectInput =
   | { kind: 'apiKey'; apiKey: string; config?: Record<string, unknown> };
 
 export type ConnectResult = {
-  /** Sealed by lib/crypto before it touches the database. */
+  /** Sealed by lib/access/crypto before it touches the database. */
   secret: string;
   config?: Record<string, unknown>;
   expiresAt?: Date;

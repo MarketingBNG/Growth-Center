@@ -1,9 +1,9 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { ProgressLink } from '@/components/NavProgress';
-import { accountValueDistribution, clientLifecycle, FLAG_LABELS } from '@/lib/lifecycle';
-import { referralPartners } from '@/lib/referrals';
-import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/lib/format';
+import { accountValueDistribution, clientLifecycle, FLAG_LABELS } from '@/lib/crm/lifecycle';
+import { referralPartners } from '@/lib/crm/referrals';
+import { fmtDate, fmtMoney, fmtNumber, fmtRelative } from '@/lib/shared/format';
 import { PartnerRegistry } from './PartnerRegistry';
 
 // §8.2, §8.3 and §8.5 on one tab.

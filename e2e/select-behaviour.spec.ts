@@ -1,12 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 test('choosing an option drives the filter and the form value', async ({ page, context, baseURL }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
 
-  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 120_000 });
+  await page.goto('/tasks', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
 
   // Synthesized onChange -> filter bar -> query string.
   await page.getByRole('combobox').first().click();
@@ -21,8 +22,8 @@ test('choosing an option drives the filter and the form value', async ({ page, c
   await page.waitForTimeout(1000);
 
   // Form field: the hidden input must carry the real value, not the sentinel.
-  await page.goto('/content', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 120_000 });
+  await page.goto('/content', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
   await page.getByRole('button', { name: /new piece/i }).first().click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('combobox').first().click();

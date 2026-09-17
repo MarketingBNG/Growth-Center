@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 type Summary = {
   rowsRead: number;
@@ -22,7 +24,7 @@ type Summary = {
 /**
  * Uploads a month's calendar.
  *
- * Not through `lib/fetcher`'s `api()`: that serialises a JSON body, and this sends a file
+ * Not through `lib/shared/fetcher`'s `api()`: that serialises a JSON body, and this sends a file
  * as multipart. The error shape is read the same way, so a refusal from the route reads
  * the same here as everywhere else.
  *
@@ -38,9 +40,8 @@ type Summary = {
 export function ImportCalendarButton({ month, replaceable }: { month: string; replaceable: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const { busy, error, run, setError } = useBooleanApiAction();
 
   function close() {
     setOpen(false);
@@ -50,12 +51,10 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
     setSummary(null);
 
     const form = new FormData(e.currentTarget);
-    try {
+    await run(async () => {
       const res = await fetch('/api/content/calendar/import', { method: 'POST', body: form });
       const text = await res.text();
       const parsed = (text ? JSON.parse(text) : {}) as Record<string, unknown>;
@@ -64,11 +63,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
       // The calendar behind the dialog is now wrong. Refreshed while the dialog is still
       // open, so closing it reveals the month that was just imported.
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -109,7 +104,7 @@ export function ImportCalendarButton({ month, replaceable }: { month: string; re
             </label>
           ) : null}
 
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
 
           {summary ? (
             <div className="space-y-2 rounded-lg border border-success/30 bg-success/5 p-2.5 text-meta">

@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { listQuery, orderBy, paged, parseQuery, slice } from '../lib/list-query.ts';
-import { pageQuery, pick } from '../lib/query.ts';
+import { listQuery, orderBy, paged, parseQuery, slice } from '../lib/platform/list-query.ts';
+import { pageQuery, pick } from '../lib/platform/query.ts';
 
 // The input-validation boundary shared by the API routes and the server components —
 // the code that turns a caller-supplied query string into database arguments.
 //
-// `route()` and `body()` are not here: they import next/server and lib/auth, which bare
+// `route()` and `body()` are not here: they import next/server and lib/access/auth, which bare
 // Node cannot resolve. Their auth path is covered end-to-end instead — an unauthenticated
 // /api/public/v1/leads answers 401 JSON, and the e2e suite signs in with a genuinely
 // signed cookie that still has to pass the roster check.
@@ -91,7 +91,7 @@ test('pick passes through only the named string keys', () => {
 // ── filters read off the URL ──────────────────────────────────────────────────
 
 test('an unreadable lead filter is ignored, not fatal', async () => {
-  const { leadFilters } = await import('../lib/leads.ts');
+  const { leadFilters } = await import('../lib/leads/leads.ts');
 
   // The Leads page parses these straight from searchParams. Throwing here took the whole
   // page down with a 500 — `?status=bogus` did it, and so did getting the case wrong on a
@@ -115,7 +115,7 @@ test('an unreadable lead filter is ignored, not fatal', async () => {
 });
 
 test('a valid lead filter still survives the fallback', async () => {
-  const { leadFilters } = await import('../lib/leads.ts');
+  const { leadFilters } = await import('../lib/leads/leads.ts');
   const ok = leadFilters.parse({
     status: 'lost',
     leadSource: 'facebook',
@@ -129,7 +129,7 @@ test('a valid lead filter still survives the fallback', async () => {
 });
 
 test('one bad filter does not discard the good ones beside it', async () => {
-  const { leadFilters } = await import('../lib/leads.ts');
+  const { leadFilters } = await import('../lib/leads/leads.ts');
   const mixed = leadFilters.parse({ status: 'lost', leadSource: 'bogus' });
   assert.equal(mixed.status, 'lost');
   assert.equal(mixed.leadSource, undefined);

@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // Walks every route and reports layout faults programmatically, so they can be found
 // without eyeballing 22 screenshots. Needs `npm run dev` on 3000 and NEXTAUTH_SECRET.
@@ -41,9 +42,9 @@ test('audit', async ({ page, context, baseURL }) => {
     page.on('pageerror', onPageErr);
 
     try {
-      await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 120_000 });
+      await page.goto(path, { waitUntil: 'domcontentloaded', timeout: GOTO });
       await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
-      await page.waitForSelector('nav a', { timeout: 90_000 });
+      await page.waitForSelector('nav a', { timeout: HYDRATE });
       await page.waitForTimeout(1500);
     } catch (e) {
       out.push(`${name}: LOAD FAILED ${(e as Error).message.slice(0, 120)}`);

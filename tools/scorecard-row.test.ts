@@ -1,10 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { KPI_SERIES } from '../lib/kpi.ts';
+import { KPI_SERIES } from '../lib/shared/kpi.ts';
 
-const band = readFileSync('lib/band.ts', 'utf8');
-const metrics = readFileSync('lib/metrics.ts', 'utf8');
+const band = libSource('band');
+// The metrics layer is three files behind a façade now, so this reads all of them: the
+// invariants below are about the layer, not about which file a line happens to sit in.
+const metrics = ['lib/metrics.ts', 'lib/metrics/window.ts', 'lib/metrics/core.ts', 'lib/metrics/kpis.ts']
+  .map((f) => readFileSync(f, 'utf8'))
+  .join('\n');
 const queue = readFileSync('app/(app)/ActionQueue.tsx', 'utf8');
 const page = readFileSync('app/(app)/page.tsx', 'utf8');
 

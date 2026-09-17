@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { driveSync, MAX_CHAIN_HOPS } from '@/lib/integrations/driver';
-import { hasDb } from '@/lib/prisma';
+import { cronGuard } from '@/lib/platform/cron-auth';
 
 /**
  * One more invocation's worth of a sync that has not finished.
@@ -11,9 +11,9 @@ import { hasDb } from '@/lib/prisma';
  * this to continue in a fresh one. Nothing else calls it.
  *
  * Not wrapped in route(): there is no session behind a continuation — the person who
- * pressed Sync now may have closed the tab, which is the whole point. It authenticates
- * with CRON_SECRET, the same way the nightly cron does, and refuses to run when the
- * variable is unset rather than becoming an open endpoint that hammers a vendor's API.
+ * pressed Sync now may have closed the tab, which is the whole point. Authenticated with
+ * cronGuard, the same way the nightly cron is, rather than becoming an open endpoint that
+ * hammers a vendor's API.
  */
 export const maxDuration = 300;
 
@@ -25,16 +25,8 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not set' }, { status: 503 });
-  }
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-  }
-  if (!hasDb()) {
-    return NextResponse.json({ error: 'No database configured' }, { status: 503 });
-  }
+  const refusal = cronGuard(req);
+  if (refusal) return refusal;
 
   let parsed: z.infer<typeof Body>;
   try {

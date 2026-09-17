@@ -1,11 +1,9 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { setConfig } from '@/lib/integrations/service';
 import { IntegrationError } from '@/lib/integrations/types';
-import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 // Non-secret settings only. Anything sealed goes through connect().
 const input = z.object({
@@ -21,6 +19,9 @@ export const PATCH = route<unknown, Ctx>('integrations:manage', async (user, req
     await invalidate(TAGS.integrations);
     return { config: updated };
   } catch (e) {
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
+    // IntegrationError elsewhere: there, the vendor is refusing us; here, setConfig is
+    // refusing the caller's own config value before any vendor is involved.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);
     throw e;
   }

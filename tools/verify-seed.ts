@@ -6,6 +6,7 @@
 //
 //   DATABASE_URL=… node --experimental-strip-types tools/verify-seed.ts
 
+import { checker } from './script.ts';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../lib/generated/prisma/client.ts';
 
@@ -18,11 +19,7 @@ if (!url) {
 const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
 
-const problems: string[] = [];
-function check(ok: boolean, message: string) {
-  console.log(`${ok ? '  ok  ' : ' FAIL '} ${message}`);
-  if (!ok) problems.push(message);
-}
+const { check, report } = checker();
 
 const leadsByStatus = await db.lead.groupBy({ by: ['status'], _count: { _all: true } });
 const stages = await db.pipelineStage.findMany({
@@ -101,8 +98,4 @@ console.log(`  CAC           ${money(Math.round(totalSpend / customers))}`);
 
 await db.$disconnect();
 
-if (problems.length) {
-  console.error(`\n${problems.length} check(s) failed.`);
-  process.exit(1);
-}
-console.log('\nAll checks passed.');
+report();

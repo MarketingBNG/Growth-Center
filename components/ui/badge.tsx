@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 /** Pills, not chips: soft ground plus the solid status colour for the text. The tone
  *  mapping is unchanged from before. Text uses the *-strong tokens, which are the same

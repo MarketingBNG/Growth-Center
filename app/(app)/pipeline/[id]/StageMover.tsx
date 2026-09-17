@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useOptimistic, useState, useTransition } from 'react';
 import { Select } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorText } from '@/components/patterns/state';
 
 export function StageMover({
   dealId,
@@ -42,7 +43,7 @@ export function StageMover({
 
   return (
     <div className="flex items-center gap-2">
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
       <Select
         aria-label="Stage"
         className="w-auto"

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { formatSlot } from '@/lib/content-fields';
+import { formatSlot } from '@/lib/content/content-fields';
 import { EditPieceModal, type EditablePiece } from './EditPieceModal';
 
 export type CalendarCell = {

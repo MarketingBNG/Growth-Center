@@ -1,13 +1,14 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { db } from '@/lib/prisma';
-import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/roles';
-import { renameUser, setActive, setRole } from '@/lib/users';
+import { body, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { ROLE_VALUES, canAdminister, canonicalEmail, isAdmin, type Role } from '@/lib/access/roles';
+import { renameUser, setActive, setRole } from '@/lib/access/users';
+import { recordAudit } from '@/lib/platform/audit';
+import { email } from '@/lib/platform/fields';
 
 const input = z
   .object({
-    email: z.string().trim().email(),
+    email: email(),
     active: z.boolean().optional(),
     name: z.string().trim().min(1).max(80).optional(),
     role: z.enum(ROLE_VALUES as [Role, ...Role[]]).optional(),
@@ -25,13 +26,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
   try {
     if (name !== undefined) {
       await renameUser(target, name);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: 'user.rename',
-          entityType: 'app_user',
-          detail: { email: target, name },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: 'user.rename',
+        entityType: 'app_user',
+        detail: { email: target, name },
+      
       });
     }
 
@@ -43,13 +43,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
       }
 
       await setRole(target, role);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: 'user.role',
-          entityType: 'app_user',
-          detail: { email: target, role },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: 'user.role',
+        entityType: 'app_user',
+        detail: { email: target, role },
+      
       });
     }
 
@@ -61,13 +60,12 @@ export const PATCH = route('settings:manage', async (user, req) => {
       }
 
       await setActive(target, active);
-      await db().auditEvent.create({
-        data: {
-          actorEmail: user.email,
-          action: active ? 'user.activate' : 'user.deactivate',
-          entityType: 'app_user',
-          detail: { email: target },
-        },
+      await recordAudit({
+        actorEmail: user.email,
+        action: active ? 'user.activate' : 'user.deactivate',
+        entityType: 'app_user',
+        detail: { email: target },
+      
       });
     }
   } catch (e) {

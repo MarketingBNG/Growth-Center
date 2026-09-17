@@ -1,16 +1,17 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { Input, Select } from '@/components/ui/input';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
+import { ErrorText } from '@/components/patterns/state';
 import {
   APPROVAL_STATE,
   STATUS_LABELS,
   nextStatuses,
   type InsightStatus,
-} from '@/lib/insight-lifecycle';
+} from '@/lib/insights/insight-lifecycle';
 
 /**
  * Moving one finding along, with whatever that move requires.
@@ -34,12 +35,10 @@ export function InsightAction({
   currentOwner: string | null;
   canApprove: boolean;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
   const [target, setTarget] = useState<InsightStatus | null>(null);
   const [owner, setOwner] = useState(currentOwner ?? '');
   const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, setError, run } = useMutation();
 
   // Approval is the one move that belongs to a single identity. Offered only to whoever
   // holds it: the route refuses it regardless, and a button that always fails teaches
@@ -60,23 +59,17 @@ export function InsightAction({
   }
 
   function submit(to: InsightStatus) {
-    setError(null);
-    start(async () => {
-      try {
-        await api(`/api/ai/insights/${id}`, {
-          method: 'PATCH',
-          json: {
-            status: to,
-            ownerEmail: owner || undefined,
-            reviewNote: note.trim() || undefined,
-          },
-        });
-        setTarget(null);
-        setNote('');
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
+    run(async () => {
+      await api(`/api/ai/insights/${id}`, {
+        method: 'PATCH',
+        json: {
+          status: to,
+          ownerEmail: owner || undefined,
+          reviewNote: note.trim() || undefined,
+        },
+      });
+      setTarget(null);
+      setNote('');
     });
   }
 
@@ -98,10 +91,14 @@ export function InsightAction({
       ) : (
         <>
           {needsOwner ? (
-            <select
+            <Select
+              aria-label="Owner"
               value={owner}
               onChange={(e) => setOwner(e.target.value)}
-              className="h-6 rounded border border-input bg-background px-1 text-meta"
+              // The size this row was built around, kept. Only the open list changes:
+              // Select's default is a full-width h-9 control, which would break a row
+              // meant to sit inline beside a note field and two buttons.
+              className="h-6 w-auto rounded border border-input bg-background px-1 text-meta"
             >
               <option value="">Choose an owner…</option>
               {owners.map((o) => (
@@ -109,7 +106,7 @@ export function InsightAction({
                   {o.name ?? o.email}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : null}
 
           {needsNote ? (
@@ -145,7 +142,7 @@ export function InsightAction({
         </>
       )}
 
-      {error ? <p className="basis-full text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="basis-full" />
     </div>
   );
 }

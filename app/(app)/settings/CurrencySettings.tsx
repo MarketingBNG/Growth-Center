@@ -6,13 +6,15 @@ import { RefreshCw, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 import {
   CURRENCIES,
   RATE_STALE_HOURS,
   rateAgeHours,
   type CurrencySettings as Settings,
-} from '@/lib/currency';
+} from '@/lib/shared/currency';
+import { ErrorText } from '@/components/patterns/state';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * Which currency the workspace reports in, and what the others are worth against it.
@@ -30,8 +32,7 @@ export function CurrencySettings({ initial }: { initial: Settings }) {
   const [rates, setRates] = useState<Record<string, string>>(
     Object.fromEntries(CURRENCIES.map((c) => [c.code, String(initial.rates[c.code] ?? 1)])),
   );
-  const [busy, setBusy] = useState<'save' | 'refresh' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run, setError } = useApiAction<'save' | 'refresh' | null>(null);
   const [saved, setSaved] = useState(false);
 
   const applied = (next: Settings) => {
@@ -44,8 +45,6 @@ export function CurrencySettings({ initial }: { initial: Settings }) {
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy('save');
-    setError(null);
     setSaved(false);
 
     const parsed: Record<string, number> = {};
@@ -54,39 +53,28 @@ export function CurrencySettings({ initial }: { initial: Settings }) {
       // rate that contradicts the currency it is quoted against.
       const n = c.code === reporting ? 1 : Number(rates[c.code]);
       if (!Number.isFinite(n) || n <= 0) {
-        setBusy(null);
         setError(`${c.code} needs a rate above zero.`);
         return;
       }
       parsed[c.code] = n;
     }
 
-    try {
+    await run('save', async () => {
       const out = await api<{ currency: Settings }>('/api/settings/currency', {
         method: 'PUT',
         json: { reporting, mode, rates: parsed },
       });
       applied(out.currency);
       setSaved(true);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function refresh() {
-    setBusy('refresh');
-    setError(null);
     setSaved(false);
-    try {
+    await run('refresh', async () => {
       const out = await api<{ currency: Settings }>('/api/settings/currency', { method: 'POST' });
       applied(out.currency);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   const others = CURRENCIES.filter((c) => c.code !== reporting);
@@ -183,7 +171,7 @@ export function CurrencySettings({ initial }: { initial: Settings }) {
         </p>
       ) : null}
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       {saved && !error ? (
         <p className="text-xs text-success">Saved. Figures across the app now use it.</p>
       ) : null}

@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ['pg', '@prisma/adapter-pg'],
 
   // typedRoutes is deliberately off: it types Link's href as a literal union, which the
-  // config-driven nav array in lib/nav.ts cannot satisfy without casting every entry.
+  // config-driven nav array in lib/shared/nav.ts cannot satisfy without casting every entry.
 };
 
 export default nextConfig;

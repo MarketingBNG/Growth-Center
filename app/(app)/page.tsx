@@ -5,24 +5,24 @@ import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
 import { AiAssistantCard } from '@/components/patterns/ai-assistant-card';
 import { LeadStatusBadge } from '@/components/patterns/badges';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { FunnelChart } from '@/components/charts/FunnelChart';
 import { TableCard } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { currentUser } from '@/lib/auth';
-import { db, hasDb } from '@/lib/prisma';
+import { currentUser } from '@/lib/access/auth';
+import { db, hasDb } from '@/lib/platform/prisma';
 import { openPipeline, windowFor, channelPerformance } from '@/lib/metrics';
-import { dashboardBand } from '@/lib/band';
-import { aiStatus } from '@/lib/ai';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/format';
-import { WEB_LEAD_BASIS } from '@/lib/web-leads';
-import { segmentMix } from '@/lib/leads';
-import { deliveryCapacity } from '@/lib/capacity';
+import { dashboardBand } from '@/lib/analytics/band';
+import { aiStatus } from '@/lib/ai/ai';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { fmtDate, fmtMoney, fmtPercent, fmtRatio, fmtRelative, fmtNumber } from '@/lib/shared/format';
+import { WEB_LEAD_BASIS } from '@/lib/analytics/web-leads';
+import { segmentMix } from '@/lib/leads/leads';
+import { deliveryCapacity } from '@/lib/crm/capacity';
 import { CostPerConsultation } from './CostPerConsultation';
 import { ActionQueue } from './ActionQueue';
-import { isPartnerView } from '@/lib/partner-view';
+import { isPartnerView } from '@/lib/shared/partner-view';
 import {
   PartnerHidden,
   PartnerViewProvider,
@@ -35,19 +35,15 @@ export const metadata = { title: 'Dashboard · Growth Center' };
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const user = await currentUser();
   const first = user?.name.split(' ')[0] ?? 'there';
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title={`Good to see you, ${first}`} subtitle="The command centre for BNG's growth engine." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
+    return noDatabasePage(
+      `Good to see you, ${first}`,
+      "The command centre for BNG's growth engine.",
     );
   }
 
@@ -55,13 +51,7 @@ export default async function DashboardPage({
   // §6.6's preset, read from the URL so the screen a partner sees is a link somebody can
   // send rather than a setting somebody has to remember to switch back.
   const partnerView = isPartnerView(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const { current } = windowFor(spec);
 
   const [dash, pipeline, channels, segments, capacity, recentLeads] =

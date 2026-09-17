@@ -4,14 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Handshake, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input, Select } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { EmptyState } from '@/components/patterns/state';
-import { api } from '@/lib/fetcher';
-import { fmtNumber, fmtRelative } from '@/lib/format';
-// From referral-types, not referrals: the latter imports lib/prisma, and a value read
+import { EmptyState, ErrorBanner } from '@/components/patterns/state';
+import { api } from '@/lib/shared/fetcher';
+import { fmtNumber, fmtRelative } from '@/lib/shared/format';
+// From referral-types, not referrals: the latter imports lib/platform/prisma, and a value read
 // from there pulls the `pg` driver into the browser bundle.
-import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/referral-types';
+import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from '@/lib/crm/referral-types';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 // §8.5's registry. "What is not recorded is not followed up."
 //
@@ -22,36 +24,23 @@ import { PARTNER_TYPES, PARTNER_TYPE_LABELS, SILENT_DAYS, type PartnerRow } from
 export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[]; canManage: boolean }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useApiAction<string | null>(null);
   const [form, setForm] = useState({ name: '', partnerType: 'ca_firm', company: '', email: '' });
 
   async function save() {
-    setBusy('new');
-    setError(null);
-    try {
+    await run('new', async () => {
       await api('/api/referrals', { method: 'POST', json: form });
       setForm({ name: '', partnerType: 'ca_firm', company: '', email: '' });
       setAdding(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function record(id: string, event: 'touch' | 'acknowledgement') {
-    setBusy(id);
-    setError(null);
-    try {
+    await run(id, async () => {
       await api(`/api/referrals/${id}`, { method: 'POST', json: { event } });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   const silent = partners.filter((p) => p.silent).length;
@@ -79,52 +68,49 @@ export function PartnerRegistry({ partners, canManage }: { partners: PartnerRow[
         ) : null}
       </CardHeader>
 
-      {error ? (
-        <div className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <ErrorBanner error={error} className="mx-4 mb-3 rounded-lg" />
 
       {adding ? (
         <div className="flex flex-wrap items-end gap-2 border-t border-border px-4 py-3">
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Name</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Name</span>
+            <Input
               autoFocus
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-48 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-48 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Type</span>
-            <select
+            <span className="mb-1 block font-medium text-muted-foreground">Type</span>
+            <Select
+              aria-label="Type"
               value={form.partnerType}
               onChange={(e) => setForm({ ...form, partnerType: e.target.value })}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-auto rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             >
               {PARTNER_TYPES.map((t) => (
                 <option key={t} value={t}>
                   {PARTNER_TYPE_LABELS[t]}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Firm</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Firm</span>
+            <Input
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
-              className="w-44 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-44 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <label className="text-xs">
-            <span className="mb-1 block text-muted-foreground">Email</span>
-            <input
+            <span className="mb-1 block font-medium text-muted-foreground">Email</span>
+            <Input
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-52 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+              className="h-auto w-52 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
             />
           </label>
           <Button size="sm" disabled={!form.name.trim() || busy !== null} onClick={save}>

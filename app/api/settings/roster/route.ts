@@ -1,9 +1,10 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
-import { ROSTER_KEY, marketingRoster } from '@/lib/roster';
-import { canonicalEmail } from '@/lib/roles';
-import { TAGS, invalidate } from '@/lib/cache';
+import { body, route } from '@/lib/platform/api';
+import { db } from '@/lib/platform/prisma';
+import { ROSTER_KEY, marketingRoster } from '@/lib/access/roster';
+import { canonicalEmail } from '@/lib/access/roles';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 // Who the Growth Center's queue is for. D2: the task-debt rule was raising a finding per
 // person across the whole firm, eighteen of them, of whom one was on the marketing team.
@@ -48,19 +49,16 @@ export const PUT = route('settings:manage', async (user, req) => {
 
   // Both tags: the roster is a setting, and the rules that read it are computed under
   // metrics.
-  await invalidate(TAGS.settings);
-  await invalidate(TAGS.metrics);
+  await invalidate(TAGS.settings, TAGS.metrics);
 
   // Recorded for the same reason a threshold change is: removing somebody from the roster
   // is how their overdue work stops appearing, and a quiet queue should be explainable.
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: 'settings.roster',
-      entityType: 'app_setting',
-      entityId: ROSTER_KEY,
-      detail: { from: before, to: unique },
-    },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'settings.roster',
+    entityType: 'app_setting',
+    entityId: ROSTER_KEY,
+    detail: { from: before, to: unique },
   });
 
   return { emails: unique, rejected };

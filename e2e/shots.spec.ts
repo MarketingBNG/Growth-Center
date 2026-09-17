@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // Captures every module so the pages can actually be looked at. One test per page: in
 // dev each route compiles on first hit, and `networkidle` never settles because of the
@@ -49,11 +50,11 @@ for (const [name, path] of PAGES) {
     // The dev-tools badge is fixed to the viewport, so a fullPage capture paints it as a
     // dark blob partway down the sidebar. Not part of the app.
     await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
-    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: GOTO });
     await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
     // The shell's sidebar is the last thing to hydrate, so it is a good "page is real"
     // signal without depending on any module's own content.
-    await page.waitForSelector('nav a', { timeout: 60_000 });
+    await page.waitForSelector('nav a', { timeout: HYDRATE });
     await page.waitForTimeout(1200);
     await page.screenshot({ path: `screenshots/${name}.png`, fullPage: true, timeout: 30_000 });
 

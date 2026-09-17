@@ -4,7 +4,10 @@ import {
   type IntegrationProvider,
   type MetricPoint,
   type SyncCursor,
+  type Json,
 } from '../types.ts';
+import { requestFailed } from '../messages.ts';
+import { intAtLeast, num, startOfDay } from '../coerce.ts';
 
 // Smartlead — the cold-email platform the outreach runs on.
 //
@@ -23,7 +26,6 @@ const API = 'https://server.smartlead.ai/api/v1';
 const PAGE = 100;
 
 type Stored = { apiKey: string };
-type Json = Record<string, unknown>;
 
 function url(path: string, apiKey: string, params: Record<string, string> = {}): string {
   const q = new URLSearchParams({ api_key: apiKey, ...params });
@@ -102,7 +104,7 @@ async function get(path: string, apiKey: string, params?: Record<string, string>
       continue;
     }
 
-    if (!res.ok) throw new IntegrationError(`Smartlead request failed (${res.status}).`);
+    if (!res.ok) throw new IntegrationError(requestFailed('Smartlead', res.status));
 
     return res.json();
   }
@@ -121,11 +123,6 @@ function rows(payload: unknown): Json[] {
 const text = (value: unknown): string | null => {
   const s = value == null ? '' : String(value).trim();
   return s === '' ? null : s;
-};
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
 };
 
 /** First of several field names to carry a value. Smartlead is inconsistent about
@@ -188,15 +185,13 @@ export function readCursor(raw: unknown): Cursor | null {
   if (!Array.isArray(c.ids)) return null;
 
   const ids = c.ids.map(Number).filter((n) => Number.isFinite(n));
-  const index = Number(c.index);
-  const offset = Number(c.offset);
   const stage = STAGES.find((s) => s === c.stage);
 
   return {
     ids,
-    index: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0,
+    index: intAtLeast(c.index),
     stage: stage ?? 'sequences',
-    offset: Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0,
+    offset: intAtLeast(c.offset),
   };
 }
 
@@ -456,12 +451,3 @@ export const smartlead: IntegrationProvider = {
   },
 };
 
-/** Midnight UTC for the day a record belongs to. Stable across syncs, which is what keeps
- *  a metric point's unique key stable and makes a re-sync an update rather than a row. */
-function startOfDay(value: unknown): Date {
-  const raw = value == null ? '' : String(value);
-  const d = raw ? new Date(raw) : new Date();
-  if (Number.isNaN(d.getTime())) return new Date(new Date().setUTCHours(0, 0, 0, 0));
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}

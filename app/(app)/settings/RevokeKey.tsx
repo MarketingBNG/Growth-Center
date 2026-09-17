@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * The revoke endpoint existed from the start with no way to reach it. These keys get
@@ -14,21 +16,14 @@ import { api } from '@/lib/fetcher';
 export function RevokeKey({ id, name }: { id: string; name: string }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function revoke() {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/settings/api-keys/${id}`, { method: 'DELETE' });
       setConfirming(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -44,7 +39,7 @@ export function RevokeKey({ id, name }: { id: string; name: string }) {
         description="Any form still using this key stops submitting immediately. This cannot be undone — issue a new key instead."
       >
         <div className="space-y-3">
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <ErrorText error={error} />
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
               Cancel

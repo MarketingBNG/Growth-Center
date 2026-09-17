@@ -2,7 +2,7 @@
 
 import { Bar, BarChart as ReBarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { AXIS, ChartFrame, GRID, SERIES, Tip } from './chart-parts';
-import { fmtCompact, fmtMoney } from '@/lib/format';
+import { fmtCompact, fmtMoney } from '@/lib/shared/format';
 
 export type BarDatum = { label: string; value: number };
 

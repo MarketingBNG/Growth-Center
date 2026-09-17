@@ -1,9 +1,9 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { channelPerformance } from '@/lib/metrics';
-import { lostReasonMix, segmentMix } from '@/lib/leads';
-import { fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
-import { currencySettings } from '@/lib/settings';
+import { lostReasonMix, segmentMix } from '@/lib/leads/leads';
+import { fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
+import { currencySettings } from '@/lib/platform/settings';
 
 // §7.1, §7.4 and §7.6 in one band under the leads table.
 //

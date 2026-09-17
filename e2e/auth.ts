@@ -5,7 +5,7 @@ import type { BrowserContext } from '@playwright/test';
 // driving Google's consent screen — which cannot be automated, and shouldn't be.
 //
 // This is not an auth bypass: the token is signed with the app's own NEXTAUTH_SECRET
-// and carries an email that must still pass the roster check in lib/roles.ts on every
+// and carries an email that must still pass the roster check in lib/access/roles.ts on every
 // request. Remove someone from the roster and this stops working for them too.
 
 export const COOKIE_NAME = 'growth-center.session-token';

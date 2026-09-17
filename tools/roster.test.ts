@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { splitByRoster } from '../lib/roster.ts';
+import { splitByRoster } from '../lib/access/roster.ts';
 
 // D2. The task-debt rule raised one finding per person across the whole firm — eighteen
 // above the floor, of whom one was on the marketing team. Raising the threshold does not
@@ -48,7 +49,7 @@ test('an empty roster leaves everyone outside it, so nothing is silently dropped
 
 // ── how the rule uses it ─────────────────────────────────────────────────────────────
 
-const rules = readFileSync('lib/insight-rules.ts', 'utf8');
+const rules = libSource('insight-rules');
 
 test('an unset roster raises a configuration finding rather than going quiet', () => {
   assert.match(rules, /subject: 'marketing-roster-unset'/);

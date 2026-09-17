@@ -9,7 +9,7 @@ import {
   isSupported,
   percentageWithoutBasis,
   unsupportedFigures,
-} from '../lib/eval-checks.ts';
+} from '../lib/ai/eval-checks.ts';
 
 // The checks §20.7's probes are made of. These run for nothing; the probes that need a
 // model call live in tools/eval.ts behind `npm run eval`.

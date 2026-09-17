@@ -1,34 +1,33 @@
 import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { DateRangePicker } from '@/components/patterns/date-range-picker';
-import { RANGE_OPTIONS } from '@/lib/enums';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
 import { DuplicateQueue } from './DuplicateQueue';
 import { Lifecycle } from './Lifecycle';
-import { duplicateCounts, duplicateQueue } from '@/lib/duplicate-queue';
+import { duplicateCounts, duplicateQueue } from '@/lib/crm/duplicate-queue';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { SortHeader } from '@/components/patterns/sort-header';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
-import { crmBand } from '@/lib/band';
+import { hasDb } from '@/lib/platform/prisma';
+import { crmBand } from '@/lib/analytics/band';
 import { ProgressLink } from '@/components/NavProgress';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { pageQuery, pick } from '@/lib/query';
-import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm';
-import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
-import { fmtDate, fmtNumber } from '@/lib/format';
-import { DEMO_SOURCE } from '@/lib/sources';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { pageQuery, pick } from '@/lib/platform/query';
+import { listCompanies, listContacts, UNASSIGNED } from '@/lib/crm/crm';
+import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/access/users';
+import { fmtDate, fmtNumber } from '@/lib/shared/format';
+import { DEMO_SOURCE } from '@/lib/shared/sources';
 import { NewCrmRecordButton } from './NewCrmRecordButton';
 import { Overview } from './Overview';
-import { crmOverview } from '@/lib/crm-overview';
+import { crmOverview } from '@/lib/crm/crm-overview';
 import { rangeFor } from '@/lib/metrics';
 
 export const metadata = { title: 'CRM · Growth Center' };
@@ -61,7 +60,7 @@ const filtersFor = (tab: 'companies' | 'contacts', people: AppUser[], owners: st
 export default async function CrmPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
   // §8.2's client lifecycle is a third tab rather than a panel: it is about the accounts
@@ -70,16 +69,7 @@ export default async function CrmPage({
   const tab =
     params.tab === 'contacts' ? 'contacts' : params.tab === 'lifecycle' ? 'lifecycle' : 'companies';
 
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="CRM" subtitle="Contacts and companies." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
-  }
+  if (!hasDb()) return noDatabasePage('CRM', 'Contacts and companies.');
 
   // Switching tab keeps the rest of the URL. These were plain links to /crm and
   // /crm?tab=contacts, so moving between Companies and Contacts silently discarded the
@@ -101,21 +91,11 @@ export default async function CrmPage({
   };
 
   const q = pageQuery(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
+  const { value, days, picked, bucket, label: rangeLabel } = resolveRange(params);
 
   // A hand-picked window wins over the preset when both are in the URL; the picker clears
   // the other, so having both means someone edited the link.
-  const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
-  // The preset's own label rather than `Last ${days} days`, which read "Last 180 days"
-  // for the six-month window and "Last 365 days" for the year.
-  const rangeLabel = picked
-    ? picked.label
-    : value === 'today'
-      ? 'Last 1 day'
-      : (RANGE_OPTIONS.find((o) => o.value === value)?.label ?? `Last ${days} days`);
-  // The chart buckets by the window actually being drawn, not by the preset behind it.
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   const { ownerEmail, status } = pick<{ ownerEmail?: string; status?: string }>(params, [
     'ownerEmail',
@@ -178,7 +158,7 @@ export default async function CrmPage({
       <DuplicateQueue
         rows={dupRows}
         counts={dupCounts}
-        canManage={user ? can(user.role, 'crm:write') : false}
+        canManage={can(user?.role, 'crm:write')}
       />
 
       <div className="flex flex-wrap items-center gap-1 pb-4">
@@ -207,7 +187,7 @@ export default async function CrmPage({
       </div>
 
       {tab === 'lifecycle' ? (
-        <Lifecycle canManage={user ? can(user.role, 'crm:write') : false} />
+        <Lifecycle canManage={can(user?.role, 'crm:write')} />
       ) : (
         <>
       {/* Both lists were unfilterable, though every row carries an owner and the leads
@@ -267,7 +247,7 @@ function CompanyTable({ rows }: { rows: CompanyRow[] }) {
     <Table>
       <THead>
         <TR>
-          {/* SortHeader renders its own th; only the columns lib/crm.ts allows are
+          {/* SortHeader renders its own th; only the columns lib/crm/crm.ts allows are
               clickable, so a header cannot ask for an order the query will ignore. */}
           <SortHeader name="name">Company</SortHeader>
           {/* Phone, not Industry. Zoho carries no Industry on any of the 2,953 accounts,

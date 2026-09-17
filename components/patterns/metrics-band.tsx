@@ -8,10 +8,10 @@ import { TrendChart, type TrendPoint, type TrendSeries } from '@/components/char
 import { WeekdayChart, type WeekdayPoint } from '@/components/charts/WeekdayChart';
 import { GaugeChart } from '@/components/charts/GaugeChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import type { Kpi } from '@/lib/kpi';
-import { sourceMeta } from '@/lib/sources';
+import type { Kpi } from '@/lib/shared/kpi';
+import { sourceMeta } from '@/lib/shared/sources';
 import { usePersisted } from '@/components/use-persisted';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 export type MetricsBandProps = {
   kpis: Kpi[];

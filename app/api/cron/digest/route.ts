@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { hasDb } from '@/lib/prisma';
-import { sendDigest } from '@/lib/digest';
-import { generateInsights, growthContext } from '@/lib/ai';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { sendDigest } from '@/lib/insights/digest';
+import { generateInsights, growthContext } from '@/lib/ai/ai';
 
 /**
  * §20.6's daily run: the rules, then the digest. Scheduled in vercel.json.
@@ -31,8 +31,7 @@ import { generateInsights, growthContext } from '@/lib/ai';
  * else. More importantly a sync that runs long or fails would take the digest silently
  * with it, and the symptom of that is an email not arriving — which nobody notices.
  *
- * Authenticated the same way as the sync: CRON_SECRET as a bearer token, refusing to run
- * when the variable is unset rather than running openly. Sending mail from an open
+ * Authenticated the same way as the sync — see cronGuard. Sending mail from an open
  * endpoint is worse than syncing from one.
  */
 export const maxDuration = 60;
@@ -48,16 +47,8 @@ function baseUrl(req: Request): string {
 }
 
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not set' }, { status: 503 });
-  }
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-  }
-  if (!hasDb()) {
-    return NextResponse.json({ error: 'No database configured' }, { status: 503 });
-  }
+  const refusal = cronGuard(req);
+  if (refusal) return refusal;
 
   // The rules first, so the digest reports today's findings rather than the last set
   // somebody's page visit happened to produce. A failure here must not stop the digest:

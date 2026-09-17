@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 // Each run replaces the whole saved set, so the label says "Regenerate" once there is
 // something to replace — "Generate" over existing findings reads as though it would add to
@@ -28,25 +30,19 @@ export function GenerateInsightsButton({
   // Without waiting for the transition the panel showed "Wrote 4 findings" directly above
   // "None yet", which is the two halves of the same screen disagreeing.
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ written: number; usage?: { input: number; output: number } } | null>(null);
+  const { busy, error, run: runAction } = useBooleanApiAction();
 
   async function run() {
-    setBusy(true);
-    setError(null);
     setDone(null);
-    try {
+    await runAction(async () => {
       const result = await api<{ written: number; usage?: { input: number; output: number } }>(
         '/api/ai/insights',
         { method: 'POST', json: { days } },
       );
       startTransition(() => router.refresh());
       setDone(result);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-    setBusy(false);
+    });
   }
 
   const working = busy || pending;
@@ -69,11 +65,7 @@ export function GenerateInsightsButton({
         </p>
       ) : null}
 
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

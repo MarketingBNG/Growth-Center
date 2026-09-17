@@ -1,7 +1,7 @@
 'use client';
 
-import { fmtNumber } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { fmtNumber } from '@/lib/shared/format';
+import { cn } from '@/lib/shared/utils';
 
 export type WeekdayPoint = { label: string; value: number };
 

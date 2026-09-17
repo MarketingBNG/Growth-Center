@@ -1,13 +1,13 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { applyAllocation, previewAllocation } from '@/lib/allocation';
+import { body, route } from '@/lib/platform/api';
+import { applyAllocation, previewAllocation } from '@/lib/leads/allocation';
 
 // Equal split of untouched leads. Two methods on purpose: GET works out the plan and
 // changes nothing, POST runs it. Nothing here decides anything a GET did not already show,
 // so the plan somebody approves on screen is the plan that executes.
 
 const options = z.object({
-  // Defaults live in lib/allocation.ts, not here — the planner is what has to be safe by
+  // Defaults live in lib/leads/allocation.ts, not here — the planner is what has to be safe by
   // default, including when a cron or the AI calls it with no options at all.
   tolerance: z.number().min(0).max(2).optional(),
   limit: z.number().int().min(1).max(1000).optional(),

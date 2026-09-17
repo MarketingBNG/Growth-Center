@@ -1,8 +1,6 @@
-import { HttpError } from '@/lib/auth';
-import { body, route } from '@/lib/api';
-import { getCompany, updateCompany, companyPatch } from '@/lib/crm';
-
-type Ctx = { params: Promise<{ id: string }> };
+import { HttpError } from '@/lib/access/auth';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { getCompany, updateCompany, companyPatch } from '@/lib/crm/crm';
 
 export const GET = route<unknown, Ctx>('growth:read', async (_user, _req, ctx) => {
   const company = await getCompany((await ctx.params).id);

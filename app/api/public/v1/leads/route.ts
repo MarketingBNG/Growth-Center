@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyApiKey } from '@/lib/apikeys';
-import { createLead } from '@/lib/leads';
-import { rateLimit } from '@/lib/rate-limit';
-import { SOURCE_TYPES } from '@/lib/enums';
-import { hasDb } from '@/lib/prisma';
+import { verifyApiKey } from '@/lib/access/apikeys';
+import { createLead } from '@/lib/leads/leads';
+import { rateLimit } from '@/lib/platform/rate-limit';
+import { SOURCE_TYPES } from '@/lib/shared/enums';
+import { hasDb } from '@/lib/platform/prisma';
+import { email } from '@/lib/platform/fields';
 
 // Website form capture. Authenticated by an org API key rather than a session, because
 // the caller is a landing page, not a signed-in person.
@@ -15,7 +16,7 @@ import { hasDb } from '@/lib/prisma';
 const input = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().max(80).optional(),
-  email: z.string().trim().email().max(200).optional(),
+  email: email().optional(),
   phone: z.string().trim().max(40).optional(),
   companyName: z.string().trim().max(160).optional(),
   title: z.string().trim().max(120).optional(),

@@ -1,5 +1,5 @@
-import { route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import {
   csvGrid,
   importCalendar,
@@ -7,7 +7,7 @@ import {
   parseMonth,
   readSheet,
 } from '@/lib/content-calendar';
-import { xlsxGrid } from '@/lib/content-calendar-xlsx';
+import { xlsxGrid } from '@/lib/content/content-calendar-xlsx';
 
 // Takes a content calendar as a file and turns it into pieces for one month.
 //

@@ -3,19 +3,19 @@ import { ArrowRight, Megaphone } from 'lucide-react';
 import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
-import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
-import { costPer, rate } from '@/lib/calc';
+import { hasDb } from '@/lib/platform/prisma';
+import { campaignPerformance, campaignTotals } from '@/lib/money/campaigns';
+import { costPer, rate } from '@/lib/shared/calc';
 import { provenance, windowFor } from '@/lib/metrics';
-import { customRange, rangeParam } from '@/lib/range';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
 import { cards } from '@/lib/integrations/service';
-import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/format';
-import { currencySettings } from '@/lib/settings';
+import { fmtMoney, fmtNumber, fmtPercent, fmtRatio, fmtRelative } from '@/lib/shared/format';
+import { currencySettings } from '@/lib/platform/settings';
 import { SourceLine } from '@/components/patterns/source-badge';
 
 export const metadata = { title: 'Paid Ads · Growth Center' };
@@ -26,26 +26,13 @@ export const metadata = { title: 'Paid Ads · Growth Center' };
 export default async function AdsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Paid Ads" subtitle="Spend and return across ad platforms." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
-  }
+  if (!hasDb()) return noDatabasePage('Paid Ads', 'Spend and return across ad platforms.');
 
   const params = await searchParams;
-  const { value, days } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const { current } = windowFor(picked ?? days);
+  const { value, spec } = resolveRange(params);
+  const { current } = windowFor(spec);
 
   const [all, providers, sources] = await Promise.all([
     campaignPerformance(current),
@@ -110,7 +97,7 @@ export default async function AdsPage({
   ]
     .map((p) => ({
       ...p,
-      // Through lib/calc's `rate`, not by hand: it returns percentage units, which is
+      // Through lib/shared/calc's `rate`, not by hand: it returns percentage units, which is
       // what fmtPercent here expects. Divided raw, Meta Ads read 0.00% CTR beside a
       // total of 0.37% computed from the same two numbers.
       ctr: rate(p.clicks, p.impressions),

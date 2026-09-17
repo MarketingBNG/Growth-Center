@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { distribute } from '../lib/speed-to-lead.ts';
+import { distribute } from '../lib/analytics/speed-to-lead.ts';
 
 // Appendix C: "distribution of first-touch times, including untouched". The untouched are
 // the half the definition most wants, and the half the application used to drop.

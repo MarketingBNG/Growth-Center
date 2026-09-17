@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KPI_SERIES, kpiDelta, kpiIsComparable, type Kpi } from '../lib/kpi.ts';
+import { KPI_SERIES, kpiDelta, kpiIsComparable, type Kpi } from '../lib/shared/kpi.ts';
 
 // The delta drives a green or red pill on every KPI card. Getting the direction wrong
 // paints rising spend as a win, so the sign and the null cases are worth pinning down.

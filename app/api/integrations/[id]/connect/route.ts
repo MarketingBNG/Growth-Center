@@ -1,13 +1,11 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { body, route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { authUrlFor, connect } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
-import { signState } from '@/lib/oauth-state';
-import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
+import { signState } from '@/lib/access/oauth-state';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 const input = z.object({
   apiKey: z.string().trim().min(1).max(500).optional(),
@@ -35,6 +33,9 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, req,
     await invalidate(TAGS.integrations);
     return { ok: true };
   } catch (e) {
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
+    // IntegrationError elsewhere: a missing or malformed API key is the caller's own
+    // input being rejected, not a vendor refusing a write.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);
     throw e;
   }

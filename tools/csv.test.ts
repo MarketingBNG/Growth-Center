@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { csvCell, csvDocument, csvRow } from '../lib/csv.ts';
+import { csvCell, csvDocument, csvRow } from '../lib/shared/csv.ts';
 
 // The export is opened in Excel by a finance team, and its cells carry company, campaign
 // and keyword text straight from whatever the CRM contains.

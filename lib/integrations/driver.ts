@@ -1,6 +1,6 @@
 import { sync } from './service.ts';
 import { IntegrationError } from './types.ts';
-import { TAGS, invalidate } from '../cache.ts';
+import { TAGS, invalidate } from '../platform/cache.ts';
 
 /**
  * Drives a sync to completion on the server.

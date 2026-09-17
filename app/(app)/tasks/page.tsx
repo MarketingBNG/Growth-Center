@@ -9,14 +9,15 @@ import { PriorityBadge } from '@/components/patterns/badges';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { db, hasDb } from '@/lib/prisma';
-import { pageQuery } from '@/lib/query';
-import { listAssignable, peopleOn, personOptions, signedInEmails } from '@/lib/users';
-import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/enums';
+import { db, hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { pageQuery } from '@/lib/platform/query';
+import { listAssignable, peopleOn, personOptions, signedInEmails } from '@/lib/access/users';
+import { TASK_KINDS, TASK_STATUSES, taskKind, taskKindWhere } from '@/lib/shared/enums';
 import { ProgressLink } from '@/components/NavProgress';
-import { fmtDate, fmtNumber, fmtRelative } from '@/lib/format';
-import { sourceMeta } from '@/lib/sources';
-import { taskLoad } from '@/lib/scorecard';
+import { fmtDate, fmtNumber, fmtRelative } from '@/lib/shared/format';
+import { sourceMeta } from '@/lib/shared/sources';
+import { taskLoad } from '@/lib/analytics/scorecard';
 import { CompleteButton } from './CompleteButton';
 
 export const metadata = { title: 'Tasks · Growth Center' };
@@ -24,7 +25,7 @@ export const metadata = { title: 'Tasks · Growth Center' };
 export default function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   return (
     <>
@@ -42,7 +43,7 @@ export default function TasksPage({
 async function TasksBody({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) return <Card><NoDatabaseState /></Card>;
 

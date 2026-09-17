@@ -7,7 +7,9 @@ import {
   parseCurrencySettings,
   rateAgeHours,
   sumInReporting,
-} from '../lib/currency.ts';
+  convertOrDrop,
+  warnUnconverted,
+} from '../lib/shared/currency.ts';
 
 // The bug these guard against: the Meta account bills in INR, most deals are written in
 // USD, and every figure was summed as though currency did not exist — a ₹292 cost per
@@ -103,4 +105,61 @@ test('a sum reports what it could not convert instead of hiding it', () => {
   );
   assert.equal(out.total, 200);
   assert.deepEqual(out.unconverted, [{ currency: 'EUR', amount: 50 }]);
+});
+
+// `?? 0` was written at nine call sites where convert() can return null, turning "this
+// workspace has no rate for that currency" into "that money is worth nothing" — a total
+// short by the whole of it, rendered with nothing to say so.
+
+test('a dropped amount contributes nothing and names its currency', () => {
+  const s = parseCurrencySettings({ reporting: 'USD', rates: { INR: 87 } });
+  const dropped = new Set<string>();
+
+  assert.equal(convertOrDrop(100, 'USD', s, dropped), 100);
+  assert.equal(convertOrDrop(8700, 'INR', s, dropped), 100);
+  assert.equal(dropped.size, 0, 'a priced currency must not be recorded as dropped');
+
+  assert.equal(convertOrDrop(50, 'EUR', s, dropped), 0);
+  assert.deepEqual([...dropped], ['EUR']);
+});
+
+test('a currency with no code at all is still recorded, not swallowed', () => {
+  // A null currency falls back to the reporting currency inside convert(), so this only
+  // bites once the fallback itself has no rate — which is exactly the state a half-saved
+  // settings row leaves the workspace in.
+  const s = parseCurrencySettings({ reporting: 'USD', rates: {} });
+  const dropped = new Set<string>();
+  assert.equal(convertOrDrop(10, 'gbp', s, dropped), 0);
+  assert.deepEqual([...dropped], ['GBP'], 'recorded uppercase, so GBP and gbp are one entry');
+});
+
+test('a thousand rows in one unpriced currency warn once', () => {
+  const s = parseCurrencySettings({ reporting: 'USD', rates: { INR: 87 } });
+  const dropped = new Set<string>();
+  for (let i = 0; i < 1000; i++) convertOrDrop(1, 'EUR', s, dropped);
+
+  const lines: string[] = [];
+  const real = console.warn;
+  console.warn = (...args: unknown[]) => void lines.push(args.join(' '));
+  try {
+    warnUnconverted('a total', dropped, 'they are missing');
+  } finally {
+    console.warn = real;
+  }
+
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /EUR/);
+  assert.match(lines[0], /a total/);
+});
+
+test('nothing dropped says nothing at all', () => {
+  const real = console.warn;
+  let called = 0;
+  console.warn = () => void called++;
+  try {
+    warnUnconverted('a total', new Set<string>());
+  } finally {
+    console.warn = real;
+  }
+  assert.equal(called, 0, 'a clean sum must not log');
 });

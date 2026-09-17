@@ -1,20 +1,13 @@
 import { IntegrationError, httpTimeout, type Entity, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { requestFailed } from '../messages.ts';
+import { intAtLeast } from '../coerce.ts';
+import { ZOHO_ACCOUNTS, ZOHO_DC, zohoAccessToken } from './oauth.ts';
 
 // Zoho CRM. BNG already runs Zoho, and bng-command-center's lib/zoho.ts is the working
 // reference for this token lifecycle — a long-lived refresh token minting short-lived
 // access tokens per request.
 
-/**
- * Zoho is region-partitioned: an account created in India lives on accounts.zoho.IN and
- * is invisible to accounts.zoho.COM. This was hardcoded to .com, which could never have
- * authenticated — bng-command-center, which does work, points at accounts.zoho.in.
- *
- * Defaulted to India for that reason, overridable for anyone on another region.
- */
-const DC = (process.env.ZOHO_DC ?? 'in').replace(/[^a-z.]/gi, '').toLowerCase() || 'in';
-
-const ACCOUNTS = `https://accounts.zoho.${DC}`;
-const API = `https://www.zohoapis.${DC}/crm/v6`;
+const API = `https://www.zohoapis.${ZOHO_DC}/crm/v6`;
 // Two writes, and only two: ticking a task off, and changing a lead's owner. Both have to
 // reach Zoho or the next sync pulls the vendor's copy back over them. Everything else stays
 // read-only.
@@ -40,82 +33,14 @@ const MAX_PAGES = 400;
 
 type Stored = { refreshToken: string };
 
-/**
- * Errors a second attempt cannot get past: the client credentials themselves are wrong,
- * and the retry would send the same pair.
- */
-const PERMANENT_TOKEN_ERRORS = new Set(['invalid_client', 'invalid_client_secret']);
-
-/** Long enough for a blip at Zoho's end to pass, short enough to be free in a 230s run. */
-const TOKEN_RETRY_MS = 1_500;
-
-/**
- * This endpoint answers in well under a second — the failure described below took 797ms
- * including its error — so the 60s default would only ever mean making the second attempt
- * against a socket that had already stopped answering.
- */
-const TOKEN_TIMEOUT_MS = 15_000;
-
-/**
- * A short-lived access token, minted from the stored refresh token.
- *
- * Attempted twice, because one bad answer here used to cost a day of syncing. On
- * 2026-09-06 the nightly cron died 797ms in with `Zoho: invalid_code` and the card
- * carried that error for 23 hours, until somebody pressed Sync now — at which point the
- * same stored refresh token pulled 43,750 records on the first try. The credential row
- * had not been rewritten in between, so the token had never been revoked. Zoho simply
- * answered badly once.
- *
- * Worth repeating because nothing else in a sync is this cheap to repeat: it is one
- * request, before a page has been fetched or a row written, and the thing it saves is the
- * entire nightly pull. Two attempts and no more — a refresh token that genuinely has been
- * revoked still fails inside four seconds, carrying the error Zoho gave for it, because
- * that error is the one that tells somebody to reconnect.
- */
-async function accessToken(refreshToken: string): Promise<string> {
-  const params = new URLSearchParams({
-    refresh_token: refreshToken,
-    client_id: process.env.ZOHO_CLIENT_ID ?? '',
-    client_secret: process.env.ZOHO_CLIENT_SECRET ?? '',
-    grant_type: 'refresh_token',
+/** This provider's own label for zohoAccessToken's shared retry logic — see lib/integrations/providers/oauth.ts. */
+const accessToken = (refreshToken: string) =>
+  zohoAccessToken({
+    refreshToken,
+    clientId: process.env.ZOHO_CLIENT_ID,
+    clientSecret: process.env.ZOHO_CLIENT_SECRET,
+    label: 'Zoho',
   });
-
-  let last: IntegrationError | null = null;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt) await new Promise((resolve) => setTimeout(resolve, TOKEN_RETRY_MS));
-
-    let json: { access_token?: string; error?: string };
-    try {
-      const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, {
-        method: 'POST',
-        signal: httpTimeout(TOKEN_TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        last = new IntegrationError(`Zoho token refresh failed (${res.status}).`);
-        continue;
-      }
-      json = (await res.json()) as { access_token?: string; error?: string };
-    } catch (e) {
-      // A dropped connection, or the timeout above. Worth one more attempt for the same
-      // reason a bad answer is.
-      last = new IntegrationError(`Zoho token refresh failed: ${(e as Error).message}`);
-      continue;
-    }
-
-    if (json.access_token) return json.access_token;
-
-    if (json.error) {
-      if (PERMANENT_TOKEN_ERRORS.has(json.error)) throw new IntegrationError(`Zoho: ${json.error}`);
-      last = new IntegrationError(`Zoho: ${json.error}`);
-      continue;
-    }
-
-    last = new IntegrationError('Zoho returned no access token.');
-  }
-
-  throw last ?? new IntegrationError('Zoho returned no access token.');
-}
 
 /**
  * Zoho's active users, keyed on lower-cased address.
@@ -135,7 +60,7 @@ async function zohoUserIds(token: string): Promise<Map<string, string>> {
       'Zoho has not granted this app permission to read its user list. Reconnect Zoho CRM on the Integrations page.',
     );
   }
-  if (!res.ok) throw new IntegrationError(`Zoho user list request failed (${res.status}).`);
+  if (!res.ok) throw new IntegrationError(requestFailed('Zoho user list', res.status));
 
   const json = (await res.json()) as { users?: { id?: unknown; email?: unknown }[] };
   const byEmail = new Map<string, string>();
@@ -212,7 +137,7 @@ async function readPage(
   // 204 is "nothing here" — an empty module, or nothing modified since. Both are a
   // successful, complete answer, not a failure.
   if (res.status === 204) return { rows: [], nextPageToken: null, more: false };
-  if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
+  if (!res.ok) throw new IntegrationError(requestFailed(`Zoho ${moduleName}`, res.status));
 
   const json = (await res.json()) as {
     data?: Row[];
@@ -282,7 +207,7 @@ export function repairEncoding(value: string): string {
     // continuation byte.
     if (!/[Â-ô][-¿]/.test(out)) break;
     // Reinterpreting as bytes only makes sense while every code point still is one.
-    if (/[^ -ÿ]/.test(out)) break;
+    if (/[^ -ÿ]/.test(out)) break;
 
     const decoded = Buffer.from(out, 'latin1').toString('utf8');
     if (decoded.includes('�')) break;
@@ -342,10 +267,9 @@ export function readCursor(raw: unknown): Cursor {
   const moduleName = MODULES.find((m) => m === c.module);
   if (!moduleName) return fresh;
 
-  const page = Number(c.page);
   return {
     module: moduleName,
-    page: Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1,
+    page: intAtLeast(c.page, 1),
     pageToken: typeof c.pageToken === 'string' && c.pageToken !== '' ? c.pageToken : null,
   };
 }
@@ -570,7 +494,7 @@ export const zohoCrm: IntegrationProvider = {
       redirect_uri: redirectUri,
       state,
     });
-    return `${ACCOUNTS}/oauth/v2/auth?${params}`;
+    return `${ZOHO_ACCOUNTS}/oauth/v2/auth?${params}`;
   },
 
   async connect(input) {
@@ -583,7 +507,7 @@ export const zohoCrm: IntegrationProvider = {
       redirect_uri: input.redirectUri,
       code: input.code,
     });
-    const res = await fetch(`${ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
+    const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token?${params}`, { method: 'POST', signal: httpTimeout() });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
     const json = (await res.json()) as { refresh_token?: string; error?: string };
@@ -765,7 +689,7 @@ export const zohoCrm: IntegrationProvider = {
       headers: { authorization: `Zoho-oauthtoken ${token}` },
       signal: httpTimeout(),
     });
-    if (!res.ok) throw new IntegrationError(`Zoho ${moduleName} request failed (${res.status}).`);
+    if (!res.ok) throw new IntegrationError(requestFailed(`Zoho ${moduleName}`, res.status));
 
     const json = (await res.json()) as { data?: Record<string, unknown>[] };
     return (json.data ?? []).map<Entity>((raw) => ({

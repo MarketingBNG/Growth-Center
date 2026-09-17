@@ -1,4 +1,6 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { requestFailed, vendorMessage } from '../messages.ts';
+import { metaExchangeForLongLived, metaRefresh } from './oauth.ts';
 
 // Facebook Page and Instagram Business organic performance — the Social page's numbers.
 //
@@ -16,38 +18,12 @@ const GRAPH = 'https://graph.facebook.com/v21.0';
 
 type Stored = { accessToken: string };
 
-// Matches meta-ads: Meta documents long-lived user tokens as ~60 days and sometimes
-// omits expires_in. Assuming the documented lifetime keeps the card's expiry warning
-// working rather than storing a null that disables renewal entirely.
-const ASSUMED_LIFETIME_SECONDS = 60 * 24 * 60 * 60;
-
 /** How many recent posts to pull per account. Insights are one request per post, so this
  *  is the main cost of a sync; a month of normal posting sits well inside it. */
 const POST_LIMIT = 50;
 
-async function exchangeForLongLived(token: string): Promise<{ token: string; expiresIn: number }> {
-  const params = new URLSearchParams({
-    grant_type: 'fb_exchange_token',
-    client_id: process.env.META_APP_ID ?? '',
-    client_secret: process.env.META_APP_SECRET ?? '',
-    fb_exchange_token: token,
-  });
-
-  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(
-      body?.error?.message ?? `Meta refused to extend the token (${res.status}). Reconnect.`,
-    );
-  }
-  const json = (await res.json()) as { access_token?: string; expires_in?: number };
-  if (!json.access_token) throw new IntegrationError('Meta returned no long-lived token.');
-  return { token: json.access_token, expiresIn: json.expires_in ?? ASSUMED_LIFETIME_SECONDS };
-}
-
 async function failed(res: Response): Promise<never> {
-  const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-  throw new IntegrationError(body?.error?.message ?? `Meta request failed (${res.status}).`);
+  throw new IntegrationError((await vendorMessage(res)) ?? requestFailed('Meta', res.status));
 }
 
 async function graph<T>(path: string, params: Record<string, string>): Promise<T> {
@@ -301,7 +277,7 @@ export const metaSocial: IntegrationProvider = {
 
     // The code exchange yields a short-lived token — roughly an hour. Trade it up
     // immediately, or the connection breaks before the first scheduled sync.
-    const long = await exchangeForLongLived(json.access_token);
+    const long = await metaExchangeForLongLived(json.access_token);
 
     // Fail here rather than at the first sync. Someone can complete the whole consent
     // screen while granting no Page, and a card reading "connected" that can never
@@ -323,14 +299,7 @@ export const metaSocial: IntegrationProvider = {
     };
   },
 
-  async refresh(credential) {
-    const { accessToken } = JSON.parse(credential) as Stored;
-    const long = await exchangeForLongLived(accessToken);
-    return {
-      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
-    };
-  },
+  refresh: metaRefresh,
 
   async sync(credential, config, range) {
     const { accessToken } = JSON.parse(credential) as Stored;

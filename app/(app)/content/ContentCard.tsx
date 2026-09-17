@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { Select } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
-import { CONTENT_STATUSES } from '@/lib/enums';
-import { safeUrl } from '@/lib/format';
+import { Input, Select } from '@/components/ui/input';
+import { api } from '@/lib/shared/fetcher';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
+import { ErrorText } from '@/components/patterns/state';
+import { CONTENT_STATUSES } from '@/lib/shared/enums';
+import { safeUrl } from '@/lib/shared/format';
 
 export type Piece = {
   id: string;
@@ -26,15 +28,12 @@ export type Piece = {
 
 export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: boolean }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, setError, run } = useBooleanApiAction();
   const [returning, setReturning] = useState(false);
   const [note, setNote] = useState('');
 
   async function decide(decision: 'approve' | 'return') {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/content/${piece.id}/approval`, {
         method: 'POST',
         json: decision === 'approve' ? { decision } : { decision, note: note.trim() },
@@ -42,24 +41,14 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
       setReturning(false);
       setNote('');
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   async function move(status: string) {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(`/api/content/${piece.id}`, { method: 'PATCH', json: { status } });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -106,12 +95,12 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {returning ? (
             <>
-              <input
+              <Input
                 aria-label="Why this is going back"
                 placeholder="What needs changing"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="h-7 min-w-0 flex-1 rounded border border-input bg-background px-2 text-meta"
+                className="h-7 w-auto min-w-0 flex-1 rounded border border-input bg-background px-2 text-meta"
               />
               <button
                 type="button"
@@ -177,7 +166,7 @@ export function ContentCard({ piece, canApprove }: { piece: Piece; canApprove: b
           </a>
         ) : null}
       </div>
-      {error ? <p className="mt-1 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-1" />
     </div>
   );
 }

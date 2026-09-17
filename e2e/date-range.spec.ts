@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { SPEC } from './timeouts';
 
 // The calendar writes ?from=&to= and six pages had to be taught to honour them. A picker
 // that quietly changes nothing on five of the pages it appears on is worse than no picker,
@@ -12,6 +13,7 @@ test.beforeEach(async ({ context, baseURL }) => {
 });
 
 test('picking a start and an end puts both dates in the URL', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics');
   await page.click(PILL);
 
@@ -38,13 +40,21 @@ test('picking a start and an end puts both dates in the URL', async ({ page }) =
 
   await apply.click();
 
-  await expect(page).toHaveURL(new RegExp(`from=${startLabel}`));
-  await expect(page).toHaveURL(new RegExp(`to=${endLabel}`));
+  // Longer than the default 15s on purpose. Applying a range is a soft navigation, and
+  // the App Router leaves the old URL in the bar until the new route's payload arrives —
+  // so this is really waiting on /analytics rendering, not on the picker. Cold, that page
+  // takes about fifteen seconds in dev against the real database (warm it is under one),
+  // which put the assertion in a photo-finish with its own timeout: the suite failed here
+  // on a cleared .next and passed on a warm one, having proved nothing either way.
+  const settled = { timeout: 45_000 };
+  await expect(page).toHaveURL(new RegExp(`from=${startLabel}`), settled);
+  await expect(page).toHaveURL(new RegExp(`to=${endLabel}`), settled);
   // The preset is dropped, or the URL would claim two different windows at once.
   await expect(page).not.toHaveURL(/range=/);
 });
 
 test('choosing a preset afterwards clears the hand-picked dates', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics?from=2026-07-01&to=2026-07-15');
   await page.getByRole('button', { name: '7 days' }).click();
 
@@ -54,6 +64,7 @@ test('choosing a preset afterwards clears the hand-picked dates', async ({ page 
 });
 
 test('the pill shows the hand-picked window, not the preset', async ({ page }) => {
+  test.setTimeout(SPEC);
   await page.goto('/analytics?from=2026-07-01&to=2026-07-15');
   await expect(page.locator(PILL)).toContainText('Jul 1 – Jul 15, 2026');
 });

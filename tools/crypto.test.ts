@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.APP_ENCRYPTION_KEY = 'a'.repeat(64);
 
-const { seal, open, generateApiKey, hashApiKey } = await import('../lib/crypto.ts');
+const { seal, open, generateApiKey, hashApiKey } = await import('../lib/access/crypto.ts');
 
 test('seal then open round-trips', () => {
   const secret = JSON.stringify({ refreshToken: 'zoho-token-123', scope: 'ZohoCRM.modules.ALL' });

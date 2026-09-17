@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 
 // D5. The manual's instruction was "suppress the stale-deal rule until reconciliation
 // passes". The reconciliation was run and it did not say what the manual expected, so
 // these lock what it actually found rather than the instruction.
 
-const rules = readFileSync('lib/insight-rules.ts', 'utf8');
-const module_ = readFileSync('lib/deal-activity.ts', 'utf8');
+const rules = libSource('insight-rules');
+const module_ = libSource('deal-activity');
 
 // The one condition under which "no activity" means "no data" rather than "no work".
 test('the rule holds its tongue only when the CRM sync cannot be trusted', () => {

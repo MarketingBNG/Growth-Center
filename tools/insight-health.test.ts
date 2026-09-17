@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { insightHealth } from '../lib/insight-health.ts';
+import { insightHealth } from '../lib/insights/insight-health.ts';
 
 // The database is not reachable here, so these exercise the shape and the one behaviour
 // that must hold before any figure is computed: a metric that cannot be measured says so

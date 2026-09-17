@@ -2,40 +2,31 @@ import Link from 'next/link';
 import { ClipboardList, Download } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
+import { hasDb } from '@/lib/platform/prisma';
 import { buildReport, isReportId, REPORTS } from '@/lib/reports';
-import { customRange, rangeParam } from '@/lib/range';
-import { fmtDate } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { fmtDate } from '@/lib/shared/format';
+import { cn } from '@/lib/shared/utils';
 
 export const metadata = { title: 'Reports · Growth Center' };
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Reports" subtitle="Built from the same numbers as the dashboard." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Reports', 'Built from the same numbers as the dashboard.');
   }
 
   const params = await searchParams;
-  const { value, days } = rangeParam(params);
+  const { value, days, spec } = resolveRange(params);
   const raw = typeof params.report === 'string' ? params.report : 'executive';
   const id = isReportId(raw) ? raw : 'executive';
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const report = await buildReport(id, picked ?? days);
+  const report = await buildReport(id, spec);
 
   return (
     <>

@@ -1,6 +1,6 @@
-import { route } from '@/lib/api';
-import { scanDuplicates } from '@/lib/duplicate-queue';
-import { TAGS, invalidate } from '@/lib/cache';
+import { route } from '@/lib/platform/api';
+import { scanDuplicates } from '@/lib/crm/duplicate-queue';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * Runs a scan on demand. §8.1.

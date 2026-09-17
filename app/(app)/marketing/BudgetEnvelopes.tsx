@@ -1,10 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
+import { ErrorText } from '@/components/patterns/state';
 
 /**
  * §22's budget envelope: what the firm decided to spend on each channel this quarter,
@@ -42,11 +43,9 @@ export function BudgetEnvelopes({
   canEdit: boolean;
   currency: string;
 }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
   const [editing, setEditing] = useState<string | null>(null);
   const [value, setValue] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const { pending, error, setError, run } = useMutation();
 
   function save(channelId: string) {
     const amount = Number(value);
@@ -54,24 +53,18 @@ export function BudgetEnvelopes({
       setError('Give an amount of zero or more.');
       return;
     }
-    setError(null);
-    start(async () => {
-      try {
-        await api('/api/budget', {
-          method: 'PUT',
-          json: {
-            channelId,
-            periodStart: period.start,
-            periodEnd: period.end,
-            amount: Math.round(amount),
-            currency,
-          },
-        });
-        setEditing(null);
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
+    run(async () => {
+      await api('/api/budget', {
+        method: 'PUT',
+        json: {
+          channelId,
+          periodStart: period.start,
+          periodEnd: period.end,
+          amount: Math.round(amount),
+          currency,
+        },
+      });
+      setEditing(null);
     });
   }
 
@@ -166,7 +159,7 @@ export function BudgetEnvelopes({
           ))}
         </div>
 
-        {error ? <p className="text-meta text-destructive">{error}</p> : null}
+        <ErrorText error={error} size="meta" />
       </CardHeader>
     </Card>
   );

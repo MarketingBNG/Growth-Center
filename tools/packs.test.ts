@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { PACKS, isFirstWorkingDay, isWeeklyDay, packsDue, renderPack } from '../lib/packs.ts';
+import { PACKS, isFirstWorkingDay, isWeeklyDay, packsDue, renderPack } from '../lib/reports/packs.ts';
 import type { Report } from '../lib/reports.ts';
 
 const utc = (iso: string) => new Date(`${iso}T02:30:00Z`);
@@ -127,5 +128,5 @@ test('the cron runs daily at the hour the packs are meant to arrive', () => {
 // A pack that silently reaches nobody is indistinguishable from one that was never
 // scheduled, which is the failure this file exists to fix.
 test('the recipient list is never empty', () => {
-  assert.match(readFileSync('lib/packs.ts', 'utf8'), /chosen\.length > 0 \? chosen\.map\(\(a\) => a\.email\) : ADMIN_EMAILS/);
+  assert.match(libSource('packs'), /chosen\.length > 0 \? chosen\.map\(\(a\) => a\.email\) : ADMIN_EMAILS/);
 });

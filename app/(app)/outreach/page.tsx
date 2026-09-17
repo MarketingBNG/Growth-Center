@@ -1,17 +1,18 @@
 import { Send, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { hasDb } from '@/lib/prisma';
-import { SEQUENCE_STATUSES, sequenceFilters, sequences } from '@/lib/outreach';
-import { pageQuery, pick } from '@/lib/query';
-import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
-import { emailStatus } from '@/lib/email';
-import { fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
+import { hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { SEQUENCE_STATUSES, sequenceFilters, sequences } from '@/lib/outreach/outreach';
+import { pageQuery, pick } from '@/lib/platform/query';
+import { DEMO_SOURCE, sourceMeta } from '@/lib/shared/sources';
+import { emailStatus } from '@/lib/outreach/email';
+import { fmtNumber, fmtPercent, fmtRelative } from '@/lib/shared/format';
 import { SequenceRegistry } from './SequenceRegistry';
 
 export const metadata = { title: 'Outreach · Growth Center' };
@@ -33,17 +34,12 @@ const FILTERS = [
 export default async function OutreachPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Outreach" subtitle="Sequences, prospects and replies." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Outreach', 'Sequences, prospects and replies.');
   }
 
   // Ten to a page, not the shared default of twenty-five: a row on this page is a whole

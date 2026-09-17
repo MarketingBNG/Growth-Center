@@ -1,8 +1,7 @@
-import { route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { db } from '@/lib/prisma';
-
-type Ctx = { params: Promise<{ id: string }> };
+import { route, type Ctx } from '@/lib/platform/api';
+import { recordAudit } from '@/lib/platform/audit';
+import { HttpError } from '@/lib/access/auth';
+import { db } from '@/lib/platform/prisma';
 
 export const DELETE = route<unknown, Ctx>('apikeys:manage', async (user, _req, ctx) => {
   const { id } = await ctx.params;
@@ -13,8 +12,12 @@ export const DELETE = route<unknown, Ctx>('apikeys:manage', async (user, _req, c
 
   // Revoked, not deleted: the audit trail should still show the key existed and was used.
   await db().apiKey.update({ where: { id }, data: { revokedAt: new Date() } });
-  await db().auditEvent.create({
-    data: { actorEmail: user.email, action: 'apikey.revoke', entityType: 'api_key', entityId: id, detail: { name: key.name } },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'apikey.revoke',
+    entityType: 'api_key',
+    entityId: id,
+    detail: { name: key.name },
   });
   return { ok: true };
 });

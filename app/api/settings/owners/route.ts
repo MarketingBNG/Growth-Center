@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { db } from '@/lib/prisma';
-import { OWNERS_KEY, OWNER_DOMAINS, type OwnerDomain } from '@/lib/insight-owners';
-import { ownerBindings } from '@/lib/settings';
-import { canonicalEmail } from '@/lib/roles';
-import { TAGS, invalidate } from '@/lib/cache';
+import { body, route } from '@/lib/platform/api';
+import { db } from '@/lib/platform/prisma';
+import { OWNERS_KEY, OWNER_DOMAINS, type OwnerDomain } from '@/lib/insights/insight-owners';
+import { ownerBindings } from '@/lib/platform/settings';
+import { canonicalEmail } from '@/lib/access/roles';
+import { TAGS, invalidate } from '@/lib/platform/cache';
+import { recordAudit } from '@/lib/platform/audit';
 
 // §5.2's map, the half that is a fact about the team rather than about the rules. D7: all
 // but four rules produced findings with no owner, and the manual's own map names people
@@ -42,20 +43,17 @@ export const PUT = route('settings:manage', async (user, req) => {
     update: { value: next },
   });
 
-  await invalidate(TAGS.settings);
-  await invalidate(TAGS.metrics);
+  await invalidate(TAGS.settings, TAGS.metrics);
 
-  await db().auditEvent.create({
-    data: {
-      actorEmail: user.email,
-      action: 'settings.insight_owner',
-      entityType: 'app_setting',
-      entityId: input.domain,
-      detail: {
-        domain: OWNER_DOMAINS[input.domain],
-        from: before[input.domain] ?? null,
-        to: email,
-      },
+  await recordAudit({
+    actorEmail: user.email,
+    action: 'settings.insight_owner',
+    entityType: 'app_setting',
+    entityId: input.domain,
+    detail: {
+      domain: OWNER_DOMAINS[input.domain],
+      from: before[input.domain] ?? null,
+      to: email,
     },
   });
 

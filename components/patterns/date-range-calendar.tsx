@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { useDismiss } from '@/components/use-dismiss';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 /**
  * A two-month range calendar for the header's date pill.
@@ -101,20 +102,7 @@ export function DateRangeCalendar({
   const ref = useRef<HTMLDivElement>(null);
 
   // Dismissed by clicking away or pressing Escape, the two things anyone tries first.
-  useEffect(() => {
-    const away = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onDismiss();
-    };
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onDismiss();
-    };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', key);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', key);
-    };
-  }, [onDismiss]);
+  useDismiss({ contains: (t) => !!ref.current?.contains(t), onDismiss });
 
   // The left month is the one being viewed, the right is the next. Shown together because
   // a range crossing a month boundary is the common case, and paging back and forth to

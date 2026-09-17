@@ -3,7 +3,7 @@
 // Pass 1 reads the deal name, which answers for 5,874 of 8,072. Pass 2 takes the deals
 // the name left as 'unknown' and asks account history instead — did this account already
 // have a deal? — which answers for most of the rest. Both passes write `originSource` so
-// the two can be told apart afterwards; see lib/deal-origin.ts for why that matters and
+// the two can be told apart afterwards; see lib/pipeline/deal-origin.ts for why that matters and
 // why the first day's import is deliberately left unclassified.
 //
 // The passes run in this order and not the other: a name is a statement by the person who
@@ -19,28 +19,19 @@
 // name that does not carry the convention is written as 'unknown', which is deliberately
 // not 'new'.
 //
-// Run:  node --experimental-strip-types tools/backfill-deal-origin.ts          (dry run)
-//       node --experimental-strip-types tools/backfill-deal-origin.ts --apply  (writes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-deal-origin.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/backfill-deal-origin.ts --apply  (writes)
 //
 // Safe to re-run: it is a pure function of the name, so a second run over unchanged names
 // writes the same values.
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
-import { parseDealName } from '../lib/deal-name.ts';
-import type { DealOrigin } from '../lib/deal-name.ts';
-import { deriveFromHistory } from '../lib/deal-origin.ts';
-import type { OriginSource } from '../lib/deal-origin.ts';
+import { chunks, connect, placeholders, stopUnlessApplying, transact } from './script.ts';
+import { parseDealName } from '../lib/pipeline/deal-name.ts';
+import type { DealOrigin } from '../lib/pipeline/deal-name.ts';
+import { deriveFromHistory } from '../lib/pipeline/deal-origin.ts';
+import type { OriginSource } from '../lib/pipeline/deal-origin.ts';
 
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const { rows } = await client.query<{
   id: string;
@@ -141,44 +132,28 @@ for (const row of rows) {
 
 console.log(`\n${changes.length} rows differ from what is stored.`);
 
-if (!apply) {
-  console.log('\nDry run. Re-run with --apply to write.');
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(client, '\nDry run. Re-run with --apply to write.');
 
 // One statement per batch rather than per row: 8,000 round trips against Neon is minutes,
 // and this is a single derivable value per record with no ordering between them.
 const BATCH = 500;
-let written = 0;
-try {
-  await client.query('BEGIN');
-  for (let i = 0; i < changes.length; i += BATCH) {
-    const batch = changes.slice(i, i + BATCH);
-    const values = batch
-      .map(
-        (_, n) =>
-          `($${n * 5 + 1}, $${n * 5 + 2}, $${n * 5 + 3}, $${n * 5 + 4}, $${n * 5 + 5}::int)`,
-      )
-      .join(', ');
-    const params = batch.flatMap((c) => [c.id, c.origin, c.source, c.engagement, c.seq]);
+const written = await transact(client, async () => {
+  let n = 0;
+  for (const batch of chunks(changes, BATCH)) {
     await client.query(
       `UPDATE opportunity AS o
          SET "dealOrigin" = v.origin,
              "originSource" = v.source,
              "engagementType" = v.engagement,
              "accountSequenceNo" = v.seq
-         FROM (VALUES ${values}) AS v(id, origin, source, engagement, seq)
+         FROM (VALUES ${placeholders(batch.length, [null, null, null, null, 'int'])}) AS v(id, origin, source, engagement, seq)
         WHERE o.id = v.id`,
-      params,
+      batch.flatMap((c) => [c.id, c.origin, c.source, c.engagement, c.seq]),
     );
-    written += batch.length;
+    n += batch.length;
   }
-  await client.query('COMMIT');
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+  return n;
+});
 
 console.log(`\nWrote ${written} rows.`);
 await client.end();

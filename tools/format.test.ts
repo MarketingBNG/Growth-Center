@@ -10,7 +10,7 @@ import {
   fmtPercent,
   fmtRatio,
   safeUrl,
-} from '../lib/format.ts';
+} from '../lib/shared/format.ts';
 
 // Every formatter is on screen somewhere, and the null paths are load-bearing: "—" is
 // how the app says "no data" instead of implying zero.

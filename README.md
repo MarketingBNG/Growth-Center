@@ -34,7 +34,7 @@ configured" state rather than a stack trace, and `/api/health` reports exactly w
 missing.
 
 Sign-in requires a Google account on an allowed domain **and** on the roster in
-[lib/roles.ts](lib/roles.ts). There is no password and no local bypass.
+[lib/access/roles.ts](lib/access/roles.ts). There is no password and no local bypass.
 
 ```
 npm run dev        # dev server
@@ -96,21 +96,74 @@ app/api/public/ X-API-Key auth for website form capture.
 components/    AppShell, Sidebar + ui/ primitives + patterns/ (tables, filters, states)
 lib/           all business logic, framework-free and unit-testable
 prisma/        schema, migrations, seed
-tools/         node:test suites
+tools/         node:test suites, and the one-off backfills
 ```
+
+`lib/` is grouped by domain:
+
+```
+shared/     formatting, enums, currency, ranges, the two mutation hooks
+platform/   prisma, api, cache, events, settings, audit — the machinery underneath
+access/     auth, roles, users, roster, API keys, crypto
+crm/        companies, contacts, deduplication, referrals, capacity
+leads/      leads, scoring, segmentation, allocation, automation
+pipeline/   deals, stages, decay, deal naming and origin
+money/      budget, campaigns, attribution, FX
+content/    the content calendar's writers and validators
+outreach/   sequences, suppression, email and Cliq delivery
+insights/   the rules that produce findings, and the digest that sends them
+ai/         the read-only analyst, its tools, redaction, answer formatting
+analytics/  per-screen KPI bands, scorecards, SEO and social reads
+```
+
+plus four that predate the grouping and keep their own shape: `integrations/` (the provider
+adapters), `reports/`, `metrics/`, `content-calendar/`. `lib/metrics.ts`, `lib/reports.ts`
+and `lib/content-calendar.ts` sit at the root — each is a re-export façade for the directory
+beside it, so `@/lib/metrics` keeps working however its halves are split.
 
 Two rules keep this navigable: **route handlers contain no logic**, and **`lib/*` never
 imports from `next`**.
 
+Moving a module is a type-checked operation. Nothing in `lib/` reads a file from disk at
+runtime, and `tsc` catches every broken specifier including inside `await import()`. The
+tests do not hardcode paths either: `tools/source.ts` resolves a module by name and throws
+when the name is unknown or ambiguous, rather than returning nothing and letting an
+assertion pass against an empty string.
+
 A third rule the build enforces: anything a `'use client'` component imports must not
-reach `lib/prisma`. Shared constants live in [lib/enums.ts](lib/enums.ts) and pure
-arithmetic in [lib/calc.ts](lib/calc.ts) — both import nothing. Importing a constant
+reach `lib/platform/prisma`. Shared constants live in [lib/shared/enums.ts](lib/shared/enums.ts) and pure
+arithmetic in [lib/shared/calc.ts](lib/shared/calc.ts) — both import nothing. Importing a constant
 from a db-touching module once pulled the Postgres driver into the browser bundle.
+
+`lib/shared/` is **not** the statement of that rule. It is where small cross-cutting
+modules live, nothing more. The rule is
+[tools/client-boundary.test.ts](tools/client-boundary.test.ts), which follows the import
+graph and fails when a client component can reach Prisma — directly, through a component it
+renders, or through four modules in between. Its `CLIENT_SAFE` list is curated on purpose:
+"imports nothing" and "safe in a browser" are different questions. `platform/cache.ts`
+imports nothing statically and reaches `next/cache` at runtime; `shared/utils.ts` imports
+clsx and is perfectly safe. Do not derive either from the folder.
+
+## Scripts and tests
+
+`tools/` holds the one-off backfills and fixes alongside the test suites. The scripts share
+[tools/script.ts](tools/script.ts) — `connect()`, the `--apply` flag,
+`stopUnlessApplying()`, `transact()`, and `placeholders()` for batched multi-row writes.
+Every one of them is a dry run until `--apply` is passed:
+
+```
+node --experimental-strip-types --env-file-if-exists=.env.local tools/<script>.ts [--apply]
+```
+
+`npm test` globs `tools/*.test.ts`, and that glob is **not** recursive. A test moved into a
+subdirectory matches nothing, and `node --test` then exits 0 having run nothing — a green
+board that checked no code. If the directory is ever split, change the glob and assert a
+minimum test count in the same commit.
 
 ## Access control
 
 Single-tenant. This is BNG's own tool, so there is no organisation or workspace layer —
-[lib/roles.ts](lib/roles.ts) is the roster, the permission source **and** the sign-in
+[lib/access/roles.ts](lib/access/roles.ts) is the roster, the permission source **and** the sign-in
 allow-list. Deleting a line revokes that person's access on their next request.
 
 Permissions resolve through one `POLICY` table, so adding a role or a capability is an
@@ -139,6 +192,12 @@ Two decisions carry most of the weight:
   the table instead of lost to the last `UPDATE`.
 - **`MetricSnapshot` is the only time-series table.** Every integration writes into it
   and every chart reads from it, so adding a provider adds rows, not tables.
+
+Prisma has no field mixins, so two things are conventions rather than shared code, and
+both are worth keeping. Every model carries `id String @id @default(cuid())` and
+`createdAt`. Every model a sync can write also carries `source` and `externalId` with
+`@@unique([source, externalId])` — that pair is what makes a re-import an upsert instead
+of a duplicate.
 
 ## Charts
 

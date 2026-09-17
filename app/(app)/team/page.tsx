@@ -6,11 +6,11 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { NoDatabaseState } from '@/components/patterns/state';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { currentUser } from '@/lib/auth';
-import { hasDb } from '@/lib/prisma';
-import { ADMIN_EMAILS, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin, pinnedName } from '@/lib/roles';
-import { fmtRelative } from '@/lib/format';
-import { ensureAdmins, listUsers } from '@/lib/users';
+import { currentUser } from '@/lib/access/auth';
+import { hasDb } from '@/lib/platform/prisma';
+import { ADMIN_EMAILS, ALLOWED_DOMAINS, ROLES_ENFORCED, isAdmin, pinnedName } from '@/lib/access/roles';
+import { fmtRelative } from '@/lib/shared/format';
+import { ensureAdmins, listUsers } from '@/lib/access/users';
 import { RoleSelect } from './RoleSelect';
 import { TeamActions } from './TeamActions';
 
@@ -70,7 +70,7 @@ async function TeamBody() {
               Role tiers are switched off: every signed-in person can manage integrations, mint
               API keys and edit any record, whatever role they hold. Roles set here are recorded
               and audited now so they are already correct on the day tiers are switched on in{' '}
-              <code className="font-mono">lib/roles.ts</code> — until then, treat the Role column
+              <code className="font-mono">lib/access/roles.ts</code> — until then, treat the Role column
               as a plan, and revoking access as the only control that bites.
             </p>
           </CardHeader>

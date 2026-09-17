@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -9,7 +10,7 @@ import {
   isLiveSource,
   isSeeded,
   sourceMeta,
-} from '../lib/sources.ts';
+} from '../lib/shared/sources.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -36,7 +37,7 @@ test('seeded data is never reported as live', () => {
 });
 
 test('every registered provider has a source label', () => {
-  // lib/sources.ts duplicates these ids because it must stay import-free for client
+  // lib/shared/sources.ts duplicates these ids because it must stay import-free for client
   // components. This is what stops the copy drifting from the registry: add a provider
   // and forget the label, and its figures would silently badge as "internal".
   const registry = readFileSync(join(ROOT, 'lib/integrations/registry.ts'), 'utf8');
@@ -53,13 +54,13 @@ test('every registered provider has a source label', () => {
     if (!KNOWN_SOURCES.includes(id)) missing.push(id);
   }
 
-  assert.deepEqual(missing, [], `providers with no entry in lib/sources.ts: ${missing.join(', ')}`);
+  assert.deepEqual(missing, [], `providers with no entry in lib/shared/sources.ts: ${missing.join(', ')}`);
 });
 
-test('lib/sources.ts imports nothing, so a client component can render a badge', () => {
+test('lib/shared/sources.ts imports nothing, so a client component can render a badge', () => {
   // Same contract as tools/client-boundary.test.ts: one import of a server module here
   // would drag Prisma into the browser bundle through every table that shows a badge.
-  const source = readFileSync(join(ROOT, 'lib/sources.ts'), 'utf8');
+  const source = libSource('sources');
   const imports = [...source.matchAll(/^\s*import\s/gm)];
-  assert.equal(imports.length, 0, 'lib/sources.ts must stay import-free');
+  assert.equal(imports.length, 0, 'lib/shared/sources.ts must stay import-free');
 });

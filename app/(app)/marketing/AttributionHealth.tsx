@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { fmtMoneyCompact, fmtPercent } from '@/lib/format';
-import type { AttributionHealth as Health, Coverage } from '@/lib/attribution';
+import { fmtMoneyCompact, fmtPercent } from '@/lib/shared/format';
+import type { AttributionHealth as Health, Coverage } from '@/lib/money/attribution';
 
 // How much of the book the channel figures on this page are actually built from.
 //

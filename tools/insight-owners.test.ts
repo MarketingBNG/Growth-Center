@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
 
 import {
   OWNER_DOMAINS,
@@ -8,8 +8,8 @@ import {
   ownerFor,
   unboundDomains,
   type OwnerBindings,
-} from '../lib/insight-owners.ts';
-import { RULE_IDS } from '../lib/insight-rules.ts';
+} from '../lib/insights/insight-owners.ts';
+import { RULE_IDS } from '../lib/insights/insight-rules.ts';
 
 // D7: "Insights carry an owner only for task and lead items; the rest are unowned."
 
@@ -62,7 +62,7 @@ test('the unbound desks are what the configuration finding names', () => {
 
 // ── the rule that reports the gap ────────────────────────────────────────────────────
 
-const rules = readFileSync('lib/insight-rules.ts', 'utf8');
+const rules = libSource('insight-rules');
 
 test('an incomplete map is raised once, not as a null on every finding', () => {
   assert.match(rules, /ruleId: 'owner_map_incomplete'/);

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The board moves deals by dragging, which no keyboard can do. This drives the table
 // view's stage control with keys only — no click on the control itself — so it proves the
@@ -11,8 +12,8 @@ test('a deal can be moved to another stage with the keyboard alone', async ({
 }) => {
   test.setTimeout(180_000);
   await signIn(context, baseURL!, 'marketing@usaindiacfo.com');
-  await page.goto('/pipeline', { waitUntil: 'domcontentloaded', timeout: 120_000 });
-  await page.waitForSelector('nav a', { timeout: 90_000 });
+  await page.goto('/pipeline', { waitUntil: 'domcontentloaded', timeout: GOTO });
+  await page.waitForSelector('nav a', { timeout: HYDRATE });
 
   await page.getByRole('button', { name: 'Table' }).click();
 
@@ -29,8 +30,21 @@ test('a deal can be moved to another stage with the keyboard alone', async ({
   await expect(first).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('listbox')).toBeVisible({ timeout: 15_000 });
+  // Wait for the write, not just the redraw.
+  //
+  // The control moves optimistically — it shows the new stage the instant the key lands,
+  // and only then sends the PATCH. Reloading on the strength of the visible change
+  // therefore races the request: the navigation cancels it in the browser, and the fresh
+  // page can render before the write has committed. That is what made this test fail,
+  // and because it failed here it never reached the restore at the bottom, leaving a real
+  // deal parked in a stage nobody moved it to. The board and the server were never wrong.
+  const written = page.waitForResponse(
+    (r) => r.url().includes('/api/pipeline/opportunities/') && r.request().method() === 'PATCH',
+    { timeout: 60_000 },
+  );
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('Enter');
+  expect((await written).status(), 'the move should be accepted').toBe(200);
 
   // The same control now reads a different stage, and it survives the round trip.
   const moved = page.getByRole('combobox', { name: label });
@@ -46,7 +60,16 @@ test('a deal can be moved to another stage with the keyboard alone', async ({
   await restore.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('listbox')).toBeVisible({ timeout: 15_000 });
+  // Awaited for the same reason as the move above, and it matters more here: the visible
+  // revert is optimistic too, so without this the test could finish — and the browser
+  // close — with the restoring PATCH still in flight, which is the very thing this step
+  // exists to prevent.
+  const putBack = page.waitForResponse(
+    (r) => r.url().includes('/api/pipeline/opportunities/') && r.request().method() === 'PATCH',
+    { timeout: 60_000 },
+  );
   await page.getByRole('option', { name: before, exact: true }).click();
+  expect((await putBack).status(), 'the deal must be put back').toBe(200);
   await expect(page.getByRole('combobox', { name: label })).toHaveText(before, {
     timeout: 30_000,
   });

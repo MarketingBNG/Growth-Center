@@ -1,9 +1,11 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
-import { api } from '@/lib/fetcher';
-import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insight-owners';
+import { useState } from 'react';
+import { Select } from '@/components/ui/input';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
+import { ErrorBanner } from '@/components/patterns/state';
+import { OWNER_DOMAINS, type OwnerBindings, type OwnerDomain } from '@/lib/insights/insight-owners';
 
 /**
  * Who each kind of finding lands on. §5.2.
@@ -23,26 +25,20 @@ export function InsightOwners({
   initial: OwnerBindings;
   owners: { email: string; name: string | null }[];
 }) {
-  const router = useRouter();
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries((Object.keys(OWNER_DOMAINS) as OwnerDomain[]).map((d) => [d, initial[d] ?? ''])),
   );
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { pending, error, run } = useMutation();
 
   function commit(domain: OwnerDomain, email: string) {
     if (email === (initial[domain] ?? '')) return;
     setValues((v) => ({ ...v, [domain]: email }));
-    setError(null);
-    start(async () => {
-      try {
+    run(
+      async () => {
         await api('/api/settings/owners', { method: 'PUT', json: { domain, email } });
-        router.refresh();
-      } catch (e) {
-        setValues((v) => ({ ...v, [domain]: initial[domain] ?? '' }));
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
-    });
+      },
+      () => setValues((v) => ({ ...v, [domain]: initial[domain] ?? '' })),
+    );
   }
 
   return (
@@ -52,11 +48,12 @@ export function InsightOwners({
           <span className="min-w-64 flex-1 text-xs text-muted-foreground">
             {OWNER_DOMAINS[domain]}
           </span>
-          <select
+          <Select
+            aria-label={OWNER_DOMAINS[domain]}
             value={values[domain]}
             disabled={pending}
             onChange={(e) => commit(domain, e.target.value)}
-            className="h-7 min-w-56 rounded border border-input bg-background px-1 text-xs"
+            className="h-7 w-auto min-w-56 rounded border border-input bg-background px-1 text-xs"
           >
             <option value="">Nobody yet</option>
             {owners.map((o) => (
@@ -64,14 +61,10 @@ export function InsightOwners({
                 {o.name ?? o.email}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       ))}
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

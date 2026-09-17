@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fairShare, pipelineValue } from '../lib/calc.ts';
+import { fairShare, pipelineValue } from '../lib/shared/calc.ts';
 
 test('pipelineValue sums total and probability-weighted value', () => {
   const { total, weighted } = pipelineValue([

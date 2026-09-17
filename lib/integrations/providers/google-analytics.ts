@@ -1,32 +1,12 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // GA4 via the Data API. Sessions, users and conversions land in MetricSnapshot under
 // entityType 'site', which is exactly what the dashboard's visitor count reads.
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/analytics.readonly';
 
 type Stored = { refreshToken: string };
-
-async function accessToken(refreshToken: string): Promise<string> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-    signal: httpTimeout(),
-  });
-  if (!res.ok) {
-    throw new IntegrationError(`Google rejected the refresh token (${res.status}). Reconnect the integration.`);
-  }
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new IntegrationError('Google returned no access token.');
-  return json.access_token;
-}
 
 export const googleAnalytics: IntegrationProvider = {
   id: 'google_analytics',
@@ -58,47 +38,16 @@ export const googleAnalytics: IntegrationProvider = {
     },
   ],
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
-    const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPE,
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    return googleAuthUrl(SCOPE, redirectUri, state);
   },
 
   async connect(input) {
     if (input.kind !== 'oauth2') throw new IntegrationError('Google Analytics uses OAuth.');
-
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        code: input.code,
-        redirect_uri: input.redirectUri,
-        grant_type: 'authorization_code',
-      }),
-      signal: httpTimeout(),
-    });
-    if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
-
-    const json = (await res.json()) as { refresh_token?: string };
-    if (!json.refresh_token) {
-      // Google only returns a refresh token on the first consent, which is why
-      // getAuthUrl forces prompt=consent.
-      throw new IntegrationError('Google returned no refresh token. Revoke access and reconnect.');
-    }
-    return { secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored) };
+    const refreshToken = await googleExchangeCode(input.code, input.redirectUri);
+    return { secret: JSON.stringify({ refreshToken } satisfies Stored) };
   },
 
   async sync(credential, config, range) {
@@ -108,7 +57,7 @@ export const googleAnalytics: IntegrationProvider = {
     }
 
     const { refreshToken } = JSON.parse(credential) as Stored;
-    const token = await accessToken(refreshToken);
+    const token = await googleAccessToken(refreshToken);
 
     const res = await fetch(
       `https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`,

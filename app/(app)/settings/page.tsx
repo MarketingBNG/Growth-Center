@@ -1,34 +1,34 @@
 import { redirect } from 'next/navigation';
 import { Check, X, TriangleAlert } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Capacity } from './Capacity';
-import { capacitySetting } from '@/lib/capacity';
+import { capacitySetting } from '@/lib/crm/capacity';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
-import { db, hasDb } from '@/lib/prisma';
-import { hasEncryptionKey } from '@/lib/crypto';
-import { aiStatus } from '@/lib/ai';
-import { describeRow, phraseAction, recentAuditEvents } from '@/lib/audit';
-import { AI_KEY_ENV } from '@/lib/enums';
-import { refreshRatesIfStale } from '@/lib/settings';
-import { emailStatus } from '@/lib/email';
-import { cliqConfigured } from '@/lib/cliq';
-import { fmtDate, fmtRelative } from '@/lib/format';
-import { attributionHealth } from '@/lib/attribution';
-import { thresholds } from '@/lib/settings';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { hasEncryptionKey } from '@/lib/access/crypto';
+import { aiStatus } from '@/lib/ai/ai';
+import { describeRow, phraseAction, recentAuditEvents } from '@/lib/platform/audit';
+import { AI_KEY_ENV } from '@/lib/shared/enums';
+import { refreshRatesIfStale } from '@/lib/platform/settings';
+import { emailStatus } from '@/lib/outreach/email';
+import { cliqConfigured } from '@/lib/outreach/cliq';
+import { fmtDate, fmtRelative } from '@/lib/shared/format';
+import { attributionHealth } from '@/lib/money/attribution';
+import { thresholds } from '@/lib/platform/settings';
 import { ApiKeys } from './ApiKeys';
 import { Thresholds } from './Thresholds';
 import { MarketingRoster } from './MarketingRoster';
 import { InsightOwners } from './InsightOwners';
-import { marketingRoster } from '@/lib/roster';
-import { attributionCeiling } from '@/lib/attribution-ceiling';
-import { ownerBindings } from '@/lib/settings';
-import { assignableOwners } from '@/lib/insight-actions';
-import { fmtMoneyCompact } from '@/lib/format';
+import { marketingRoster } from '@/lib/access/roster';
+import { attributionCeiling } from '@/lib/money/attribution-ceiling';
+import { ownerBindings } from '@/lib/platform/settings';
+import { assignableOwners } from '@/lib/insights/insight-actions';
+import { fmtMoneyCompact } from '@/lib/shared/format';
 import { CurrencySettings } from './CurrencySettings';
 import { VerifyEmail } from './VerifyEmail';
 import { RevokeKey } from './RevokeKey';
@@ -47,14 +47,7 @@ export default async function SettingsPage() {
   const user = await currentUser();
   if (!user) redirect('/signin');
 
-  if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Settings" subtitle="Workspace configuration." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
-  }
+  if (!hasDb()) return noDatabasePage('Settings', 'Workspace configuration.');
 
   const manageKeys = can(user.role, 'apikeys:manage');
   const manageSettings = can(user.role, 'settings:manage');

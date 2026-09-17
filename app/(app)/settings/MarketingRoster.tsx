@@ -1,11 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { useMutation } from '@/lib/shared/use-mutation';
+import { ErrorBanner } from '@/components/patterns/state';
 
 /**
  * Who the Growth Center's queue is for.
@@ -19,12 +20,10 @@ import { api } from '@/lib/fetcher';
  * removing a third is a single thought that should be a single audit row.
  */
 export function MarketingRoster({ initial }: { initial: string[] }) {
-  const router = useRouter();
   const [emails, setEmails] = useState<string[]>(initial);
   const [draft, setDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const { pending, error, run } = useMutation();
 
   const dirty =
     emails.length !== initial.length || emails.some((e, i) => e !== initial[i]);
@@ -40,27 +39,21 @@ export function MarketingRoster({ initial }: { initial: string[] }) {
   }
 
   function save() {
-    setError(null);
     setNote(null);
-    start(async () => {
-      try {
-        const out = await api<{ emails: string[]; rejected: string[] }>('/api/settings/roster', {
-          method: 'PUT',
-          json: { emails },
-        });
-        setEmails(out.emails);
-        // Said rather than swallowed: an address outside the firm's domains belongs to
-        // somebody who cannot sign in, and a name quietly vanishing from a list the
-        // person just saved looks like the save failed.
-        setNote(
-          out.rejected.length > 0
-            ? `Saved. Not added, outside the firm’s domains: ${out.rejected.join(', ')}`
-            : 'Saved.',
-        );
-        router.refresh();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not save.');
-      }
+    run(async () => {
+      const out = await api<{ emails: string[]; rejected: string[] }>('/api/settings/roster', {
+        method: 'PUT',
+        json: { emails },
+      });
+      setEmails(out.emails);
+      // Said rather than swallowed: an address outside the firm's domains belongs to
+      // somebody who cannot sign in, and a name quietly vanishing from a list the
+      // person just saved looks like the save failed.
+      setNote(
+        out.rejected.length > 0
+          ? `Saved. Not added, outside the firm’s domains: ${out.rejected.join(', ')}`
+          : 'Saved.',
+      );
     });
   }
 
@@ -113,11 +106,7 @@ export function MarketingRoster({ initial }: { initial: string[] }) {
       </div>
 
       {note ? <p className="text-meta text-muted-foreground">{note}</p> : null}
-      {error ? (
-        <p className="rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-meta text-destructive">
-          {error}
-        </p>
-      ) : null}
+      <ErrorBanner error={error} tone="compact" />
     </div>
   );
 }

@@ -1,4 +1,6 @@
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { vendorMessage } from '../messages.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // Google Search Console — the provider that populates the SEO tables. It reports
 // per-query and per-page rows from the site's own traffic rather than an estimate of it,
@@ -8,7 +10,6 @@ import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoi
 // Console has no search volume, keyword difficulty or CPC, so those columns stay empty.
 // An average position from real impressions is worth more than an invented volume.
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API = 'https://searchconsole.googleapis.com/webmasters/v3';
 const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
 
@@ -17,28 +18,6 @@ type Stored = { refreshToken: string };
 /** Search Console caps a query at 25k rows. Well past what a site this size returns,
  *  and it keeps one sync inside a serverless function's budget. */
 const ROW_LIMIT = 5000;
-
-async function accessToken(refreshToken: string): Promise<string> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-    signal: httpTimeout(),
-  });
-  if (!res.ok) {
-    throw new IntegrationError(
-      `Google rejected the refresh token (${res.status}). Reconnect the integration.`,
-    );
-  }
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new IntegrationError('Google returned no access token.');
-  return json.access_token;
-}
 
 type QueryRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
 
@@ -56,9 +35,9 @@ async function searchAnalytics(
     signal: httpTimeout(),
   });
   if (!res.ok) {
-    const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
     throw new IntegrationError(
-      detail?.error?.message ?? `Search Console query failed (${res.status}). Check the property.`,
+      (await vendorMessage(res)) ??
+        `Search Console query failed (${res.status}). Check the property.`,
     );
   }
   const json = (await res.json()) as { rows?: QueryRow[] };
@@ -111,47 +90,16 @@ export const searchConsole: IntegrationProvider = {
     },
   ],
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
-    const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPE,
-      access_type: 'offline',
-      prompt: 'consent',
-      state,
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    return googleAuthUrl(SCOPE, redirectUri, state);
   },
 
   async connect(input) {
     if (input.kind !== 'oauth2') throw new IntegrationError('Search Console uses OAuth.');
-
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        code: input.code,
-        redirect_uri: input.redirectUri,
-        grant_type: 'authorization_code',
-      }),
-      signal: httpTimeout(),
-    });
-    if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
-
-    const json = (await res.json()) as { refresh_token?: string };
-    if (!json.refresh_token) {
-      // Google returns a refresh token only on first consent, which is why getAuthUrl
-      // forces prompt=consent.
-      throw new IntegrationError('Google returned no refresh token. Revoke access and reconnect.');
-    }
-    return { secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored) };
+    const refreshToken = await googleExchangeCode(input.code, input.redirectUri);
+    return { secret: JSON.stringify({ refreshToken } satisfies Stored) };
   },
 
   async sync(credential, config, range) {
@@ -161,7 +109,7 @@ export const searchConsole: IntegrationProvider = {
     }
 
     const { refreshToken } = JSON.parse(credential) as Stored;
-    const token = await accessToken(refreshToken);
+    const token = await googleAccessToken(refreshToken);
     const window = { startDate: iso(range.from), endDate: iso(range.to) };
 
     // Three shapes from the same window, because they populate three different things:

@@ -5,20 +5,20 @@ import { SyncRuns } from './SyncRuns';
 import { SourceBadge } from '@/components/patterns/source-badge';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { StateBadge, stateLabel } from '@/components/patterns/integration-state';
-import { db, hasDb } from '@/lib/prisma';
-import { TAGS, cached } from '@/lib/cache';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { TAGS, cached } from '@/lib/platform/cache';
 import { channelPerformance, windowFor, trend } from '@/lib/metrics';
 import { cards } from '@/lib/integrations/service';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { analyticsBand } from '@/lib/band';
-import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/format';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { analyticsBand } from '@/lib/analytics/band';
+import { fmtDaysAgo, fmtNumber, fmtRelative } from '@/lib/shared/format';
 
 export const metadata = { title: 'Analytics · Growth Center' };
 
@@ -58,29 +58,14 @@ const scopeLabel = (t: string) => SCOPES[t] ?? t.replaceAll('_', ' ');
 export default async function AnalyticsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Analytics" subtitle="One metrics layer across every connected source." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Analytics', 'One metrics layer across every connected source.');
   }
 
   const params = await searchParams;
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  // A hand-picked span buckets by its own length, so a two-year custom window plots by
-  // month like the 12-month preset rather than as 730 unreadable daily points.
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const { current } = windowFor(spec);
 
   const [series, band, channels, providers, sources] = await Promise.all([

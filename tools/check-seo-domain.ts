@@ -7,10 +7,9 @@
 // than from a screenshot. Read-only.
 //
 // Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/check-seo-domain.ts
-import pg from 'pg';
+import { connect } from './script.ts';
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const providers = await client.query<{
   provider: string; state: string; config: unknown; lastSyncAt: Date | null; lastSyncRows: number | null;

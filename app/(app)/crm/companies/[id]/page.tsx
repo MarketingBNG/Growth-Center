@@ -1,23 +1,20 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackLink, Detail, DetailHeader, HistoryCard, LinkedRow, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
 import { LeadStatusBadge } from '@/components/patterns/badges';
-import { Timeline } from '@/components/patterns/timeline';
 import { TaskList } from '@/components/patterns/task-list';
-import { NoteBox } from '../../../leads/[id]/NoteBox';
-import { getCompany } from '@/lib/crm';
-import { hasDb } from '@/lib/prisma';
-import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/format';
-import { convert } from '@/lib/currency';
-import { currencySettings } from '@/lib/settings';
+import { getCompany } from '@/lib/crm/crm';
+import { hasDb } from '@/lib/platform/prisma';
+import { fmtDate, fmtMoney, fmtRelative, safeUrl } from '@/lib/shared/format';
+import { convertOrDrop, warnUnconverted } from '@/lib/shared/currency';
+import { currencySettings } from '@/lib/platform/settings';
 import {
   COMPANY_SEGMENT_LABELS,
   entityTypeLabel,
   jurisdictionLabels,
   jurisdictionWarning,
-} from '@/lib/company-facts';
+} from '@/lib/crm/company-facts';
 
 export const metadata = { title: 'Company · Growth Center' };
 
@@ -30,7 +27,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
   // total adds them up, so it has to convert first or it is rupees plus dollars.
   const fx = await currencySettings();
   const entries = company.customer?.revenue ?? [];
-  const revenue = entries.reduce((t, r) => t + (convert(Number(r.amount), r.currency, fx) ?? 0), 0);
+  const dropped = new Set<string>();
+  const revenue = entries.reduce(
+    (t, r) => t + convertOrDrop(Number(r.amount), r.currency, fx, dropped),
+    0,
+  );
+  warnUnconverted('company revenue total', dropped, 'that revenue is missing from the header total');
   // The header total is in the reporting currency and the entries below it are each in
   // the one they were billed in, so a company billed in dollars showed a rupee total
   // above a column of dollar amounts with nothing to explain the jump.
@@ -38,39 +40,34 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <Link
-        href="/crm"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> CRM
-      </Link>
+      <BackLink href="/crm" label="CRM" />
 
-      <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{company.name}</h1>
-            {company.customer ? <Badge tone="success">customer</Badge> : null}
-          </div>
-          {/* Domain, industry and country are empty on all 2,953 imported companies —
-              Zoho holds none of the three — so this line read "No details recorded"
-              under every name on the site while the phone number and owner sat unread
-              in the same row. */}
+      <DetailHeader
+        title={company.name}
+        badge={company.customer ? <Badge tone="success">customer</Badge> : null}
+        subtitle={
+          /* Domain, industry and country are empty on all 2,953 imported companies —
+             Zoho holds none of the three — so this line read "No details recorded"
+             under every name on the site while the phone number and owner sat unread
+             in the same row. */
           <p className="mt-1 text-label text-muted-foreground">
             {[company.domain, company.industry, company.country, company.phone]
               .filter(Boolean)
               .join(' · ') || 'No details recorded'}
           </p>
-        </div>
-        {revenue > 0 ? (
-          <div className="text-right">
-            <p className="text-meta uppercase tracking-wide text-muted-foreground">Revenue</p>
-            <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
-            {converted ? (
-              <p className="text-meta text-muted-foreground">Converted to {fx.reporting}</p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+        }
+        actions={
+          revenue > 0 ? (
+            <div className="text-right">
+              <p className="text-meta uppercase tracking-wide text-muted-foreground">Revenue</p>
+              <p className="text-lg font-semibold tnum">{fmtMoney(revenue, false, fx.reporting)}</p>
+              {converted ? (
+                <p className="text-meta text-muted-foreground">Converted to {fx.reporting}</p>
+              ) : null}
+            </div>
+          ) : null
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="min-w-0 space-y-4 lg:col-span-2">
@@ -131,11 +128,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 <p className="text-xs text-muted-foreground">No contacts yet.</p>
               ) : (
                 company.contacts.map((c) => (
-                  <Link
-                    key={c.id}
-                    href={`/crm/contacts/${c.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={c.id} href={`/crm/contacts/${c.id}`}>
                     <span>
                       {[c.firstName, c.lastName].filter(Boolean).join(' ')}
                       {c.title ? (
@@ -143,7 +136,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                       ) : null}
                     </span>
                     <span className="text-xs text-muted-foreground">{c.email}</span>
-                  </Link>
+                  </LinkedRow>
                 ))
               )}
             </CardContent>
@@ -158,11 +151,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                 <p className="text-xs text-muted-foreground">No deals yet.</p>
               ) : (
                 company.opportunities.map((o) => (
-                  <Link
-                    key={o.id}
-                    href={`/pipeline/${o.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={o.id} href={`/pipeline/${o.id}`}>
                     <span>{o.name}</span>
                     <span className="flex items-center gap-2">
                       <Badge tone={o.stage.isWon ? 'success' : o.stage.isLost ? 'danger' : 'info'}>
@@ -170,7 +159,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                       </Badge>
                       <span className="tnum text-muted-foreground">{fmtMoney(Number(o.value), false, o.currency)}</span>
                     </span>
-                  </Link>
+                  </LinkedRow>
                 ))
               )}
             </CardContent>
@@ -183,11 +172,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               </CardHeader>
               <CardContent className="space-y-2">
                 {company.leads.map((l) => (
-                  <Link
-                    key={l.id}
-                    href={`/leads/${l.id}`}
-                    className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary/50"
-                  >
+                  <LinkedRow key={l.id} href={`/leads/${l.id}`}>
                     <span>{[l.firstName, l.lastName].filter(Boolean).join(' ')}</span>
                     <span className="flex items-center gap-2">
                       <LeadStatusBadge status={l.status} />
@@ -195,28 +180,13 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
                         {fmtRelative(l.createdAt)}
                       </span>
                     </span>
-                  </Link>
+                  </LinkedRow>
                 ))}
               </CardContent>
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <NoteBox companyId={company.id} />
-              {company.noteEntries.map((n) => (
-                <div key={n.id} className="rounded-md border border-border px-3 py-2">
-                  <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-meta text-muted-foreground">
-                    {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <NotesCard parent={{ companyId: company.id }} notes={company.noteEntries} />
         </div>
 
         <div className="min-w-0 space-y-4">
@@ -242,23 +212,9 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             </Card>
           ) : null}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>History</CardTitle>
-            </CardHeader>
-            <Timeline entries={company.activities} />
-          </Card>
+          <HistoryCard entries={company.activities} />
         </div>
       </div>
     </>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
-    </div>
   );
 }

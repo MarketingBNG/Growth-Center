@@ -7,33 +7,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
 import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function ApiKeys() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const { busy, error, run, setError } = useBooleanApiAction();
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setBusy(true);
-    setError(null);
     const name = String(new FormData(e.currentTarget).get('name') ?? '').trim();
-    try {
+    await run(async () => {
       const result = await api<{ key: string }>('/api/settings/api-keys', {
         method: 'POST',
         json: { name },
       });
       setCreated(result.key);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   function close() {
@@ -90,7 +85,7 @@ export function ApiKeys() {
             <Field label="Name" required>
               <Input name="name" required autoFocus maxLength={80} placeholder="usaindiacfo.com contact form" />
             </Field>
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            <ErrorText error={error} />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={close}>Cancel</Button>
               <Button type="submit" disabled={busy}>{busy ? 'Creating…' : 'Create key'}</Button>

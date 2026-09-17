@@ -6,7 +6,7 @@
 // Separate from `npm test` on purpose, and the reason is money rather than tidiness. Two
 // of the six probe families need a real model call, so the full set costs a fraction of a
 // rupee per run — trivial once before a release, wrong to charge for on every save. The
-// deterministic checks underneath live in lib/eval-checks.ts and are unit-tested in
+// deterministic checks underneath live in lib/ai/eval-checks.ts and are unit-tested in
 // `npm test` like anything else, so the checkers themselves are covered for free and the
 // paid run exercises the model against them.
 //
@@ -34,26 +34,24 @@
 
 import process from 'node:process';
 
+import { libSource } from './source.ts';
 import {
   arithmeticVerdict,
   figuresIn,
   percentageWithoutBasis,
   unsupportedFigures,
-} from '../lib/eval-checks.ts';
-import { blocksSending, lintStep, type LintableStep } from '../lib/outreach-lint.ts';
-import { requirementFor, type InsightStatus } from '../lib/insight-lifecycle.ts';
-import { fingerprint, normaliseSubject } from '../lib/insight-identity.ts';
-import { RULES, runRules } from '../lib/insight-rules.ts';
-import { aiStatus, ask, generateInsights, growthContext } from '../lib/ai.ts';
-import { db } from '../lib/prisma.ts';
+} from '../lib/ai/eval-checks.ts';
+import { blocksSending, lintStep, type LintableStep } from '../lib/outreach/outreach-lint.ts';
+import { requirementFor, type InsightStatus } from '../lib/insights/insight-lifecycle.ts';
+import { fingerprint, normaliseSubject } from '../lib/insights/insight-identity.ts';
+import { RULES, runRules } from '../lib/insights/insight-rules.ts';
+import { aiStatus, ask, generateInsights, growthContext } from '../lib/ai/ai.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 const FREE_ONLY = process.argv.includes('--free');
 
 // Read once, at startup, so the regression probe is checking the file that shipped.
-const THRESHOLD_SOURCE = await (await import('node:fs/promises')).readFile(
-  new URL('../lib/settings.ts', import.meta.url),
-  'utf8',
-);
+const THRESHOLD_SOURCE = libSource('settings');
 
 type Result = {
   family: string;

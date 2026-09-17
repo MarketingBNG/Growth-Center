@@ -1,5 +1,5 @@
-import { route } from '@/lib/api';
-import { verifyEmail } from '@/lib/email';
+import { route } from '@/lib/platform/api';
+import { verifyEmail } from '@/lib/outreach/email';
 
 /**
  * Proves the SMTP credentials without sending anything.

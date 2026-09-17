@@ -2,14 +2,15 @@ import Link from 'next/link';
 import { CalendarDays, ChevronLeft, ChevronRight, Columns3, FileText } from 'lucide-react';
 import { StatTile } from '@/components/patterns/stat-tile';
 import { PageHeader } from '@/components/patterns/page-header';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { hasDb } from '@/lib/prisma';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
-import { contentBoard } from '@/lib/content';
+import { hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
+import { contentBoard } from '@/lib/content/content';
 import {
   addMonths,
   contentCalendar,
@@ -17,7 +18,7 @@ import {
   monthKey,
   parseMonth,
 } from '@/lib/content-calendar';
-import { fmtCompact, fmtDate, fmtNumber } from '@/lib/format';
+import { fmtCompact, fmtDate, fmtNumber } from '@/lib/shared/format';
 import { NewContentButton } from './NewContentButton';
 import { AutofillButton } from './AutofillButton';
 import { ContentCard } from './ContentCard';
@@ -57,25 +58,20 @@ const STATUS_TONE = {
 export default async function ContentPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Content" subtitle="From idea to published, with what it produced." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('Content', 'From idea to published, with what it produced.');
   }
 
   // §21.2's approving identity. The owner alone holds `approve`, so an admin can write
   // and move a piece without being able to sign it off — which is the separation the
   // permission was created for and, until this page, nothing used.
   const user = await currentUser();
-  const canApprove = can(user?.role ?? 'user', 'approve');
-  const canWrite = can(user?.role ?? 'user', 'content:write');
+  const canApprove = can(user?.role, 'approve');
+  const canWrite = can(user?.role, 'content:write');
 
   const view = params.view === 'board' ? 'board' : 'calendar';
   const month = parseMonth(typeof params.month === 'string' ? params.month : null) ?? currentMonth();

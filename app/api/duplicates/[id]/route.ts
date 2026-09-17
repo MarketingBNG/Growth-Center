@@ -1,15 +1,7 @@
 import { z } from 'zod';
-import { route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import {
-  MergeError,
-  dismissDuplicate,
-  mergeDuplicate,
-  unmergeDuplicate,
-} from '@/lib/duplicate-queue';
-import { TAGS, invalidate } from '@/lib/cache';
-
-type Ctx = { params: Promise<{ id: string }> };
+import { body as readBody, route, type Ctx } from '@/lib/platform/api';
+import { dismissDuplicate, mergeDuplicate, unmergeDuplicate } from '@/lib/crm/duplicate-queue';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * Resolve one pair: merge it, or say why it is not a duplicate.
@@ -28,26 +20,21 @@ const body = z.discriminatedUnion('action', [
 
 export const POST = route<unknown, Ctx>('crm:write', async (user, req, ctx) => {
   const { id } = await ctx.params;
-  const input = body.parse(await req.json());
+  const input = await readBody(req, body);
 
-  try {
-    if (input.action === 'merge') {
-      const merged = await mergeDuplicate(id, user.email);
-      await invalidate(TAGS.metrics);
-      return merged;
-    }
-    if (input.action === 'unmerge') {
-      const restored = await unmergeDuplicate(id, user.email);
-      await invalidate(TAGS.metrics);
-      return restored;
-    }
-    await dismissDuplicate(id, input.reason, user.email);
+  // MergeError becomes a 422 in lib/platform/api.ts's route(): "already resolved" and "company
+  // merges are not automated" are both answers to the request, not server faults.
+  if (input.action === 'merge') {
+    const merged = await mergeDuplicate(id, user.email);
     await invalidate(TAGS.metrics);
-    return { dismissed: id };
-  } catch (e) {
-    // 422 rather than 500: "already resolved" and "company merges are not automated" are
-    // both answers to the request, not failures of the server.
-    if (e instanceof MergeError) throw new HttpError(422, e.message);
-    throw e;
+    return merged;
   }
+  if (input.action === 'unmerge') {
+    const restored = await unmergeDuplicate(id, user.email);
+    await invalidate(TAGS.metrics);
+    return restored;
+  }
+  await dismissDuplicate(id, input.reason, user.email);
+  await invalidate(TAGS.metrics);
+  return { dismissed: id };
 });

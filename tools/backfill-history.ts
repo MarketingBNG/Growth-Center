@@ -27,7 +27,7 @@
 // current; it is only the history behind it that was never fetched.
 
 import { sync } from '../lib/integrations/service.ts';
-import { db } from '../lib/prisma.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 const DEFAULT_DAYS = 400;
 const provider = process.argv[2];

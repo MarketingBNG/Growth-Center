@@ -1,12 +1,10 @@
 import { after } from 'next/server';
-import { route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
+import { route, type Ctx } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
 import { driveSync } from '@/lib/integrations/driver';
 import { syncStatus } from '@/lib/integrations/service';
 import { getProvider } from '@/lib/integrations/registry';
 import { IntegrationError } from '@/lib/integrations/types';
-
-type Ctx = { params: Promise<{ id: string }> };
 
 /**
  * Starts a sync and answers as soon as it has started, not when it has finished.
@@ -45,6 +43,10 @@ export const POST = route<unknown, Ctx>('integrations:manage', async (user, _req
     after(() => driveSync(id, { days: 30, actorEmail: user.email }));
     return { started: true };
   } catch (e) {
+    // 422 here, deliberately not the 502 lib/platform/api.ts's route() gives an uncaught
+    // IntegrationError elsewhere: this can only throw before driveSync is scheduled
+    // (nothing above it can fail once the closure is handed to after()), which means the
+    // caller's own request was rejected, not a vendor.
     if (e instanceof IntegrationError) throw new HttpError(422, e.message);
     throw e;
   }

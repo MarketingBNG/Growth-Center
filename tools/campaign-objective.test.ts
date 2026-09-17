@@ -4,7 +4,7 @@ import {
   ACQUISITION_CAMPAIGN,
   isAcquisition,
   resolveObjective,
-} from '../lib/campaign-objective.ts';
+} from '../lib/money/campaign-objective.ts';
 
 // The five campaigns this account actually runs recruitment through, by name, verbatim
 // from the database. ₹395,505 of lifetime spend sat in the denominator of CPL, CAC and

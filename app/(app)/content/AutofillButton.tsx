@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { DownloadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 
 // §15.4's manual trigger. The nightly cron does this too; this is for the first run and
 // for the morning after a batch of articles goes live.

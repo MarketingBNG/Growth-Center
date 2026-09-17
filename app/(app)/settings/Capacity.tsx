@@ -3,8 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/fetcher';
-import type { CapacitySetting } from '@/lib/capacity';
+import { Input } from '@/components/ui/input';
+import { api } from '@/lib/shared/fetcher';
+import type { CapacitySetting } from '@/lib/crm/capacity';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 // §6.2's monthly manual input.
 //
@@ -19,15 +22,12 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
     initial.monthlyConsultations === null ? '' : String(initial.monthlyConsultations),
   );
   const [note, setNote] = useState(initial.note ?? '');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function save() {
-    setBusy(true);
-    setError(null);
     setSaved(false);
-    try {
+    await run(async () => {
       await api('/api/settings/capacity', {
         method: 'PUT',
         json: {
@@ -40,34 +40,30 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
       });
       setSaved(true);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-xs">
-          <span className="mb-1 block text-muted-foreground">New consultations per month</span>
-          <input
+          <span className="mb-1 block font-medium text-muted-foreground">New consultations per month</span>
+          <Input
             type="number"
             min={0}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Not set"
-            className="w-36 rounded-md border border-border bg-background px-2 py-1.5 text-xs tnum"
+            className="h-auto w-36 rounded-md border border-border bg-background px-2 py-1.5 text-xs tnum"
           />
         </label>
         <label className="flex-1 text-xs">
-          <span className="mb-1 block text-muted-foreground">Why this number</span>
-          <input
+          <span className="mb-1 block font-medium text-muted-foreground">Why this number</span>
+          <Input
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Two senior reviewers, four days a week…"
-            className="w-full min-w-[220px] rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+            className="h-auto w-full min-w-[220px] rounded-md border border-border bg-background px-2 py-1.5 text-xs"
           />
         </label>
         <Button size="sm" onClick={save} disabled={busy}>
@@ -75,7 +71,7 @@ export function Capacity({ initial }: { initial: CapacitySetting }) {
         </Button>
       </div>
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       {saved ? <p className="text-xs text-success">Saved and recorded in the activity log.</p> : null}
 
       <p className="text-meta text-muted-foreground">

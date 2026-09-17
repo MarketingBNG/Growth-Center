@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { campaignTotals } from '../lib/campaigns.ts';
-import type { CampaignRow } from '../lib/campaigns.ts';
+import { campaignTotals } from '../lib/money/campaigns.ts';
+import type { CampaignRow } from '../lib/money/campaigns.ts';
 
 const row = (over: Partial<CampaignRow>): CampaignRow =>
   ({

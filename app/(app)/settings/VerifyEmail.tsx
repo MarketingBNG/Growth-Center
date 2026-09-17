@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
 
 /**
  * Checks that the mail server accepts the credentials, without sending anything.

@@ -1,5 +1,6 @@
 import { test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE, SPEC } from './timeouts';
 
 // Not checks, looks. The calendar's spacing, range shading and the two-month layout are
 // things a passing assertion says nothing useful about — and both themes matter, because
@@ -11,13 +12,14 @@ test.beforeEach(async ({ context, baseURL }) => {
 
 for (const theme of ['light', 'dark'] as const) {
   test(`capture the open calendar (${theme})`, async ({ page }) => {
+    test.setTimeout(SPEC);
     // next-themes reads this before paint, so it is set before the first navigation.
     await page.addInitScript(
       (t) => window.localStorage.setItem('theme', t),
       theme,
     );
-    await page.goto('/analytics');
-    await page.waitForSelector('nav a');
+    await page.goto('/analytics', { timeout: GOTO });
+    await page.waitForSelector('nav a', { timeout: HYDRATE });
     await page.click('button[aria-haspopup="dialog"]');
 
     const dialog = page.getByRole('dialog', { name: 'Choose a date range' });

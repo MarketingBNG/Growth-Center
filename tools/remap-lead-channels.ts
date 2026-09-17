@@ -13,22 +13,14 @@
 //
 // Invents nothing: a row whose source maps nowhere keeps whatever it has.
 //
-// Run:  node --experimental-strip-types tools/remap-lead-channels.ts          (dry run)
-//       node --experimental-strip-types tools/remap-lead-channels.ts --apply  (writes)
+// Run:  node --experimental-strip-types --env-file-if-exists=.env.local tools/remap-lead-channels.ts          (dry run)
+//       node --experimental-strip-types --env-file-if-exists=.env.local tools/remap-lead-channels.ts --apply  (writes)
 //
 // Safe to re-run: a second run finds nothing to do.
 
-import { readFileSync } from 'node:fs';
-import pg from 'pg';
+import { apply, connect, stopUnlessApplying, transact } from './script.ts';
 import { channelSlugFor, leadSourceType } from '../lib/integrations/crm-mapping.ts';
-import type { SourceType } from '../lib/enums.ts';
-
-for (const line of readFileSync('.env.local', 'utf8').split('\n')) {
-  const m = line.match(/^([A-Z_]+)="?(.*?)"?\s*$/);
-  if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-}
-
-const apply = process.argv.includes('--apply');
+import type { SourceType } from '../lib/shared/enums.ts';
 
 /** Channels the mapping can now name. Kind matters: Marketing's ROAS and CAC are measured
  *  against the channels that carried spend, and `paid` is what puts Canada among them. */
@@ -38,8 +30,7 @@ const REQUIRED = [
   { slug: 'incorp', name: 'Incorp', kind: 'direct' },
 ];
 
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const existing = await client.query<{ id: string; slug: string }>('select id, slug from channel');
 const missing = REQUIRED.filter((c) => !existing.rows.some((r) => r.slug === c.slug));
@@ -129,17 +120,12 @@ const revenueCount = await client.query<{ n: string }>(
 );
 console.log(`\nrevenue_entry: ${revenueCount.rows[0].n} rows on a stale channel`);
 
-if (!apply) {
-  console.log('\nDry run. Re-run with --apply to write.');
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(client, '\nDry run. Re-run with --apply to write.');
 
 // One transaction over both tables: a half-applied remap would leave Marketing's
 // lead-first customer resolution reading a lead and a deal on different channels.
-await client.query('BEGIN');
-try {
-  let written = 0;
+const { written, rev } = await transact(client, async () => {
+  let moved = 0;
   for (const [table, moves] of [
     ['lead', leadMoves],
     ['opportunity', dealMoves],
@@ -149,11 +135,11 @@ try {
         `update ${table} set "channelId" = $1 where id = any($2::text[])`,
         [channelId, ids],
       );
-      written += r.rowCount ?? 0;
+      moved += r.rowCount ?? 0;
     }
   }
 
-  const rev = await client.query(
+  const revenue = await client.query(
     `UPDATE revenue_entry r
         SET "channelId" = COALESCE(l."channelId", o."channelId")
        FROM opportunity o
@@ -162,11 +148,8 @@ try {
         AND r."channelId" IS DISTINCT FROM COALESCE(l."channelId", o."channelId")`,
   );
 
-  await client.query('COMMIT');
-  console.log(`\nMoved ${written} rows, and re-attributed ${rev.rowCount ?? 0} revenue entries.`);
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+  return { written: moved, rev: revenue };
+});
+console.log(`\nMoved ${written} rows, and re-attributed ${rev.rowCount ?? 0} revenue entries.`);
 
 await client.end();

@@ -34,7 +34,7 @@ export default defineConfig({
   // trying to acquire a postgres advisory lock", against a connection sitting idle.
   //
   // DIRECT_URL is the same Neon host without the `-pooler` suffix. Only the CLI reads
-  // this; the running app still builds its client from DATABASE_URL in lib/prisma.ts,
+  // this; the running app still builds its client from DATABASE_URL in lib/platform/prisma.ts,
   // which is exactly where pooling belongs.
   datasource: { url: process.env.DIRECT_URL || process.env.DATABASE_URL || '' },
 });

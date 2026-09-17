@@ -1,5 +1,5 @@
-import { cn } from '@/lib/utils';
-import { sourceMeta, type SourceTone } from '@/lib/sources';
+import { cn } from '@/lib/shared/utils';
+import { sourceMeta, type SourceTone } from '@/lib/shared/sources';
 
 // Where a figure came from, shown next to the figure itself. Provenance used to live
 // only on the Analytics page, so every other page presented seeded numbers exactly like

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { hasDb } from '@/lib/prisma';
-import { packsDue, sendPack } from '@/lib/packs';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { packsDue, sendPack } from '@/lib/reports/packs';
 
 /**
  * §12.6's scheduled packs: Shweta on a Monday, Akshay on the first working day. K7.
@@ -17,8 +17,7 @@ import { packsDue, sendPack } from '@/lib/packs';
  * a run that fails takes everything after it silently, and the symptom of a missing email
  * is that nobody notices.
  *
- * Authenticated the same way as the sync and the digest — CRON_SECRET as a bearer token,
- * refusing to run when the variable is unset rather than running openly.
+ * Authenticated the same way as the sync and the digest — see cronGuard.
  */
 export const maxDuration = 60;
 
@@ -32,16 +31,8 @@ function baseUrl(req: Request): string {
 }
 
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not set' }, { status: 503 });
-  }
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-  }
-  if (!hasDb()) {
-    return NextResponse.json({ error: 'No database configured' }, { status: 503 });
-  }
+  const refusal = cronGuard(req);
+  if (refusal) return refusal;
 
   const now = new Date();
   const due = packsDue(now);

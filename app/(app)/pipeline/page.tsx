@@ -2,15 +2,15 @@ import { Kanban } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
-import { hasDb } from '@/lib/prisma';
-import { pipelineBand } from '@/lib/band';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { board, BOARD_LIMIT } from '@/lib/pipeline';
-import { fmtMoney, fmtNumber } from '@/lib/format';
-import { convert } from '@/lib/currency';
-import { currencySettings } from '@/lib/settings';
+import { hasDb } from '@/lib/platform/prisma';
+import { pipelineBand } from '@/lib/analytics/band';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { board, BOARD_LIMIT } from '@/lib/pipeline/pipeline';
+import { fmtMoney, fmtNumber } from '@/lib/shared/format';
+import { convertOrDrop, warnUnconverted } from '@/lib/shared/currency';
+import { currencySettings } from '@/lib/platform/settings';
 import { PipelineViews } from './PipelineViews';
 
 export const metadata = { title: 'Pipeline · Growth Center' };
@@ -18,27 +18,14 @@ export const metadata = { title: 'Pipeline · Growth Center' };
 export default async function PipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Pipeline" subtitle="Opportunities from first conversation to won." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Pipeline', 'Opportunities from first conversation to won.');
   }
 
   const params = await searchParams;
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const [data, band, fx] = await Promise.all([
     board(),
     pipelineBand(spec, bucket),
@@ -78,6 +65,7 @@ export default async function PipelinePage({
   const total = kpi('totalValue');
   const weighted = kpi('weighted');
 
+  const dropped = new Set<string>();
   const columns = data.columns.map((c) => ({
     total: c.total,
     stage: {
@@ -92,7 +80,7 @@ export default async function PipelinePage({
       name: o.name,
       // Converted here rather than shown as written: the board sums each column, and a
       // column adding rupees to dollars is the figure people act on.
-      value: convert(Number(o.value), o.currency, fx) ?? 0,
+      value: convertOrDrop(Number(o.value), o.currency, fx, dropped),
       probability: o.probability,
       ownerEmail: o.ownerEmail,
       source: o.source,
@@ -103,6 +91,7 @@ export default async function PipelinePage({
         : null,
     })),
   }));
+  warnUnconverted('pipeline board', dropped, 'those deals show as zero on their cards and in their column total');
 
   return (
     <>

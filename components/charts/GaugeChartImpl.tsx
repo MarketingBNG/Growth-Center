@@ -1,7 +1,7 @@
 'use client';
 
-import { fmtPercent } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { fmtPercent } from '@/lib/shared/format';
+import { cn } from '@/lib/shared/utils';
 
 const TICKS = 44;
 const INNER = 62;

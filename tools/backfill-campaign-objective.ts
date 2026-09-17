@@ -17,13 +17,10 @@
 // Safe to re-run: it is a pure function of the name and the stored platform objective, so
 // a second run over unchanged rows writes the same values.
 
-import pg from 'pg';
-import { resolveObjective } from '../lib/campaign-objective.ts';
+import { connect, stopUnlessApplying, transact } from './script.ts';
+import { resolveObjective } from '../lib/money/campaign-objective.ts';
 
-const apply = process.argv.includes('--apply');
-
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
-await client.connect();
+const client = await connect();
 
 const { rows } = await client.query<{
   id: string;
@@ -63,24 +60,18 @@ for (const c of excluded.sort((a, b) => b.spend - a.spend)) {
   console.log(`  ${c.spend.toFixed(2).padStart(12)}  ${c.to.padEnd(10)} ${c.name}`);
 }
 
-if (!apply) {
-  console.log(`\nDry run. ${changes.length} rows would change. Re-run with --apply.`);
-  await client.end();
-  process.exit(0);
-}
+await stopUnlessApplying(
+  client,
+  `\nDry run. ${changes.length} rows would change. Re-run with --apply.`,
+);
 
 // One statement, one transaction. A half-applied classification would leave two campaigns
 // in the same account on different sides of the exclusion, which is worse than neither.
-await client.query('BEGIN');
-try {
+await transact(client, async () => {
   for (const c of changes) {
     await client.query('UPDATE campaign SET objective = $1 WHERE id = $2', [c.to, c.id]);
   }
-  await client.query('COMMIT');
-} catch (e) {
-  await client.query('ROLLBACK');
-  throw e;
-}
+});
 
 console.log(`\nWrote ${changes.length} rows.`);
 await client.end();

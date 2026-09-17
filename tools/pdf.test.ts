@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pdfSafe, reportPdf } from '../lib/pdf.ts';
+import { pdfSafe, reportPdf } from '../lib/reports/pdf.ts';
 
 // The standard-14 fonts encode as WinAnsi, which has no ₹ (U+20B9) — and pdfkit does not
 // fail on a character it cannot encode. It emits byte 0xB9, which in WinAnsi is ¹, so

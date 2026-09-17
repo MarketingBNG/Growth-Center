@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { WEB_ARRIVING_CHANNELS, WEB_ARRIVING_LEAD, WEB_LEAD_BASIS, arrivesOnSite } from '../lib/web-leads.ts';
+import { WEB_ARRIVING_CHANNELS, WEB_ARRIVING_LEAD, WEB_LEAD_BASIS, arrivesOnSite } from '../lib/analytics/web-leads.ts';
 
 // The four channels that account for 12,614 of this workspace's 15,830 annual leads. All
 // four are in-platform forms or chat threads: the person never loads a page on

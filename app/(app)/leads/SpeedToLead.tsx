@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { SpeedToLead as Distribution } from '@/lib/speed-to-lead';
+import type { SpeedToLead as Distribution } from '@/lib/analytics/speed-to-lead';
 
 /**
  * Appendix C's speed to lead: the distribution, including the untouched.

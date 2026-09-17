@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/lib/shared/utils';
 
 /**
  * A figure with no comparison behind it.

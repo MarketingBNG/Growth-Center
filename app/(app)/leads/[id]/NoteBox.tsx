@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function NoteBox(parent: {
   leadId?: string;
@@ -14,23 +16,16 @@ export function NoteBox(parent: {
 }) {
   const router = useRouter();
   const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/notes', { method: 'POST', json: { ...parent, body: body.trim() } });
       setBody('');
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -41,7 +36,7 @@ export function NoteBox(parent: {
         placeholder="Add a note…"
         rows={2}
       />
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      <ErrorText error={error} />
       <div className="flex justify-end">
         <Button type="submit" size="sm" variant="secondary" disabled={busy || !body.trim()}>
           {busy ? 'Saving…' : 'Add note'}

@@ -2,9 +2,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { EmptyState } from '@/components/patterns/state';
 import { History } from 'lucide-react';
-import { runHistory } from '@/lib/sync-health';
+import { runHistory } from '@/lib/platform/sync-health';
 import { getProvider } from '@/lib/integrations/registry';
-import { fmtNumber, fmtRelative } from '@/lib/format';
+import { fmtNumber, fmtRelative } from '@/lib/shared/format';
 
 // §16's run history, on the page that already answers "where did this number come from".
 //

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './auth';
+import { GOTO, HYDRATE } from './timeouts';
 
 // The delta chip carries two encodings — the arrow says which way the number moved, the
 // colour says whether that was good — so on a metric where a fall is the win they look
@@ -16,8 +17,8 @@ test('a chip never contradicts itself', async ({ page, context, baseURL }) => {
   let worded = 0;
 
   for (const path of PAGES) {
-    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: 120_000 });
-    await page.waitForSelector('nav a', { timeout: 90_000 });
+    await page.goto(path, { waitUntil: 'domcontentloaded', timeout: GOTO });
+    await page.waitForSelector('nav a', { timeout: HYDRATE });
     await page.waitForTimeout(1200);
 
     const found = await page.evaluate(() => {

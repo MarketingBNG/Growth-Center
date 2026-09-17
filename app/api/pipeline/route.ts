@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { parseQuery, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { board } from '@/lib/pipeline';
+import { parseQuery, route } from '@/lib/platform/api';
+import { HttpError } from '@/lib/access/auth';
+import { board } from '@/lib/pipeline/pipeline';
 
 export const GET = route('growth:read', async (_user, req) => {
   const { pipelineId } = parseQuery(req, z.object({ pipelineId: z.string().optional() }));

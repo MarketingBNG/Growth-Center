@@ -1,8 +1,7 @@
 import { z } from 'zod';
-import { body, route } from '@/lib/api';
-import { HttpError } from '@/lib/auth';
-import { BudgetError, envelopesFor, quarterOf, setEnvelope } from '@/lib/budget';
-import { TAGS, invalidate } from '@/lib/cache';
+import { body, route } from '@/lib/platform/api';
+import { envelopesFor, quarterOf, setEnvelope } from '@/lib/money/budget';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 // The budget envelope. §22: Akshay sets it by channel, once a quarter, recorded with his
 // identity.
@@ -41,24 +40,21 @@ export const PUT = route('settings:manage', async (user, req) => {
     }),
   );
 
-  try {
-    const saved = await setEnvelope(
-      {
-        channelId: input.channelId,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        amount: input.amount,
-        currency: input.currency.toUpperCase(),
-        note: input.note ?? null,
-      },
-      user.email,
-    );
+  // BudgetError (an over-committed envelope, say) becomes a 422 in lib/platform/api.ts's route() —
+  // a rejected write is an answer to the request, not a server fault.
+  const saved = await setEnvelope(
+    {
+      channelId: input.channelId,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      amount: input.amount,
+      currency: input.currency.toUpperCase(),
+      note: input.note ?? null,
+    },
+    user.email,
+  );
 
-    // The envelope rule and the marketing page both compute against this.
-    await invalidate(TAGS.metrics);
-    return { id: saved.id };
-  } catch (e) {
-    if (e instanceof BudgetError) throw new HttpError(422, e.message);
-    throw e;
-  }
+  // The envelope rule and the marketing page both compute against this.
+  await invalidate(TAGS.metrics);
+  return { id: saved.id };
 });

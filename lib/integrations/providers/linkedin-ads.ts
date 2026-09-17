@@ -1,4 +1,6 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint } from '../types.ts';
+import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
+import { num, str } from '../coerce.ts';
 
 // LinkedIn Ads — the third paid channel.
 //
@@ -29,7 +31,6 @@ const VERSION = '202411';
 const SCOPE = 'r_ads r_ads_reporting';
 
 type Stored = { refreshToken: string; expiresAt?: string };
-type Json = Record<string, unknown>;
 
 function headers(token: string): Record<string, string> {
   return {
@@ -41,16 +42,6 @@ function headers(token: string): Record<string, string> {
     accept: 'application/json',
   };
 }
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
 
 /**
  * `urn:li:sponsoredCampaign:123456` → `123456`.
@@ -89,13 +80,13 @@ export function readMoney(value: unknown): { amount: number; currency: string | 
 
 function describeError(status: number, body: string): string {
   if (/REVOKED_ACCESS_TOKEN|EXPIRED/i.test(body) || status === 401) {
-    return 'LinkedIn rejected the token. Reconnect the integration.';
+    return tokenRejected('LinkedIn');
   }
   if (status === 403) {
     return 'LinkedIn refused the request. This usually means the Marketing Developer Platform application has not been approved for this app yet — it gates every advertising endpoint.';
   }
-  if (status === 429) return 'LinkedIn is rate-limiting requests. It will resume on the next run.';
-  return `LinkedIn request failed (${status}).`;
+  if (status === 429) return rateLimited('LinkedIn');
+  return requestFailed('LinkedIn', status);
 }
 
 async function get(url: string, token: string): Promise<Json> {

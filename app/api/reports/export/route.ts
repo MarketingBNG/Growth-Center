@@ -1,9 +1,9 @@
-import { requirePermission } from '@/lib/auth';
-import { fail } from '@/lib/api';
+import { requirePermission } from '@/lib/access/auth';
+import { fail } from '@/lib/platform/api';
 import { buildReport, isReportId } from '@/lib/reports';
-import { hasDb } from '@/lib/prisma';
-import { csvCell as cell, csvDocument } from '@/lib/csv';
-import { reportPdf } from '@/lib/pdf';
+import { hasDb } from '@/lib/platform/prisma';
+import { csvCell as cell, csvDocument } from '@/lib/shared/csv';
+import { reportPdf } from '@/lib/reports/pdf';
 
 // Returns a file rather than JSON, so it cannot use route() — that wraps every result in
 // NextResponse.json. There was no export anywhere in the product; a report could be read

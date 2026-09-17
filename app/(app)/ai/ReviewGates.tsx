@@ -4,7 +4,7 @@ import {
   campaignsMissingRegistry,
   canScale,
   sequencesBreachingSuppression,
-} from '@/lib/review-card';
+} from '@/lib/insights/review-card';
 
 // §21.3 and §21.4, on the screen where the proposals are.
 //

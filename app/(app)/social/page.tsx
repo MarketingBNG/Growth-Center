@@ -9,9 +9,9 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { BarChart } from '@/components/charts/BarChart';
-import { hasDb } from '@/lib/prisma';
-import { socialOverview } from '@/lib/social';
-import { fmtCompact, fmtNumber, fmtPercent, fmtRelative } from '@/lib/format';
+import { hasDb } from '@/lib/platform/prisma';
+import { socialOverview } from '@/lib/analytics/social';
+import { fmtCompact, fmtNumber, fmtPercent, fmtRelative } from '@/lib/shared/format';
 
 export const metadata = { title: 'Social · Growth Center' };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { fmtCompact, fmtNumber, fmtPercent } from '@/lib/format';
+import { fmtCompact, fmtNumber, fmtPercent } from '@/lib/shared/format';
 import { ChartFrame } from './chart-parts';
 
 export type Stage = {

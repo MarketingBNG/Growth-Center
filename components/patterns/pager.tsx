@@ -21,7 +21,10 @@ export function Pager({ page, perPage, total }: { page: number; perPage: number;
       showPage(next);
       const q = new URLSearchParams(params.toString());
       q.set('page', String(next));
-      router.replace(`?${q.toString()}`);
+      // `scroll: false`, as with every other control that edits this screen's query
+      // string. The default throws you to the top of the document, which on a long page
+      // means the table you were reading scrolls out of sight the moment you page it.
+      router.replace(`?${q.toString()}`, { scroll: false });
     });
   }
 

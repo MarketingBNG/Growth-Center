@@ -6,9 +6,11 @@ import { Check, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { api } from '@/lib/fetcher';
-import { PURPOSE_LABELS, SEQUENCE_PURPOSES } from '@/lib/outreach-approval';
-import { fmtDate } from '@/lib/format';
+import { api } from '@/lib/shared/fetcher';
+import { PURPOSE_LABELS, SEQUENCE_PURPOSES } from '@/lib/outreach/outreach-approval';
+import { fmtDate } from '@/lib/shared/format';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 type SignOffView =
   | { state: 'none' }
@@ -43,8 +45,7 @@ export function SequenceRegistry({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
   const [draft, setDraft] = useState({
     purpose: purpose ?? '',
     segment: segment ?? '',
@@ -53,17 +54,11 @@ export function SequenceRegistry({
   });
 
   async function send(path: string, json: Record<string, unknown>, method: 'PATCH' | 'POST') {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api(path, { method, json });
       setOpen(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   const saveRegistry = () =>
@@ -159,7 +154,7 @@ export function SequenceRegistry({
         />
       </div>
 
-      {error ? <p className="mt-2 text-meta text-destructive">{error}</p> : null}
+      <ErrorText error={error} size="meta" className="mt-2" />
     </div>
   );
 }

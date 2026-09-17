@@ -3,8 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Select } from '@/components/ui/select';
-import { api } from '@/lib/fetcher';
-import { ROLES, canAdminister, type Role } from '@/lib/roles';
+import { api } from '@/lib/shared/fetcher';
+import { ROLES, canAdminister, type Role } from '@/lib/access/roles';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 /**
  * The Role cell on the Team page.
@@ -25,9 +27,8 @@ export function RoleSelect({
   isAdmin: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
   const [value, setValue] = useState<Role>(role);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   // Whoever must not lose their way back in: the shared admin mailboxes, and you.
   const mustAdminister = isAdmin || isSelf;
@@ -35,17 +36,15 @@ export function RoleSelect({
   async function change(next: Role) {
     const previous = value;
     setValue(next);
-    setBusy(true);
-    setError(null);
-    try {
-      await api('/api/settings/users', { method: 'PATCH', json: { email, role: next } });
-      router.refresh();
-    } catch (e) {
-      setValue(previous);
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    await run(async () => {
+      try {
+        await api('/api/settings/users', { method: 'PATCH', json: { email, role: next } });
+        router.refresh();
+      } catch (e) {
+        setValue(previous);
+        throw e;
+      }
+    });
   }
 
   return (
@@ -67,7 +66,7 @@ export function RoleSelect({
           </option>
         ))}
       </Select>
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
     </span>
   );
 }

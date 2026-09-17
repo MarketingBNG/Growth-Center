@@ -4,7 +4,9 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/fetcher';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export function TeamActions({
   email,
@@ -22,23 +24,16 @@ export function TeamActions({
   namePinned: boolean;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run, setError } = useBooleanApiAction();
 
   async function send(json: Record<string, unknown>) {
-    setBusy(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/settings/users', { method: 'PATCH', json: { email, ...json } });
       setEditing(false);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   if (editing) {
@@ -73,14 +68,14 @@ export function TeamActions({
         >
           Cancel
         </Button>
-        {error ? <span className="text-xs text-destructive">{error}</span> : null}
+        <ErrorText error={error} as="span" />
       </form>
     );
   }
 
   return (
     <span className="inline-flex items-center justify-end gap-2">
-      {error ? <span className="text-xs text-destructive">{error}</span> : null}
+      <ErrorText error={error} as="span" />
 
       {/* A shared mailbox has its name pinned in lib/roles.ts. A person does not. */}
       {namePinned ? null : (

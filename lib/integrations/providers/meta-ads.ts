@@ -1,5 +1,7 @@
-import { resolveObjective } from '../../campaign-objective.ts';
+import { resolveObjective } from '../../money/campaign-objective.ts';
+import { vendorMessage } from '../messages.ts';
 import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint } from '../types.ts';
+import { metaExchangeForLongLived, metaRefresh } from './oauth.ts';
 
 // Meta Ads insights, written per campaign so the marketing table's spend, impressions
 // and clicks come from the platform rather than being entered by hand.
@@ -7,42 +9,6 @@ import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoi
 const GRAPH = 'https://graph.facebook.com/v21.0';
 
 type Stored = { accessToken: string };
-
-/**
- * Trades a token for a fresh long-lived one (~60 days).
- *
- * Used at connect, because the code exchange returns a short-lived token that would
- * die in about an hour, and again from refresh() to push the expiry out before it
- * lapses. Meta accepts a long-lived token as input here, which is what makes rolling
- * renewal possible at all.
- */
-// Meta documents long-lived user tokens as ~60 days. When it omits expires_in we assume
-// that rather than storing no expiry at all: a null expiry made renewIfNearExpiry() skip
-// renewal entirely and the card's expiry warning never render, so the connection could
-// simply stop working one morning with nothing on screen saying why. Under-estimating is
-// safe — an early renewal costs one extra request.
-const ASSUMED_LIFETIME_SECONDS = 60 * 24 * 60 * 60;
-
-async function exchangeForLongLived(token: string): Promise<{ token: string; expiresIn: number }> {
-  const params = new URLSearchParams({
-    grant_type: 'fb_exchange_token',
-    client_id: process.env.META_APP_ID ?? '',
-    client_secret: process.env.META_APP_SECRET ?? '',
-    fb_exchange_token: token,
-  });
-
-  const res = await fetch(`${GRAPH}/oauth/access_token?${params}`, { signal: httpTimeout() });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(
-      body?.error?.message ?? `Meta refused to extend the token (${res.status}). Reconnect.`,
-    );
-  }
-
-  const json = (await res.json()) as { access_token?: string; expires_in?: number };
-  if (!json.access_token) throw new IntegrationError('Meta returned no long-lived token.');
-  return { token: json.access_token, expiresIn: json.expires_in ?? ASSUMED_LIFETIME_SECONDS };
-}
 
 export const metaAds: IntegrationProvider = {
   id: 'meta_ads',
@@ -108,7 +74,7 @@ export const metaAds: IntegrationProvider = {
 
     // The code exchange yields a short-lived token — roughly an hour. Trade it up
     // immediately, or the connection would break before the first scheduled sync.
-    const long = await exchangeForLongLived(json.access_token);
+    const long = await metaExchangeForLongLived(json.access_token);
 
     return {
       secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
@@ -116,14 +82,7 @@ export const metaAds: IntegrationProvider = {
     };
   },
 
-  async refresh(credential) {
-    const { accessToken } = JSON.parse(credential) as Stored;
-    const long = await exchangeForLongLived(accessToken);
-    return {
-      secret: JSON.stringify({ accessToken: long.token } satisfies Stored),
-      expiresAt: new Date(Date.now() + long.expiresIn * 1000),
-    };
-  },
+  refresh: metaRefresh,
 
   async sync(credential, config, range) {
     const adAccountId = config.adAccountId;
@@ -164,8 +123,9 @@ export const metaAds: IntegrationProvider = {
     for (let page = 0; url && page < 50; page++) {
       const res: Response = await fetch(url, { signal: httpTimeout() });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-        throw new IntegrationError(body?.error?.message ?? `Meta insights failed (${res.status}).`);
+        throw new IntegrationError(
+          (await vendorMessage(res)) ?? `Meta insights failed (${res.status}).`,
+        );
       }
 
       const json = (await res.json()) as { data?: Row[]; paging?: { next?: string } };

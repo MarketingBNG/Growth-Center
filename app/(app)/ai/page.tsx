@@ -1,19 +1,19 @@
 import { Brain } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
-import { NoDatabaseState } from '@/components/patterns/state';
+import { noDatabasePage } from '@/components/patterns/state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { db, hasDb } from '@/lib/prisma';
-import { aiStatus, growthContext, ruleFindings } from '@/lib/ai';
-import { AI_KEY_ENV } from '@/lib/enums';
-import { TABLES } from '@/lib/ai-tools';
-import { ageLabel } from '@/lib/insight-identity';
-import { STATUS_LABELS, isInsightStatus } from '@/lib/insight-lifecycle';
-import { assignableOwners } from '@/lib/insight-actions';
-import { rangeParam } from '@/lib/range';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { aiStatus, growthContext, ruleFindings } from '@/lib/ai/ai';
+import { AI_KEY_ENV } from '@/lib/shared/enums';
+import { TABLES } from '@/lib/ai/ai-tools';
+import { ageLabel } from '@/lib/insights/insight-identity';
+import { STATUS_LABELS, isInsightStatus } from '@/lib/insights/insight-lifecycle';
+import { assignableOwners } from '@/lib/insights/insight-actions';
+import { rangeParam, type PageParams } from '@/lib/shared/range';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
 import { GenerateInsightsButton } from './GenerateInsightsButton';
 import { InsightAction } from './InsightAction';
 import { AskBox } from './AskBox';
@@ -53,15 +53,10 @@ const KIND_TONE = {
 export default async function AiPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="AI Insights" subtitle="Analysis over Growth Center's own data." />
-        <Card><NoDatabaseState /></Card>
-      </>
-    );
+    return noDatabasePage('AI Insights', "Analysis over Growth Center's own data.");
   }
 
   const { value: rangeValue, days } = rangeParam(await searchParams);
@@ -69,7 +64,7 @@ export default async function AiPage({
   // §5.1 gives approval to one identity. Hiding the button is a courtesy — the route
   // refuses the transition either way — but a button that always 403s teaches people to
   // ignore the row it sits on.
-  const canApprove = can(user?.role ?? 'user', 'approve');
+  const canApprove = can(user?.role, 'approve');
 
   const status = aiStatus();
   const [context, stored, owners] = await Promise.all([

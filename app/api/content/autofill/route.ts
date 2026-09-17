@@ -1,6 +1,6 @@
-import { route } from '@/lib/api';
-import { autofillContent } from '@/lib/content-autofill';
-import { TAGS, invalidate } from '@/lib/cache';
+import { route } from '@/lib/platform/api';
+import { autofillContent } from '@/lib/content/content-autofill';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * §15.4, on demand as well as nightly.

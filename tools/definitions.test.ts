@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { libSource } from './source.ts';
 
 import {
   consultationHeld,
   newCustomer,
   qualifiedLead,
   semiQualifiedLead,
-} from '../lib/definitions.ts';
+} from '../lib/analytics/definitions.ts';
 
 const range = { from: new Date('2026-01-01T00:00:00Z'), to: new Date('2026-03-31T23:59:59Z') };
 
@@ -65,7 +65,11 @@ test('a customer lands on one channel, lead first and deal second', () => {
 // ── one implementation, not two ──────────────────────────────────────────────────────
 
 test('the funnel and the cost card count consultations with the same predicate', () => {
-  const metrics = readFileSync('lib/metrics.ts', 'utf8');
+  // The metrics layer is three files behind a façade now, so this reads all of them: the
+  // invariants below are about the layer, not about which file a line happens to sit in.
+  const metrics = ['metrics', 'metrics/window', 'metrics/core', 'metrics/kpis']
+    .map(libSource)
+    .join('\n');
   const uses = metrics.match(/consultationHeld\(/g) ?? [];
   assert.ok(uses.length >= 2, `expected both call sites to use it, saw ${uses.length}`);
   // What must not come back: a hand-written copy of the definition beside the named one.

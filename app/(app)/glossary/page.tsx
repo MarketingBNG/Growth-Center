@@ -2,11 +2,11 @@ import { redirect } from 'next/navigation';
 import { PageHeader } from '@/components/patterns/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
-import { hasDb } from '@/lib/prisma';
-import { GLOSSARY, disagreementCount, type GlossaryAgreement } from '@/lib/glossary';
-import { glossaryOwners } from '@/lib/settings';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
+import { hasDb } from '@/lib/platform/prisma';
+import { GLOSSARY, disagreementCount, type GlossaryAgreement } from '@/lib/shared/glossary';
+import { glossaryOwners } from '@/lib/platform/settings';
 import { GlossaryOwner } from './GlossaryOwner';
 
 export const metadata = { title: 'Glossary · Growth Center' };

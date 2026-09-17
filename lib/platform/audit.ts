@@ -1,0 +1,333 @@
+// Reading the audit log.
+//
+// The writes have been there a while — connecting an integration, minting a key, moving a
+// content piece — but nothing ever read them back, so "who did that" was a question the
+// database could answer and the product could not. This is the read side.
+//
+// Server-only: imports Prisma. The phrasing helpers below are pure and framework-free so
+// tools/audit.test.ts can import them directly.
+
+import { db } from './prisma.ts';
+
+export type AuditRow = {
+  id: string;
+  actorEmail: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  detail: unknown;
+  createdAt: Date;
+};
+
+/**
+ * How each action the app WRITES reads in a sentence, in the past tense, with the subject
+ * supplied by the actor column beside it.
+ *
+ * Typed as a total map over `AuditAction`, so adding an action to that union without a
+ * sentence here is a compile error rather than a row that renders as `duplicate.merged`
+ * in a column of English. That is what the union was introduced for; for a while the two
+ * were only related by intention, and ten actions had drifted out of this map by the time
+ * anyone counted.
+ */
+const WRITTEN_PHRASING: Record<AuditAction, string> = {
+  'apikey.create': 'issued an API key',
+  'apikey.revoke': 'revoked an API key',
+  'budget.envelope': 'set a budget envelope',
+  'capacity.set': 'set the delivery capacity',
+  'content.approve': 'approved a content piece',
+  'content.calendar_import': 'imported a content calendar',
+  'content.calendar_replace': 'replaced the content calendar',
+  'content.create': 'added a content piece',
+  'content.return': 'returned a content piece to its author',
+  'content.status': 'moved a content piece',
+  'content.update': 'edited a content piece',
+  'duplicate.dismissed': 'dismissed a suspected duplicate',
+  'duplicate.merge_undone': 'undid a merge',
+  'duplicate.merged': 'merged two records',
+  'insight.status': 'moved a finding',
+  'integration.configure': 'reconfigured an integration',
+  'integration.connect': 'connected an integration',
+  'integration.disconnect': 'disconnected an integration',
+  'leads.rebalance': 'rebalanced the lead queue',
+  // The registry is the descriptive half of a sequence — owner, service line, sending
+  // domain. Named as such rather than as "edited a sequence", which is what a change to
+  // the steps would be and is a different thing to go looking for.
+  'sequence.registry': 'edited a sequence’s details',
+  // Two sign-offs, each of which can be given and taken back. Spelled out one per row
+  // rather than built from the kind: the log is read to answer "who approved this copy",
+  // and the sentence is the thing being searched.
+  'sequence.copy_signed': 'signed off a sequence’s copy',
+  'sequence.copy_withdrawn': 'withdrew sign-off on a sequence’s copy',
+  'sequence.numbers_signed': 'verified a sequence’s numbers',
+  'sequence.numbers_withdrawn': 'withdrew verification of a sequence’s numbers',
+  'settings.currency': 'changed the reporting currency',
+  'settings.glossary': 'reassigned a definition',
+  'settings.insight_owner': 'reassigned who owns a kind of finding',
+  'settings.roster': 'changed the marketing roster',
+  'settings.threshold': 'changed a threshold',
+  'user.activate': 'restored access',
+  'user.deactivate': 'revoked access',
+  'user.rename': 'renamed someone',
+  'user.role': 'changed a role',
+};
+
+/**
+ * The `record.*` actions `recentAuditEvents` synthesises from the `activity` table.
+ *
+ * Kept apart from the map above because nothing writes these — they are manufactured at
+ * read time from an ActivityType, so they cannot be members of `AuditAction` and the
+ * compiler has no list to check them against. The test file holds that list instead.
+ */
+const ACTIVITY_PHRASING: Record<string, string> = {
+  'record.converted': 'converted a lead',
+  'record.note_added': 'added a note',
+  'record.owner_changed': 'reassigned a record',
+  'record.stage_changed': 'moved a deal',
+  'record.status_changed': 'changed a status',
+  'record.task_completed': 'completed a task',
+};
+
+/**
+ * Actions no call site writes any more, whose rows are still in the table.
+ *
+ * `insight.dismiss` and `insight.restore` were replaced by the single `insight.status`,
+ * and one row of each survives in this workspace's log. They cannot be members of
+ * `AuditAction` — nothing may write them again — but dropping their sentences would make
+ * the two oldest rows in the log the only unreadable ones, which is backwards: age is
+ * what makes a log row worth keeping legible.
+ */
+const RETIRED_PHRASING: Record<string, string> = {
+  'insight.dismiss': 'dismissed a finding',
+  'insight.restore': 'restored a finding',
+};
+
+/**
+ * An action with no entry in any of the three maps falls back to its own string rather than being
+ * hidden or relabelled — an unrecognised action is exactly the row someone is most likely
+ * to be looking for, and a log that quietly drops what it does not understand is worse
+ * than no log at all.
+ */
+const PHRASING: Record<string, string> = {
+  ...WRITTEN_PHRASING,
+  ...ACTIVITY_PHRASING,
+  ...RETIRED_PHRASING,
+};
+
+export function phraseAction(action: string): string {
+  return PHRASING[action] ?? action;
+}
+
+/**
+ * Every action the app can write.
+ *
+ * Thirty-odd call sites each spelled their action as a bare string literal inside an
+ * inline auditEvent.create, with nothing connecting them to the PHRASING map above. A
+ * mistyped action did not fail anywhere — it wrote happily and then rendered in the log as
+ * its own raw string, which is the one thing a reader would assume was a bug in the page
+ * rather than in the write.
+ *
+ * The four sign-off actions are written as one template literal at their call site —
+ * `sequence.${kind}_signed` — but `kind` is a closed two-member union, so the four names
+ * it can produce are listed out rather than left as a `${string}` pattern. That is what
+ * lets PHRASING be a total map and the compiler enforce the sync; a pattern member makes
+ * exhaustiveness unexpressible and was how ten actions went unphrased unnoticed.
+ */
+export type AuditAction =
+  | 'apikey.create'
+  | 'apikey.revoke'
+  | 'budget.envelope'
+  | 'capacity.set'
+  | 'content.approve'
+  | 'content.calendar_import'
+  | 'content.calendar_replace'
+  | 'content.create'
+  | 'content.return'
+  | 'content.status'
+  | 'content.update'
+  | 'duplicate.dismissed'
+  | 'duplicate.merge_undone'
+  | 'duplicate.merged'
+  | 'insight.status'
+  | 'integration.configure'
+  | 'integration.connect'
+  | 'integration.disconnect'
+  | 'leads.rebalance'
+  | 'sequence.registry'
+  | 'settings.currency'
+  | 'settings.glossary'
+  | 'settings.insight_owner'
+  | 'settings.roster'
+  | 'settings.threshold'
+  | 'user.activate'
+  | 'user.deactivate'
+  | 'user.rename'
+  | 'user.role'
+  | 'sequence.copy_signed'
+  | 'sequence.copy_withdrawn'
+  | 'sequence.numbers_signed'
+  | 'sequence.numbers_withdrawn';
+
+/**
+ * Write one audit row.
+ *
+ * The shape was identical at every call site — actor, action, entity, detail — so the
+ * only thing each one was really choosing was its four literals. Going through here means
+ * `action` is checked against the union above instead of being any string at all.
+ */
+export async function recordAudit(input: {
+  actorEmail: string;
+  action: AuditAction;
+  entityType: string;
+  entityId?: string | null;
+  detail?: unknown;
+}): Promise<void> {
+  await db().auditEvent.create({
+    data: {
+      actorEmail: input.actorEmail,
+      action: input.action,
+      entityType: input.entityType,
+      entityId: input.entityId ?? null,
+      detail: (input.detail ?? undefined) as never,
+    },
+  });
+}
+
+/**
+ * The one-line "what changed" beside the sentence, read out of the detail JSON.
+ *
+ * Deliberately generic rather than a switch per action: detail shapes are written by a
+ * dozen call sites and will keep being added to, and a formatter that knows all of them
+ * is a formatter that silently prints nothing the first time one changes. It looks for
+ * the handful of keys those call sites actually use, then falls back to the keys present.
+ */
+export function summariseDetail(detail: unknown): string {
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return '';
+  const d = detail as Record<string, unknown>;
+
+  const subject = [d.title, d.name, d.email].find((v) => typeof v === 'string' && v) as
+    | string
+    | undefined;
+
+  const parts: string[] = [];
+  if (subject) parts.push(subject);
+
+  // from/to is the commonest shape: a status move, a role change, a rename.
+  if (d.from !== undefined || d.to !== undefined) {
+    parts.push(`${format(d.from) || '—'} → ${format(d.to) || '—'}`);
+  } else if (typeof d.role === 'string') {
+    parts.push(d.role);
+  } else if (typeof d.status === 'string') {
+    parts.push(d.status);
+  }
+
+  if (parts.length) return parts.join(' · ');
+
+  // Nothing recognised: name the keys, so the row still says something was recorded.
+  const keys = Object.keys(d);
+  return keys.length ? keys.join(', ') : '';
+}
+
+/**
+ * What the Detail column shows: the detail JSON where there is one, and otherwise the
+ * subject itself.
+ *
+ * The fallback is load-bearing rather than cosmetic. The integration rows — the bulk of
+ * the log on this workspace — carry no detail at all, and their entityId is the provider
+ * slug, so without this every connect and disconnect in the firm's history reads
+ * "connected an integration · —" and the log cannot answer which one.
+ */
+export function describeRow(row: Pick<AuditRow, 'detail' | 'entityId'>): string {
+  return summariseDetail(row.detail) || row.entityId || '';
+}
+
+function format(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+/**
+ * The most recent entries, newest first — from BOTH tables.
+ *
+ * `auditEvent` records administrative acts: a role change, a key, a threshold, a
+ * rebalance. Changes to records — a lead's status, a deal's stage, a task ticked off —
+ * were never written there, and the first instinct was to start writing them. That would
+ * have been wrong: they are already recorded, as `activity` rows carrying the actor, the
+ * from and the to, attached to the record they describe. Two tables recording one fact is
+ * this repository's documented failure mode, and the duplicate would have drifted.
+ *
+ * So the gap was never the writes. It was that this reader could only see one of the two,
+ * and a log that shows who changed a threshold but not who reassigned two thousand leads
+ * is not an activity log. They are merged here, at read time, and the merge is the only
+ * place that knows about both.
+ *
+ * Fetched `limit` from each and then trimmed: taking 25 from each would show a quiet
+ * fortnight of settings changes beside this morning's record edits, which is not what
+ * "the last fifty things that happened" means.
+ */
+export async function recentAuditEvents(limit = 50): Promise<AuditRow[]> {
+  const [events, activity] = await Promise.all([
+    db().auditEvent.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        actorEmail: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        detail: true,
+        createdAt: true,
+      },
+    }),
+    // Only rows with an actor. The sync writes `activity` too — 25,156 rows of imported
+    // lead history — and none of it is somebody in this workspace doing something. An
+    // activity log filled with the nightly import is a log nobody reads.
+    db().activity.findMany({
+      where: { actorEmail: { not: null }, source: null },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        actorEmail: true,
+        type: true,
+        summary: true,
+        detail: true,
+        createdAt: true,
+        leadId: true,
+        contactId: true,
+        companyId: true,
+        opportunityId: true,
+      },
+    }),
+  ]);
+
+  const fromActivity: AuditRow[] = activity.map((a) => ({
+    id: a.id,
+    actorEmail: a.actorEmail!,
+    // Prefixed so the phrasing map cannot collide with an auditEvent action of the same
+    // name, and so an unrecognised one still reads as a record change rather than as a
+    // setting change.
+    action: `record.${a.type}`,
+    entityType: a.opportunityId
+      ? 'opportunity'
+      : a.leadId
+        ? 'lead'
+        : a.companyId
+          ? 'company'
+          : a.contactId
+            ? 'contact'
+            : 'record',
+    entityId: a.opportunityId ?? a.leadId ?? a.companyId ?? a.contactId ?? null,
+    // The summary is better than anything summariseDetail could build from the JSON —
+    // "Status changed from new to contacted" is already the sentence — so it is used as
+    // the detail directly.
+    detail: a.detail ?? { name: a.summary },
+    createdAt: a.createdAt,
+  }));
+
+  return [...events, ...fromActivity]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
+}

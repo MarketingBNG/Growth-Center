@@ -1,13 +1,11 @@
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackLink, Detail, DetailHeader, HistoryCard, NotesCard } from '@/components/patterns/detail';
 import { Badge } from '@/components/ui/badge';
-import { Timeline } from '@/components/patterns/timeline';
-import { NoteBox } from '../../leads/[id]/NoteBox';
-import { db, hasDb } from '@/lib/prisma';
-import { convert } from '@/lib/currency';
-import { currencySettings } from '@/lib/settings';
-import { fmtDate, fmtMoney, fmtRelative } from '@/lib/format';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { convert } from '@/lib/shared/currency';
+import { currencySettings } from '@/lib/platform/settings';
+import { fmtDate, fmtMoney } from '@/lib/shared/format';
 import { StageMover } from './StageMover';
 import { ProgressLink } from '@/components/NavProgress';
 import { leadSourceLabel } from '@/lib/integrations/crm-mapping';
@@ -49,35 +47,32 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      <ProgressLink
-        href="/pipeline"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" /> Pipeline
-      </ProgressLink>
+      <BackLink href="/pipeline" label="Pipeline" progress />
 
-      <div className="flex flex-wrap items-start justify-between gap-3 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-display font-extrabold leading-tight tracking-[-0.03em]">{deal.name}</h1>
-            <Badge tone={deal.stage.isWon ? 'success' : deal.stage.isLost ? 'danger' : 'info'}>
-              {deal.stage.name}
-            </Badge>
-          </div>
+      <DetailHeader
+        title={deal.name}
+        badge={
+          <Badge tone={deal.stage.isWon ? 'success' : deal.stage.isLost ? 'danger' : 'info'}>
+            {deal.stage.name}
+          </Badge>
+        }
+        subtitle={
           <p className="mt-1 text-label text-muted-foreground">
             {fmtMoney(Number(deal.value), false, deal.currency)} · {deal.probability}% ·{' '}
             {deal.company?.name ?? 'No company'}
           </p>
-        </div>
-        <StageMover
-          dealId={deal.id}
-          stageId={deal.stageId}
-          stages={deal.pipeline.stages.map((s) => ({ id: s.id, name: s.name }))}
-        />
-      </div>
+        }
+        actions={
+          <StageMover
+            dealId={deal.id}
+            stageId={deal.stageId}
+            stages={deal.pipeline.stages.map((s) => ({ id: s.id, name: s.name }))}
+          />
+        }
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>Details</CardTitle>
@@ -150,40 +145,11 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <NoteBox opportunityId={deal.id} />
-              {deal.noteEntries.map((n) => (
-                <div key={n.id} className="rounded-md border border-border px-3 py-2">
-                  <p className="whitespace-pre-wrap text-sm">{n.body}</p>
-                  <p className="mt-1 text-meta text-muted-foreground">
-                    {n.authorEmail.split('@')[0]} · {fmtRelative(n.createdAt)}
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <NotesCard parent={{ opportunityId: deal.id }} notes={deal.noteEntries} />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>History</CardTitle>
-          </CardHeader>
-          <Timeline entries={deal.activities} />
-        </Card>
+        <HistoryCard entries={deal.activities} />
       </div>
     </>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-meta uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-0.5 break-words text-sm">{value || '—'}</p>
-    </div>
   );
 }

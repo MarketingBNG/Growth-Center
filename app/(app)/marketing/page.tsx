@@ -2,23 +2,23 @@ import { Megaphone } from 'lucide-react';
 import { PageHeader } from '@/components/patterns/page-header';
 import { RangePicker } from '@/components/patterns/range-picker';
 import { MetricsBand } from '@/components/patterns/metrics-band';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { BarChart } from '@/components/charts/BarChart';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { db, hasDb } from '@/lib/prisma';
-import { campaignPerformance, campaignTotals } from '@/lib/campaigns';
+import { db, hasDb } from '@/lib/platform/prisma';
+import { campaignPerformance, campaignTotals } from '@/lib/money/campaigns';
 import { channelPerformance, windowFor } from '@/lib/metrics';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
-import { marketingBand } from '@/lib/band';
-import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/format';
+import { resolveRange, type PageParams } from '@/lib/shared/range';
+import { marketingBand } from '@/lib/analytics/band';
+import { fmtMoney, fmtMoneyCompact, fmtNumber, fmtPercent, fmtRatio } from '@/lib/shared/format';
 import { SourceBadge } from '@/components/patterns/source-badge';
-import { DEMO_SOURCE, sourceMeta } from '@/lib/sources';
-import { attributionHealth } from '@/lib/attribution';
-import { envelopesFor, quarterOf } from '@/lib/budget';
-import { currentUser } from '@/lib/auth';
-import { can } from '@/lib/roles';
+import { DEMO_SOURCE, sourceMeta } from '@/lib/shared/sources';
+import { attributionHealth } from '@/lib/money/attribution';
+import { envelopesFor, quarterOf } from '@/lib/money/budget';
+import { currentUser } from '@/lib/access/auth';
+import { can } from '@/lib/access/roles';
 import { ChannelFilter } from './ChannelFilter';
 import { AttributionHealth } from './AttributionHealth';
 import { BudgetEnvelopes } from './BudgetEnvelopes';
@@ -28,34 +28,21 @@ export const metadata = { title: 'Marketing · Growth Center' };
 export default async function MarketingPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Marketing" subtitle="Campaigns and channels, spend against return." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Marketing', 'Campaigns and channels, spend against return.');
   }
 
   const params = await searchParams;
-  const { value, days, bucket: presetBucket } = rangeParam(params);
-  // A hand-picked window from the calendar wins over the preset. The two are the same
-  // setting — RangePicker clears one when the other is chosen — so this only has to say
-  // which it prefers when both somehow appear in a URL.
-  const picked = customRange(params);
-  const spec = picked ?? days;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
+  const { value, spec, bucket } = resolveRange(params);
   const { current } = windowFor(spec);
   const channelId = typeof params.channelId === 'string' ? params.channelId : undefined;
   const source = typeof params.source === 'string' ? params.source : '';
 
   const quarter = quarterOf(new Date());
   const user = await currentUser();
-  const canSetBudget = can(user?.role ?? 'user', 'settings:manage');
+  const canSetBudget = can(user?.role, 'settings:manage');
 
   const [channels, allChannels, rows, band, health, envelopes] = await Promise.all([
     channelPerformance(current),

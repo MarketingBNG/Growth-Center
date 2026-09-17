@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAnswer } from '../lib/answer-format.ts';
+import { parseAnswer } from '../lib/ai/answer-format.ts';
 
 // The grouping half of the renderer, which is where the decisions are. The inline half
 // produces React elements and is checked in the browser instead.

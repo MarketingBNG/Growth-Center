@@ -6,29 +6,29 @@ import { MetricsBand } from '@/components/patterns/metrics-band';
 import { FilterBar } from '@/components/patterns/filter-bar';
 import { Pager } from '@/components/patterns/pager';
 import { SortHeader } from '@/components/patterns/sort-header';
-import { LeadStatusBadge, SourceBadge } from '@/components/patterns/badges';
-import { SourceBadge as ProvenanceBadge } from '@/components/patterns/source-badge';
-import { EmptyState, NoDatabaseState } from '@/components/patterns/state';
+import { LeadSourceBadge, LeadStatusBadge } from '@/components/patterns/badges';
+import { SourceBadge } from '@/components/patterns/source-badge';
+import { EmptyState, noDatabasePage } from '@/components/patterns/state';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
+import { hasDb } from '@/lib/platform/prisma';
 import { ProgressLink } from '@/components/NavProgress';
-import { leadsBand } from '@/lib/band';
-import { speedToLead } from '@/lib/speed-to-lead';
+import { leadsBand } from '@/lib/analytics/band';
+import { speedToLead } from '@/lib/analytics/speed-to-lead';
 import { SpeedToLead } from './SpeedToLead';
-import { bucketFor, customRange, rangeParam } from '@/lib/range';
+import { resolveRange, type CustomRange, type PageParams } from '@/lib/shared/range';
 import { rangeFor } from '@/lib/metrics';
-import { pageQuery, pick } from '@/lib/query';
-import { leadCampaignOptions, leadFilters, leadSourceOptions, listLeads } from '@/lib/leads';
+import { pageQuery, pick } from '@/lib/platform/query';
+import { leadCampaignOptions, leadFilters, leadSourceOptions, listLeads } from '@/lib/leads/leads';
 import { leadCampaign, leadSourceLabel } from '@/lib/integrations/crm-mapping';
-import { LEAD_STATUSES } from '@/lib/enums';
-import { DEMO_SOURCE } from '@/lib/sources';
-import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/users';
-import { fmtRelative } from '@/lib/format';
-import { LEAD_SEGMENTS, SEGMENT_LABELS, segmentLabel } from '@/lib/lead-segment';
-import { LOST_REASONS, LOST_REASON_LABELS, lostReasonLabel } from '@/lib/lead-lost-reason';
-import { scoreBand } from '@/lib/lead-score';
+import { LEAD_STATUSES } from '@/lib/shared/enums';
+import { DEMO_SOURCE } from '@/lib/shared/sources';
+import { listAssignable, peopleOn, personOptions, type AppUser } from '@/lib/access/users';
+import { fmtRelative } from '@/lib/shared/format';
+import { LEAD_SEGMENTS, SEGMENT_LABELS, segmentLabel } from '@/lib/leads/lead-segment';
+import { LOST_REASONS, LOST_REASON_LABELS, lostReasonLabel } from '@/lib/leads/lead-lost-reason';
+import { scoreBand } from '@/lib/leads/lead-score';
 import { NewLeadButton } from './NewLeadButton';
 import { RebalanceButton } from './RebalanceButton';
 import { LeadQuality } from './LeadQuality';
@@ -111,30 +111,21 @@ const filtersFor = (
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   const params = await searchParams;
 
   if (!hasDb()) {
-    return (
-      <>
-        <PageHeader title="Leads" subtitle="Every hand-raise, with the source that produced it." />
-        <Card>
-          <NoDatabaseState />
-        </Card>
-      </>
-    );
+    return noDatabasePage('Leads', 'Every hand-raise, with the source that produced it.');
   }
 
   const q = pageQuery(params);
-  const { value, days, bucket: presetBucket } = rangeParam(params);
+  const { value, days, picked, spec, bucket } = resolveRange(params);
   const filters = leadFilters.parse(pick(params, ['status', 'sourceType', 'leadSource', 'leadCampaign', 'ownerEmail', 'campaignId', 'channelId', 'segment', 'band', 'lostReason', 'from', 'to']));
   // The window the picker resolved, handed to the list as well as the band so the table
   // and the cards above it describe the same period. A hand-picked ?from=&to= wins, which
   // is what the CRM page's owner links carry.
-  const picked = customRange(params);
   const window = picked ?? rangeFor(days).current;
-  const bucket = picked ? bucketFor(picked.days) : presetBucket;
 
   // Nothing is awaited before the header goes out. Leads reads live data on every view —
   // a stale lead list would be a bug, not an invisible delay, so it cannot be cached the
@@ -162,7 +153,7 @@ export default async function LeadsPage({
       <Suspense fallback={<BandSkeleton />}>
         {/* Arriving from a CRM owner link carries ?from=&to=; the band has to honour it,
             or the cards describe the last thirty days over a table that does not. */}
-        <Band spec={picked ?? days} bucket={bucket} />
+        <Band spec={spec} bucket={bucket} />
       </Suspense>
 
       {/* Its own boundary, below the band and above the filters. It is two queries over
@@ -205,7 +196,7 @@ function BandSkeleton() {
   );
 }
 
-async function Band({ spec, bucket }: { spec: number | ReturnType<typeof customRange>; bucket: 'day' | 'month' }) {
+async function Band({ spec, bucket }: { spec: number | CustomRange; bucket: 'day' | 'month' }) {
   return <MetricsBand {...(await leadsBand(spec as Parameters<typeof leadsBand>[0], bucket))} />;
 }
 
@@ -290,7 +281,7 @@ async function LeadsTable({
                           {/* Which system wrote the row, distinct from the `sourceType`
                               column beside it — that says how the lead found us, this
                               says whether the record is real or the seeder's. */}
-                          <ProvenanceBadge source={lead.source ?? DEMO_SOURCE} />
+                          <SourceBadge source={lead.source ?? DEMO_SOURCE} />
                         </span>
                         {lead.email ? (
                           <p className="text-xs text-muted-foreground">{lead.email}</p>
@@ -311,7 +302,7 @@ async function LeadsTable({
                           `leadSourceGroup` decides both — so the column was the same word
                           printed twice on every row. */}
                       <TD>
-                        <SourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />
+                        <LeadSourceBadge source={leadSourceLabel(lead.sourceDetail, lead.sourceType)} />
                         {lead.sourceDetail && lead.sourceDetail !== leadSourceLabel(lead.sourceDetail, lead.sourceType) ? (
                           <p className="mt-0.5 text-xs text-muted-foreground">{lead.sourceDetail}</p>
                         ) : null}

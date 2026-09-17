@@ -8,11 +8,12 @@ import { StateBadge } from '@/components/patterns/integration-state';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
-import { hasDb } from '@/lib/prisma';
-import { searchTrend, seoOverview, webVitals } from '@/lib/seo';
-import { currencySettings } from '@/lib/settings';
+import { hasDb } from '@/lib/platform/prisma';
+import type { PageParams } from '@/lib/shared/range';
+import { searchTrend, seoOverview, webVitals } from '@/lib/analytics/seo';
+import { currencySettings } from '@/lib/platform/settings';
 import { cards } from '@/lib/integrations/service';
-import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/format';
+import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { Pager } from '@/components/patterns/pager';
@@ -20,6 +21,14 @@ import { Pager } from '@/components/patterns/pager';
 export const metadata = { title: 'SEO · Growth Center' };
 
 const SUBTITLE = 'Keywords, rankings and the pages that earn them.';
+
+/** How long a keyword's move took, for the gains and losses rows. Both cards print a
+ *  delta between two readings, and those readings are not evenly spaced — without this
+ *  a six-week drift and an overnight jump read as the same event. */
+function moveWindow(days: number | null) {
+  if (days === null) return null;
+  return days === 1 ? '1 day' : `${fmtNumber(days)} days`;
+}
 
 /**
  * The title is the prerendered shell; everything that reads the database sits behind a
@@ -37,7 +46,7 @@ const SUBTITLE = 'Keywords, rankings and the pages that earn them.';
 export default function SeoPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   return (
     <>
@@ -81,7 +90,7 @@ async function SeoState() {
 async function SeoBody({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<PageParams>;
 }) {
   if (!hasDb()) {
     return <Card><NoDatabaseState /></Card>;
@@ -151,9 +160,19 @@ async function SeoBody({
   // Search Console reports no volume, difficulty, CPC or intent. The columns stay in the
   // markup for whenever something that does report them is connected.
   const hasKeywordTool = keywords.some((k) => k.searchVolume !== null || k.difficulty !== null);
-  const movers = keywords.filter((k) => k.move !== null && k.move !== 0);
+  // A Search Console position is an average over the impressions a query got that day, so
+  // a keyword seen once can read 90 one day and 2 the next off a single lucky impression.
+  // Both cards used to rank on that: every row was a keyword with almost no traffic, and
+  // the biggest numbers on the page were the least real things on it. Keywords under this
+  // many lifetime impressions are not movement, they are sampling noise.
+  const MOVER_MIN_IMPRESSIONS = 10;
+  const movers = keywords.filter(
+    (k) => k.move !== null && k.move !== 0 && k.impressions >= MOVER_MIN_IMPRESSIONS,
+  );
   const improved = [...movers].sort((a, b) => (b.move ?? 0) - (a.move ?? 0)).slice(0, 5);
   const declined = [...movers].sort((a, b) => (a.move ?? 0) - (b.move ?? 0)).slice(0, 5);
+  const moverNote = `Keywords with at least ${fmtNumber(MOVER_MIN_IMPRESSIONS)} impressions, against their previous reading`;
+  const noMovers = `No keyword above ${fmtNumber(MOVER_MIN_IMPRESSIONS)} impressions has moved since its last reading.`;
 
   return (
     <>
@@ -214,14 +233,20 @@ async function SeoBody({
 
       <div className="grid gap-4 pb-4 lg:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle>Biggest gains</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Biggest gains</CardTitle>
+            <p className="text-xs text-muted-foreground">{moverNote}</p>
+          </CardHeader>
           <CardContent className="space-y-1.5">
             {improved.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No keyword improved since the last check.</p>
+              <p className="text-xs text-muted-foreground">{noMovers}</p>
             ) : improved.map((k) => (
               <div key={k.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="truncate">{k.keyword}</span>
                 <span className="flex shrink-0 items-center gap-2">
+                  {/* Per row, because the gap between two readings is per row: one of
+                      these can be yesterday and the one under it six weeks ago. */}
+                  <span className="text-xs text-muted-foreground">{moveWindow(k.moveDays)}</span>
                   <span className="text-success tnum">+{k.move}</span>
                   <Badge tone="neutral">#{k.position}</Badge>
                 </span>
@@ -231,14 +256,18 @@ async function SeoBody({
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Biggest losses</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle>Biggest losses</CardTitle>
+            <p className="text-xs text-muted-foreground">{moverNote}</p>
+          </CardHeader>
           <CardContent className="space-y-1.5">
             {declined.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No keyword declined since the last check.</p>
+              <p className="text-xs text-muted-foreground">{noMovers}</p>
             ) : declined.map((k) => (
               <div key={k.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="truncate">{k.keyword}</span>
                 <span className="flex shrink-0 items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{moveWindow(k.moveDays)}</span>
                   <span className="text-destructive tnum">{k.move}</span>
                   <Badge tone="neutral">#{k.position}</Badge>
                 </span>

@@ -1,4 +1,4 @@
-import { route } from '@/lib/api';
+import { route } from '@/lib/platform/api';
 import { syncStatus } from '@/lib/integrations/service';
 
 /**

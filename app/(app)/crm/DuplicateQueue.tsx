@@ -4,10 +4,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Copy, Search, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { api } from '@/lib/fetcher';
-import { fmtRelative } from '@/lib/format';
-import type { QueueRow } from '@/lib/duplicate-queue';
+import { api } from '@/lib/shared/fetcher';
+import { ErrorBanner } from '@/components/patterns/state';
+import { fmtRelative } from '@/lib/shared/format';
+import type { QueueRow } from '@/lib/crm/duplicate-queue';
+import { useApiAction } from '@/lib/shared/use-api-action';
 
 // §8.1's front end. The engine proposes; this is where a person decides.
 //
@@ -25,8 +28,7 @@ type Props = {
 
 export function DuplicateQueue({ rows, counts, canManage }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useApiAction<string | null>(null);
   // Which row is being dismissed, and the reason typed so far. A dismissal needs a note,
   // so it cannot be a single button the way a merge can.
   const [dismissing, setDismissing] = useState<string | null>(null);
@@ -42,32 +44,20 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
     body: { action: 'merge' } | { action: 'dismiss'; reason: string } | { action: 'unmerge' },
     label?: string,
   ) {
-    setBusy(id);
-    setError(null);
-    try {
+    await run(id, async () => {
       await api(`/api/duplicates/${id}`, { method: 'POST', json: body });
       setDismissing(null);
       setReason('');
       setUndoable(body.action === 'merge' && label ? { id, label } : null);
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   async function scan() {
-    setBusy('scan');
-    setError(null);
-    try {
+    await run('scan', async () => {
       await api('/api/duplicates', { method: 'POST' });
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+    });
   }
 
   return (
@@ -89,11 +79,7 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
         ) : null}
       </CardHeader>
 
-      {error ? (
-        <div className="mx-4 mb-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
-      ) : null}
+      <ErrorBanner error={error} className="mx-4 mb-3 rounded-lg" />
 
       {/* Sits where the merged row was, so the offer is where the eye already is. It says
           what happened before it offers to reverse it: "Undo" alone leaves somebody
@@ -184,12 +170,12 @@ export function DuplicateQueue({ rows, counts, canManage }: Props) {
                 {canManage ? (
                   dismissing === row.id ? (
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <input
+                      <Input
                         autoFocus
                         value={reason}
                         onChange={(e) => setReason(e.target.value)}
                         placeholder="Why are these not the same record?"
-                        className="min-w-[240px] flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
+                        className="h-auto w-auto min-w-[240px] flex-1 rounded-md border border-border bg-background px-2 py-1.5 text-xs"
                       />
                       <Button
                         size="sm"

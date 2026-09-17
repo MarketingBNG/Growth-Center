@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_ROWS, MAX_TOOL_ROUNDS, READ_TOOLS, TABLES, runReadTool } from '../lib/ai-tools.ts';
+import { MAX_ROWS, MAX_TOOL_ROUNDS, READ_TOOLS, TABLES, runReadTool } from '../lib/ai/ai-tools.ts';
 
 // The allowlist IS the security boundary, so it is asserted rather than trusted. These run
 // without a database: the invariants worth protecting are properties of the table list and

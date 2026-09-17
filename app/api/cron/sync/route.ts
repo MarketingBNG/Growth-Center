@@ -1,20 +1,18 @@
 import { NextResponse } from 'next/server';
 import { syncAll } from '@/lib/integrations/service';
-import { scanDuplicates } from '@/lib/duplicate-queue';
-import { autofillContent } from '@/lib/content-autofill';
-import { refreshRatesIfStale } from '@/lib/settings';
-import { hasDb } from '@/lib/prisma';
-import { TAGS, invalidate } from '@/lib/cache';
+import { scanDuplicates } from '@/lib/crm/duplicate-queue';
+import { autofillContent } from '@/lib/content/content-autofill';
+import { refreshRatesIfStale } from '@/lib/platform/settings';
+import { cronGuard } from '@/lib/platform/cron-auth';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * Nightly refresh of every connected integration. Scheduled in vercel.json.
  *
  * Not wrapped in route(): there is no session here, the caller is Vercel's scheduler.
- * It authenticates with CRON_SECRET instead, which Vercel sends as a bearer token.
- *
- * Refuses to run unauthenticated even when CRON_SECRET is unset. The alternative —
- * running openly when the variable is missing — turns one forgotten env var into a
- * public endpoint that hammers four third-party APIs on demand.
+ * Authenticated with cronGuard instead, which checks CRON_SECRET as a bearer token and
+ * refuses to run even unauthenticated when it is unset — the alternative would turn one
+ * forgotten env var into a public endpoint that hammers four third-party APIs on demand.
  */
 export const maxDuration = 300;
 
@@ -29,16 +27,8 @@ export const maxDuration = 300;
 const SYNC_SHARE_MS = 210_000;
 
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    return NextResponse.json({ error: 'CRON_SECRET is not set' }, { status: 503 });
-  }
-  if (req.headers.get('authorization') !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 });
-  }
-  if (!hasDb()) {
-    return NextResponse.json({ error: 'No database configured' }, { status: 503 });
-  }
+  const refusal = cronGuard(req);
+  if (refusal) return refusal;
 
   const started = Date.now();
 

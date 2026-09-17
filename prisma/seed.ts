@@ -15,7 +15,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../lib/generated/prisma/client.ts';
-import { normalizeEmail } from '../lib/dedupe.ts';
+import { normalizeEmail } from '../lib/crm/dedupe.ts';
 
 // Local/CLI convenience only — this script runs outside Next.js (which is what
 // normally loads .env.local), so it reads the same files itself. Same reasoning

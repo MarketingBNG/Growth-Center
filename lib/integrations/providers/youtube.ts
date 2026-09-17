@@ -1,4 +1,7 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoint, type SyncCursor } from '../types.ts';
+import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint, type SyncCursor } from '../types.ts';
+import { requestFailed, vendorMessage } from '../messages.ts';
+import { intAtLeast, num, startOfDay, str } from '../coerce.ts';
+import { googleAccessToken, googleAuthUrl, googleConfigured, googleExchangeCode } from './oauth.ts';
 
 // YouTube — the channel and its videos, into the same SocialAccount and SocialPost tables
 // Facebook and Instagram already use. `youtube` has been in the SocialNetwork enum since
@@ -21,7 +24,6 @@ import { IntegrationError, httpTimeout, type IntegrationProvider, type MetricPoi
 // syncs its videos; the impression columns simply stay unset, which the schema already
 // distinguishes from zero.
 
-const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DATA_API = 'https://www.googleapis.com/youtube/v3';
 const ANALYTICS_API = 'https://youtubeanalytics.googleapis.com/v2';
 
@@ -46,27 +48,6 @@ const PAGE = 50;
 const MAX_VIDEOS = 200;
 
 type Stored = { refreshToken: string };
-type Json = Record<string, unknown>;
-
-async function accessToken(refreshToken: string): Promise<string> {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-    signal: httpTimeout(),
-  });
-  if (!res.ok) {
-    throw new IntegrationError(`Google rejected the refresh token (${res.status}). Reconnect the integration.`);
-  }
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new IntegrationError('Google returned no access token.');
-  return json.access_token;
-}
 
 async function get(url: string, token: string): Promise<Json> {
   const res = await fetch(url, {
@@ -74,21 +55,12 @@ async function get(url: string, token: string): Promise<Json> {
     signal: httpTimeout(),
   });
   if (!res.ok) {
-    const detail = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new IntegrationError(detail?.error?.message ?? `YouTube request failed (${res.status}).`);
+    throw new IntegrationError(
+      (await vendorMessage(res)) ?? requestFailed('YouTube', res.status),
+    );
   }
   return (await res.json()) as Json;
 }
-
-const num = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const str = (value: unknown): string | null => {
-  const s = value == null ? '' : String(value).trim();
-  return s === '' ? null : s;
-};
 
 /**
  * The channel's handle, for SocialAccount's `(network, handle)` natural key.
@@ -114,13 +86,12 @@ export function readCursor(raw: unknown): Cursor | null {
   const uploads = str(c.uploads);
   if (!channelId || !handle || !uploads) return null;
 
-  const seen = Number(c.seen);
   return {
     channelId,
     handle,
     uploads,
     pageToken: str(c.pageToken),
-    seen: Number.isFinite(seen) && seen >= 0 ? Math.floor(seen) : 0,
+    seen: intAtLeast(c.seen),
   };
 }
 
@@ -178,62 +149,32 @@ export const youtube: IntegrationProvider = {
   ],
   docsUrl: 'https://developers.google.com/youtube/v3/docs',
 
-  isConfigured() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
-  },
+  isConfigured: googleConfigured,
 
   getAuthUrl(redirectUri, state) {
-    const params = new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: SCOPE,
-      access_type: 'offline',
-      // Google issues a refresh token only on first consent for a client-scope pair.
-      prompt: 'consent',
-      state,
-    });
-    return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+    return googleAuthUrl(SCOPE, redirectUri, state);
   },
 
   async connect(input) {
     if (input.kind !== 'oauth2') throw new IntegrationError('YouTube uses OAuth.');
-
-    const res = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID ?? '',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        code: input.code,
-        redirect_uri: input.redirectUri,
-        grant_type: 'authorization_code',
-      }),
-      signal: httpTimeout(),
-    });
-    if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
-
-    const json = (await res.json()) as { refresh_token?: string };
-    if (!json.refresh_token) {
-      throw new IntegrationError('Google returned no refresh token. Revoke access and reconnect.');
-    }
+    const refreshToken = await googleExchangeCode(input.code, input.redirectUri);
 
     // Checked here rather than on the first sync: an account with no channel is a
     // connection that will never report anything, and finding that out tomorrow morning
     // is finding it out too late.
-    const token = await accessToken(json.refresh_token);
+    const token = await googleAccessToken(refreshToken);
     const mine = await get(`${DATA_API}/channels?part=id&mine=true`, token);
     const items = Array.isArray(mine.items) ? mine.items : [];
     if (!items.length) {
       throw new IntegrationError('This Google account owns no YouTube channel. Connect the account that does.');
     }
 
-    return { secret: JSON.stringify({ refreshToken: json.refresh_token } satisfies Stored) };
+    return { secret: JSON.stringify({ refreshToken } satisfies Stored) };
   },
 
   async syncPaged(credential, _config, ctx) {
     const { refreshToken } = JSON.parse(credential) as Stored;
-    const token = await accessToken(refreshToken);
+    const token = await googleAccessToken(refreshToken);
     const points: MetricPoint[] = [];
 
     let cursor = readCursor(ctx.cursor);
@@ -364,11 +305,3 @@ export const youtube: IntegrationProvider = {
   },
 };
 
-/** Midnight UTC, which keeps a metric point's unique key stable across syncs. */
-function startOfDay(value: unknown): Date {
-  const raw = value == null ? '' : String(value);
-  const d = raw ? new Date(raw) : new Date();
-  if (Number.isNaN(d.getTime())) return new Date(new Date().setUTCHours(0, 0, 0, 0));
-  d.setUTCHours(0, 0, 0, 0);
-  return d;
-}

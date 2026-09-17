@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { DECAY_FLOOR, DECAY_GRACE_DAYS, DECAY_HALF_LIFE_DAYS, decay, decayFactor, explainDecay } from '../lib/decay.ts';
-import { canMoveTo } from '../lib/content.ts';
-import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from '../lib/enums.ts';
-import { THRESHOLDS } from '../lib/thresholds.ts';
+import { DECAY_FLOOR, DECAY_GRACE_DAYS, DECAY_HALF_LIFE_DAYS, decay, decayFactor, explainDecay } from '../lib/pipeline/decay.ts';
+import { canMoveTo } from '../lib/content/content.ts';
+import { CONTENT_PIPELINE, CONTENT_REVIEW_STATUS, CONTENT_STATUSES } from '../lib/shared/enums.ts';
+import { THRESHOLDS } from '../lib/shared/thresholds.ts';
 
 // ── §9.5 probability decay ───────────────────────────────────────────────────────────
 

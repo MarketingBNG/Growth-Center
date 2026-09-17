@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { hasDb, prisma } from '@/lib/prisma';
-import { hasEncryptionKey } from '@/lib/crypto';
-import { currentUser } from '@/lib/auth';
+import { hasDb, prisma } from '@/lib/platform/prisma';
+import { hasEncryptionKey } from '@/lib/access/crypto';
+import { currentUser } from '@/lib/access/auth';
 
 /**
  * Liveness probe. Unauthenticated, because a probe that needs a session is useless to a

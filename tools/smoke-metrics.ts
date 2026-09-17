@@ -23,21 +23,18 @@ import {
   unassignedLeads,
   winRate,
 } from '../lib/metrics.ts';
-import { campaignPerformance, campaignTotals } from '../lib/campaigns.ts';
+import { checker } from './script.ts';
+import { campaignPerformance, campaignTotals } from '../lib/money/campaigns.ts';
 import { cards } from '../lib/integrations/service.ts';
 import { providerList } from '../lib/integrations/registry.ts';
-import { db } from '../lib/prisma.ts';
+import { db } from '../lib/platform/prisma.ts';
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL is not set.');
   process.exit(1);
 }
 
-const failures: string[] = [];
-function check(ok: boolean, message: string) {
-  console.log(`${ok ? '  ok  ' : ' FAIL '} ${message}`);
-  if (!ok) failures.push(message);
-}
+const { check, report } = checker();
 const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
 
 const { current } = rangeFor(365);
@@ -177,8 +174,17 @@ check(
 // which is the good outcome, and demanding a seeded one made a healthy install look broken.
 // What matters is that nothing claims to be live without a credential — asserted above —
 // and that every state is one the badge can actually render.
+// Keep in step with the STATE map in components/patterns/integration-state.tsx, which is
+// what actually draws these. Not imported from it: that module pulls in the Badge
+// component and this script runs under plain node.
+//
+// `sync_paused` was missing here from the day K31 introduced it. The badge has always
+// known the state — so nothing was broken on screen — but this check has failed on every
+// run since, which is the worse outcome: a smoke check that is always red stops being
+// read, and takes the real failures with it.
 const RENDERABLE = new Set([
-  'disconnected', 'connecting', 'connected', 'syncing', 'sync_stalled', 'error', 'demo_data',
+  'disconnected', 'connecting', 'connected', 'syncing', 'sync_stalled', 'sync_paused',
+  'error', 'demo_data',
 ]);
 check(
   list.every((c) => RENDERABLE.has(c.state)),
@@ -277,8 +283,4 @@ for (const [name, set] of Object.entries(sets)) {
 
 await db().$disconnect();
 
-if (failures.length) {
-  console.error(`\n${failures.length} check(s) failed.`);
-  process.exit(1);
-}
-console.log('\nAll checks passed.');
+report();

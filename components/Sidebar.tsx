@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useDismiss } from '@/components/use-dismiss';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
@@ -8,9 +9,9 @@ import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpe
 import { signOut } from 'next-auth/react';
 import { usePersisted } from './use-persisted';
 import { LinkProgress } from './NavProgress';
-import { ACCOUNT_NAV, NAV } from '@/lib/nav';
-import { cn } from '@/lib/utils';
-import type { CurrentUser } from '@/lib/auth';
+import { ACCOUNT_NAV, NAV } from '@/lib/shared/nav';
+import { cn } from '@/lib/shared/utils';
+import type { CurrentUser } from '@/lib/access/auth';
 
 /**
  * Warm a route when the pointer reaches its link, rather than when it scrolls into view.
@@ -227,21 +228,11 @@ export function UserCard({
 
   // Dismissed by clicking away or pressing Escape, both of which people try first. Bound
   // only while open, so an idle sidebar carries no document-level listeners.
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('[data-account-menu]')) setOpen(false);
-    };
-    const esc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', away);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', away);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
+  useDismiss({
+    active: open,
+    contains: (t) => !!(t as HTMLElement).closest('[data-account-menu]'),
+    onDismiss: () => setOpen(false),
+  });
 
   return (
     <div className="relative border-t border-line-soft p-3" data-account-menu>

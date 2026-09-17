@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { libSource } from './source.ts';
 import { readFileSync } from 'node:fs';
-import { capacityInput, CAPACITY_KEY } from '../lib/capacity.ts';
-import { PARTNER_PARAM, PARTNER_VALUE, isPartnerView } from '../lib/partner-view.ts';
+import { capacityInput, CAPACITY_KEY } from '../lib/crm/capacity.ts';
+import { PARTNER_PARAM, PARTNER_VALUE, isPartnerView } from '../lib/shared/partner-view.ts';
 
 // ── §6.2 delivery capacity ───────────────────────────────────────────────────────────
 
@@ -19,7 +20,7 @@ test('no ceiling and a ceiling of zero are different states', () => {
 // §22's audited config: a ceiling with no author is a ceiling nobody will defend when
 // marketing wants to exceed it.
 test('the ceiling records who set it', () => {
-  const source = readFileSync('lib/capacity.ts', 'utf8');
+  const source = libSource('capacity');
   assert.match(source, /action: 'capacity\.set'/);
   assert.match(source, /setByEmail: actorEmail/);
   assert.equal(CAPACITY_KEY, 'delivery.capacity');
@@ -30,10 +31,12 @@ test('the ceiling records who set it', () => {
 // on, and inferring one from headcount would be an invented number on the one screen
 // whose purpose is to stop marketing outrunning delivery.
 test('nothing infers a ceiling from the load', () => {
-  const source = readFileSync('lib/capacity.ts', 'utf8');
+  const source = libSource('capacity');
   assert.match(source, /const ceiling = setting\.monthlyConsultations;/);
   // Utilisation is null with no ceiling rather than being computed against the load.
-  assert.match(source, /ceiling === null \|\| ceiling === 0 \? null/);
+  // rate() (lib/shared/calc.ts) already returns null for a zero denominator, so only the
+  // "nobody has set one" case needs its own guard here.
+  assert.match(source, /ceiling === null \? null : rate\(booked, ceiling\)/);
 });
 
 // ── §6.6 partner view ────────────────────────────────────────────────────────────────
@@ -52,9 +55,18 @@ test('the partner preset lives in the URL', () => {
 });
 
 test('owner names are what the preset hides', () => {
+  // The dashboard used to gate these on `!partnerView &&` inline. K25 moved the mode into
+  // the client so the toggle repaints instead of refetching, so the gate is now the
+  // PartnerHidden wrapper — asserted on the wrapper rather than the old idiom, which this
+  // test went on grepping for through four releases of it not being there.
   const page = readFileSync('app/(app)/page.tsx', 'utf8');
-  assert.match(page, /!partnerView && t\.assigneeEmail/);
-  assert.match(page, /!partnerView && l\.ownerEmail/);
+  assert.match(page, /<PartnerHidden>[^<]*\{l\.ownerEmail/);
+
+  // ...and that the wrapper actually withholds. A PartnerHidden that rendered its children
+  // unconditionally would satisfy the grep above and leak every name on the screen.
+  const view = readFileSync('app/(app)/PartnerView.tsx', 'utf8');
+  assert.match(view, /export function PartnerHidden/);
+  assert.match(view, /usePartnerView\(\) \? null :/);
 });
 
 // ── §6.4 hiding hiring ───────────────────────────────────────────────────────────────
@@ -75,7 +87,7 @@ test('the footer totals every campaign even when hiring is hidden', () => {
 // case worth being able to see, and a single row carrying `sent: 2` hides which one
 // missed it.
 test('a delivery row is written for every recipient, on both outcomes', () => {
-  const source = readFileSync('lib/digest.ts', 'utf8');
+  const source = libSource('digest');
   // The loop is over `deliveries` now, not a constant list: K5 splits the queue into the
   // message each person is waiting on. The invariant is unchanged — one row per
   // recipient, inside the loop, whichever way the send went.
@@ -89,20 +101,20 @@ test('a delivery row is written for every recipient, on both outcomes', () => {
 // Logging the whole backlog against a mail listing two items is the log disagreeing with
 // the mail, and the log is what gets believed afterwards.
 test('a delivery row counts what that person was sent', () => {
-  const source = readFileSync('lib/digest.ts', 'utf8');
+  const source = libSource('digest');
   assert.match(source, /itemCount: theirs\.items\.length \+ theirs\.others/);
 });
 
 // A delivery log is a record of the send, not part of it. Losing a row must not turn a
 // digest that went out into one that failed.
 test('failing to record a delivery does not fail the send', () => {
-  assert.match(readFileSync('lib/digest.ts', 'utf8'), /could not record the delivery/);
+  assert.match(libSource('digest'), /could not record the delivery/);
 });
 
 // The webhook URL carries a token. The channel name is what a reader needs; the secret is
 // what a log must not keep.
 test('the Cliq webhook token is never written to the log', () => {
-  const source = readFileSync('lib/digest.ts', 'utf8');
+  const source = libSource('digest');
   assert.match(source, /recipient: 'zoho-cliq'/);
   assert.doesNotMatch(source, /recipient: url\(\)/);
 });

@@ -1,6 +1,6 @@
-import { route } from '@/lib/api';
-import { capacityInput, setCapacity } from '@/lib/capacity';
-import { TAGS, invalidate } from '@/lib/cache';
+import { body, route } from '@/lib/platform/api';
+import { capacityInput, setCapacity } from '@/lib/crm/capacity';
+import { TAGS, invalidate } from '@/lib/platform/cache';
 
 /**
  * §6.2's monthly ceiling.
@@ -10,7 +10,7 @@ import { TAGS, invalidate } from '@/lib/cache';
  * delivery time — the same class of decision as a budget envelope, and gated the same way.
  */
 export const PUT = route('settings:manage', async (user, req) => {
-  const input = capacityInput.parse(await req.json());
+  const input = await body(req, capacityInput);
   const saved = await setCapacity(input, user.email);
   await invalidate(TAGS.settings, TAGS.metrics);
   return saved;

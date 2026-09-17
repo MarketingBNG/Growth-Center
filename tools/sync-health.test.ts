@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { THRESHOLDS } from '../lib/thresholds.ts';
+import { libSource } from './source.ts';
+import { THRESHOLDS } from '../lib/shared/thresholds.ts';
 
-const service = readFileSync('lib/integrations/service.ts', 'utf8');
-const health = readFileSync('lib/sync-health.ts', 'utf8');
+const service = libSource('integrations/service');
+const health = libSource('sync-health');
 
 // G5.2 asks for two thresholds and the codebase had one, so a run missed overnight and a
 // system that had stopped two days ago produced the same finding at the same severity.

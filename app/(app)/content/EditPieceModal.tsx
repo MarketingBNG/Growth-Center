@@ -1,13 +1,11 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { Input, Select, Textarea } from '@/components/ui/input';
 import { Field } from '@/components/patterns/field';
-import { Modal } from '@/components/ui/modal';
-import { api } from '@/lib/fetcher';
-import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/enums';
+import { Modal, ModalFooter } from '@/components/ui/modal';
+import { api } from '@/lib/shared/fetcher';
+import { CONTENT_STATUSES, CONTENT_STATUS_LABELS } from '@/lib/shared/enums';
 import {
   CALENDAR_TIMEZONE,
   FORMAT_LABELS,
@@ -16,8 +14,10 @@ import {
   SERVICE_LINES,
   TOPIC_CLUSTERS,
   slotToInput,
-} from '@/lib/content-fields';
-import { COMPANY_SEGMENTS } from '@/lib/company-facts';
+} from '@/lib/content/content-fields';
+import { COMPANY_SEGMENTS } from '@/lib/crm/company-facts';
+import { ErrorText } from '@/components/patterns/state';
+import { useBooleanApiAction } from '@/lib/shared/use-api-action';
 
 export type EditablePiece = {
   id: string;
@@ -71,16 +71,13 @@ export function EditPieceModal({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useBooleanApiAction();
 
   if (!piece) return null;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!piece) return;
-    setBusy(true);
-    setError(null);
 
     const form = new FormData(e.currentTarget);
     // An empty input is a cleared field, so this returns null rather than undefined —
@@ -91,7 +88,7 @@ export function EditPieceModal({
       return raw ? raw : null;
     };
 
-    try {
+    await run(async () => {
       await api(`/api/content/${piece.id}`, {
         method: 'PATCH',
         json: {
@@ -123,11 +120,7 @@ export function EditPieceModal({
       });
       onClose();
       router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
   return (
@@ -233,12 +226,9 @@ export function EditPieceModal({
           <Input name="tags" defaultValue={piece.tags.join(', ')} />
         </Field>
 
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <ErrorText error={error} />
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save'}</Button>
-        </div>
+        <ModalFooter onCancel={onClose} busy={busy} submit="Save" />
       </form>
     </Modal>
   );
