@@ -1,0 +1,140 @@
+# Builds the app + nginx images, pushes them to Artifact Registry, then
+# deploys by SSHing into the VM (via `gcloud compute ssh`, which handles key
+# exchange automatically under the authenticated service account — no manual
+# key management, no key stored anywhere) and running `redeploy.sh` there.
+# Approved by Karan (2026-09) in place of the earlier no-SSH,
+# metadata/reboot-based design.
+#
+# Runtime secrets come from GCP Secret Manager, not from GitHub Actions
+# secrets and not from a `.env` file baked or carried by this workflow. This
+# workflow never sees a single app secret value — it only triggers
+# deploy/redeploy.sh on the VM, which pulls each value directly from Secret
+# Manager under the VM's own service account and writes /opt/growth-center/.env
+# fresh on every deploy (root-owned, mode 600). See deploy/redeploy.sh for the
+# full secret list and reasoning.
+#
+# ── One-time setup this workflow assumes already exists ────────────────────
+#   - An Artifact Registry Docker repo
+#   - A VM (any Linux image with Docker + gcloud CLI installed), reachable
+#     over SSH
+#   - IAP-tunneled SSH enabled for that VM:
+#       - IAP API enabled (`gcloud services enable iap.googleapis.com`)
+#       - A firewall rule allowing tcp:22 from 35.235.240.0/20 (IAP's range)
+#   - A firewall rule allowing tcp:80 (and tcp:443 once TLS is added) from
+#     0.0.0.0/0, targeting this VM — without it the deploy succeeds but
+#     nginx/the app are unreachable from the internet; GCP blocks all inbound
+#     traffic by default, the `http-server`/`https-server` tags alone don't
+#     open anything:
+#       gcloud compute firewall-rules create allow-http \
+#         --direction=INGRESS --action=allow --rules=tcp:80 \
+#         --target-tags=http-server
+#   - A dedicated deploy service account + Workload Identity Federation trust
+#     scoped to this repo (no long-lived key stored anywhere), granted:
+#       roles/compute.osAdminLogin (SSH in as a sudo-capable user)
+#       roles/iap.tunnelResourceAccessor (permission to open the IAP tunnel)
+#       roles/artifactregistry.writer
+#       roles/iam.serviceAccountUser
+#   - The VM's OWN service account (separate from the CI deploy service
+#     account above) granted roles/secretmanager.secretAccessor — this is
+#     what lets redeploy.sh pull secret values locally, with no credentials
+#     passed in from CI at all
+#   - Every var .env.example lists already created as a secret of the same
+#     name in Secret Manager, with at least one version. Optional ones
+#     (Zoho, Meta, LinkedIn, Google Ads, AI, SMTP, Cliq) can be skipped —
+#     redeploy.sh falls back to empty for any secret that doesn't exist,
+#     same "not configured" degradation the app already does for these
+#   - /opt/growth-center already exists on the VM (or the SSH step below is
+#     adjusted to create it)
+#
+# ── Repository configuration this workflow reads (Settings → Secrets and
+#    variables → Actions) ───────────────────────────────────────────────────
+#   Variables (not secret — project/resource identifiers):
+#     GCP_PROJECT_ID, GCP_REGION, GCP_ZONE, GCP_VM_NAME,
+#     ARTIFACT_REGISTRY_REPO, WIF_PROVIDER, DEPLOY_SERVICE_ACCOUNT
+#   No app-runtime secrets are stored in GitHub any more — those live only in
+#   Secret Manager (see deploy/redeploy.sh).
+
+name: Deploy to GCP
+
+on:
+  push:
+    # Points at this feature branch for now, not main — main has no GCP infra
+    # to deploy to yet (see the setup notes above). Switch this back to
+    # branches: [main] once the one-time GCP setup is done and this is ready
+    # to be the real deploy trigger.
+    branches: [infra/docker-nginx-setup]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write # required for Workload Identity Federation
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP (Workload Identity Federation, no key file)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push app image
+        env:
+          APP_IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/app:${{ github.sha }}
+        run: |
+          docker build -t "$APP_IMAGE" .
+          docker push "$APP_IMAGE"
+          echo "APP_IMAGE=$APP_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Build and push nginx image
+        env:
+          NGINX_IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.ARTIFACT_REGISTRY_REPO }}/nginx:${{ github.sha }}
+        run: |
+          docker build -t "$NGINX_IMAGE" ./nginx
+          docker push "$NGINX_IMAGE"
+          echo "NGINX_IMAGE=$NGINX_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Render deploy compose file
+        run: |
+          export APP_IMAGE NGINX_IMAGE
+          envsubst < deploy/docker-compose.deploy.yml > /tmp/compose-file
+
+      - name: Deploy over SSH
+        run: |
+          gcloud compute scp /tmp/compose-file "${{ vars.GCP_VM_NAME }}":/opt/growth-center/docker-compose.yml \
+            --zone="${{ vars.GCP_ZONE }}" --tunnel-through-iap
+
+          gcloud compute scp deploy/redeploy.sh "${{ vars.GCP_VM_NAME }}":/opt/growth-center/redeploy.sh \
+            --zone="${{ vars.GCP_ZONE }}" --tunnel-through-iap
+
+          gcloud compute ssh "${{ vars.GCP_VM_NAME }}" --zone="${{ vars.GCP_ZONE }}" --tunnel-through-iap \
+            --command="chmod +x /opt/growth-center/redeploy.sh && sudo /opt/growth-center/redeploy.sh"
+
+      - name: Verify the app is healthy
+        run: |
+          VM_IP=$(gcloud compute instances describe "${{ vars.GCP_VM_NAME }}" \
+            --zone="${{ vars.GCP_ZONE }}" \
+            --format='get(networkInterfaces[0].accessConfigs[0].natIP)')
+
+          echo "Checking http://$VM_IP/api/health ..."
+          for i in $(seq 1 10); do
+            if curl -sf "http://$VM_IP/api/health"; then
+              echo "Healthy."
+              exit 0
+            fi
+            echo "Not ready yet (attempt $i/10), waiting 10s..."
+            sleep 10
+          done
+
+          echo "App did not become healthy in time — failing the deploy."
+          exit 1

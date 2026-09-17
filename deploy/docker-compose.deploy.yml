@@ -1,0 +1,22 @@
+# Deploy-time variant of the repo's docker-compose.yml — this one is generated
+# by the GitHub Actions workflow, not run by hand. The difference: it pulls
+# pre-built images from Artifact Registry (`image:`) instead of building from
+# source (`build:`), because the VM never has the repo checked out — it only
+# ever receives this one file, copied over by the workflow's SSH deploy step.
+# ${APP_IMAGE} / ${NGINX_IMAGE} are substituted by the workflow before this
+# gets copied to the VM.
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    env_file:
+      - .env
+
+  nginx:
+    image: ${NGINX_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - app
