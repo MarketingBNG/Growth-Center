@@ -6,9 +6,15 @@
 # Run this over the same IAP-tunnelled SSH the deploy workflow uses:
 #   gcloud compute ssh <VM_NAME> --zone=<ZONE> --tunnel-through-iap
 #   (copy this file over first, or paste its contents into the session)
-#   sudo bash setup-vm.sh
+#   sudo bash setup-vm.sh <ARTIFACT_REGISTRY_REGION>
+#
+# Region must match wherever the Artifact Registry repo actually lives
+# (deploy.yml's vars.GCP_REGION for the real deploy) — pass it as the one
+# argument, e.g.: sudo bash setup-vm.sh asia-south1
 
 set -euo pipefail
+
+REGION="${1:?Usage: sudo bash setup-vm.sh <ARTIFACT_REGISTRY_REGION>}"
 
 echo "Installing Docker..."
 curl -fsSL https://get.docker.com | sh
@@ -24,6 +30,13 @@ if ! command -v gcloud >/dev/null 2>&1; then
 else
   echo "gcloud already present: $(gcloud --version | head -n1)"
 fi
+
+echo "Configuring Docker authentication for Artifact Registry..."
+# redeploy.sh runs `docker compose` via sudo, so this must be configured for
+# root — configuring it for the regular login user only would leave root's
+# docker pull unauthenticated, exactly the "Unauthenticated request" error
+# this fixes.
+gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 echo "Creating /opt/growth-center..."
 mkdir -p /opt/growth-center

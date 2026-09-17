@@ -24,3 +24,8 @@ test-results
 # One of these was committed by accident, which is why it is written down.
 e2e/tmp/
 test-results/
+
+# Personal-GCP-project deploy test notes and rendered compose files — reference
+# a personal test project's IDs/paths, not meant to be shared in the repo.
+deploy/MANUAL-DEPLOY-NOTES.md
+deploy/docker-compose.rendered.yml
