@@ -24,3 +24,8 @@ test-results
 # One of these was committed by accident, which is why it is written down.
 e2e/tmp/
 test-results/
+
+# Implementation pack for the Organic Growth Automation Engine: prompts, target schema
+# and checklists handed over as a working reference, not source. Kept local so the repo
+# keeps only what it builds, not the brief it was built from.
+/Growth_Center_Claude_Code_Pack
