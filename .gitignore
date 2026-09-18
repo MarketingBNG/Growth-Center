@@ -29,3 +29,6 @@ test-results/
 # and checklists handed over as a working reference, not source. Kept local so the repo
 # keeps only what it builds, not the brief it was built from.
 /Growth_Center_Claude_Code_Pack
+
+# Running notes for Karan, written as work happens. Local by design.
+/PROGRESS.md
