@@ -62,6 +62,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by the Facebook Page and Instagram Business APIs on each sync.',
   },
+  bing_webmaster: {
+    label: 'Bing',
+    name: 'Bing Webmaster Tools',
+    tone: 'live',
+    hint: 'Reported by Bing Webmaster Tools on each sync. Bing also feeds Copilot and ChatGPT web results, which Search Console cannot see.',
+  },
   google_search_console: {
     label: 'GSC',
     name: 'Google Search Console',
