@@ -21,6 +21,41 @@ const ROW_LIMIT = 5000;
 
 type QueryRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
 
+/**
+ * The two markets the firm sells into, as Search Console spells a country — ISO 3166-1
+ * alpha-3, lower case.
+ *
+ * The breakdown is asked for one country at a time rather than by adding `country` to the
+ * existing calls, for two reasons. A page's rows would otherwise be multiplied by every
+ * country that has ever seen it — mostly a handful of impressions from places the firm
+ * does not sell — and the 5000-row cap would be spent on them before the rows that matter.
+ * And the split the business actually asks for is US against India: Indian founders
+ * expanding to the US, and NRIs already living there. Everywhere else is one bucket nobody
+ * reads.
+ */
+const TRACKED_COUNTRIES = ['usa', 'ind'] as const;
+
+/** Restricts a query to one country. */
+const inCountry = (country: string) => ({
+  dimensionFilterGroups: [
+    { filters: [{ dimension: 'country', operator: 'equals', expression: country }] },
+  ],
+});
+
+/**
+ * How a country-scoped row is addressed in `metric_snapshot.entityId`.
+ *
+ * Country first and split on the *first* separator, because a URL may legally contain a
+ * pipe and a country code never can.
+ */
+export const countryKey = (country: string, entity: string) => `${country}|${entity}`;
+export function splitCountryKey(key: string): { country: string; entity: string } {
+  const at = key.indexOf('|');
+  return at === -1
+    ? { country: key, entity: '' }
+    : { country: key.slice(0, at), entity: key.slice(at + 1) };
+}
+
 async function searchAnalytics(
   token: string,
   siteUrl: string,
@@ -59,7 +94,16 @@ export const searchConsole: IntegrationProvider = {
   category: 'seo',
   authKind: 'oauth2',
   summary: 'Real search clicks, impressions and average position by query and page.',
-  provides: ['Clicks', 'Impressions', 'CTR', 'Average position', 'Keyword rankings', 'Landing pages'],
+  provides: [
+    'Clicks',
+    'Impressions',
+    'CTR',
+    'Average position',
+    'Keyword rankings',
+    'Landing pages',
+    'US / India split',
+    'Device split',
+  ],
   requiredEnv: [
     { name: 'GOOGLE_CLIENT_ID', description: 'OAuth client with the Search Console API enabled' },
     { name: 'GOOGLE_CLIENT_SECRET', description: 'Secret for that OAuth client' },
@@ -201,6 +245,95 @@ export const searchConsole: IntegrationProvider = {
           date: pageDate,
           value,
         });
+      }
+    }
+
+    // ── Country and device breakdowns ─────────────────────────────────────────
+    //
+    // Separate entity types, not a country dimension added to the `site`, `seo_page` and
+    // `seo_keyword` points above. Those three are read by code that filters on entityType
+    // and never on entityId: readSearchTrend in lib/analytics/seo.ts assigns
+    // `day.clicks = value` for each row of a day, and the traffic totals sum every
+    // `seo_keyword` row there is. Country rows under those types would make the trend
+    // report whichever country happened to be written last, and double every total. A
+    // type of its own is invisible to both, and to the materialiser in writers/seo.ts,
+    // which matches entityType exactly and so will not mint duplicate SeoPage rows.
+    const [byCountry, devices] = await Promise.all([
+      Promise.all(
+        TRACKED_COUNTRIES.map(async (country) => {
+          const scope = inCountry(country);
+          const [days, terms, urls] = await Promise.all([
+            searchAnalytics(token, siteUrl, { ...window, dimensions: ['date'], ...scope }),
+            searchAnalytics(token, siteUrl, { ...window, dimensions: ['query'], ...scope }),
+            searchAnalytics(token, siteUrl, { ...window, dimensions: ['page'], ...scope }),
+          ]);
+          return { country, days, terms, urls };
+        }),
+      ),
+      searchAnalytics(token, siteUrl, { ...window, dimensions: ['date', 'device'] }),
+    ]);
+
+    /** clicks, impressions, CTR and position off one row, in that order. */
+    const figures = (row: QueryRow, prefix: '' | 'search_'): [string, number][] => [
+      [`${prefix}clicks`, row.clicks ?? 0],
+      [`${prefix}impressions`, row.impressions ?? 0],
+      [`${prefix}ctr`, (row.ctr ?? 0) * 100],
+      [`${prefix}position`, row.position ?? 0],
+    ];
+
+    for (const { country, days, terms, urls } of byCountry) {
+      for (const row of days) {
+        const date = parseDay(row.keys?.[0]);
+        if (!date) continue;
+        for (const [metricKey, value] of figures(row, 'search_')) {
+          points.push({ entityType: 'site_country', entityId: country, metricKey, date, value });
+        }
+      }
+
+      // Queries and pages are aggregated across the window, matching the `seo_page` rows
+      // above: the question these answer is "how does this page do in India versus the
+      // US", which is a period figure, not a daily series.
+      for (const row of terms) {
+        const keyword = row.keys?.[0];
+        if (!keyword) continue;
+        for (const [metricKey, value] of figures(row, '')) {
+          points.push({
+            entityType: 'seo_keyword_country',
+            entityId: countryKey(country, keyword),
+            entityLabel: keyword,
+            entityMeta: { keyword, country },
+            metricKey,
+            date: pageDate,
+            value,
+          });
+        }
+      }
+
+      for (const row of urls) {
+        const url = row.keys?.[0];
+        if (!url) continue;
+        for (const [metricKey, value] of figures(row, '')) {
+          points.push({
+            entityType: 'seo_page_country',
+            entityId: countryKey(country, url),
+            entityLabel: url,
+            entityMeta: { url, country },
+            metricKey,
+            date: pageDate,
+            value,
+          });
+        }
+      }
+    }
+
+    // Device needs no country filter and no per-page grain: three values a day, kept as a
+    // daily series because the thing worth seeing is mobile's share moving over time.
+    for (const row of devices) {
+      const date = parseDay(row.keys?.[0]);
+      const device = row.keys?.[1]?.toLowerCase();
+      if (!date || !device) continue;
+      for (const [metricKey, value] of figures(row, 'search_')) {
+        points.push({ entityType: 'site_device', entityId: device, metricKey, date, value });
       }
     }
 
