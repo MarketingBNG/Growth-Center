@@ -68,6 +68,12 @@ const SOURCES: Record<string, SourceMeta> = {
     tone: 'live',
     hint: 'Reported by Bing Webmaster Tools on each sync. Bing also feeds Copilot and ChatGPT web results, which Search Console cannot see.',
   },
+  fireflies: {
+    label: 'Fireflies',
+    name: 'Fireflies',
+    tone: 'live',
+    hint: 'Sales calls, with names, addresses and tax identifiers stripped before anything is stored. Counts only — no transcript text reaches this database.',
+  },
   google_search_console: {
     label: 'GSC',
     name: 'Google Search Console',
