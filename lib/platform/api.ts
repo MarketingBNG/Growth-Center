@@ -7,6 +7,7 @@ import { ApprovalError, WorkflowError } from '../content/content.ts';
 import { MergeError } from '../crm/duplicate-queue.ts';
 import { TransitionError } from '../insights/insight-actions.ts';
 import { IneligibleError } from '../outreach/outreach.ts';
+import { FactError } from '../content/facts-store.ts';
 import type { Permission } from '../access/roles.ts';
 
 /**
@@ -20,7 +21,7 @@ import type { Permission } from '../access/roles.ts';
  * it to 422 locally instead, because there the vendor is rejecting the caller's own input
  * — see the comment in each of those routes.
  */
-const DOMAIN_422 = [BudgetError, ApprovalError, WorkflowError, MergeError, TransitionError, IneligibleError];
+const DOMAIN_422 = [BudgetError, ApprovalError, WorkflowError, MergeError, TransitionError, IneligibleError, FactError];
 
 // The pure list/pagination contract lives in list-query.ts so it can be unit-tested
 // without next/server. Re-exported here because 22 route handlers import it from

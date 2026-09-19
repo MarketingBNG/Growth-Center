@@ -49,6 +49,7 @@ export const NAV: NavSection[] = [
       { label: 'Social', href: '/social', icon: 'Share2' },
       { label: 'Outreach', href: '/outreach', icon: 'Send' },
       { label: 'Content', href: '/content', icon: 'FileText' },
+      { label: 'Facts', href: '/facts', icon: 'BookCheck' },
       { label: 'Analytics', href: '/analytics', icon: 'ChartLine' },
       { label: 'Reports', href: '/reports', icon: 'ClipboardList' },
       { label: 'AI Insights', href: '/ai', icon: 'Brain' },

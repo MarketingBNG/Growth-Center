@@ -1504,6 +1504,101 @@ model ContentImport {
   @@map("content_import")
 }
 
+// ─── verified facts ───────────────────────────────────────────────────────────
+//
+// The register behind the engine's first non-negotiable: **the model never originates a
+// tax number.** Thresholds, penalties, deadlines, rates and form applicability come from
+// here and reach a draft only through a placeholder — `{{fact:US-FBAR-THRESHOLD}}`. A
+// numeric or form token in a draft that does not resolve to an approved fact blocks it.
+//
+// This is a register of claims about law, entered and cleared by named CA/CPA reviewers.
+// It is not content and it is not derived from anything: nothing syncs into it, and the
+// model may read it but never write it.
+
+/// Where a fact applies. Free text against a documented vocabulary rather than an enum,
+/// because `US-<state>` is fifty values and a new state must not be a migration.
+/// lib/content/facts-fields.ts holds the list the form reads.
+///
+/// Every fact carries one. The firm advises across two jurisdictions and a treaty, and an
+/// untagged threshold is the kind of thing that ends up in the wrong article.
+
+enum FactStatus {
+  /// Entered, not yet put up for review.
+  draft
+  /// Waiting on a reviewer.
+  proposed
+  /// Cleared by a named CA/CPA. Only these may be used in a draft.
+  approved
+  /// Superseded or withdrawn. Kept, never deleted — published articles cite it.
+  retired
+}
+
+model VerifiedFact {
+  id String @id @default(cuid())
+
+  /// The placeholder key, e.g. `US-FBAR-THRESHOLD`. Upper-case, dash-separated; this is
+  /// what an author types inside `{{fact:…}}`, so it is stable and never reused.
+  key String @unique
+
+  /// What the fact is, in a reviewer's words: "FBAR filing threshold".
+  label String
+
+  /// The value exactly as it should appear in prose — "$10,000", "21%", "15 April".
+  /// A string, because the rendered form carries a currency symbol, a percent sign or a
+  /// date format that a number cannot.
+  value String
+
+  /// The same value as a number where it is one, so the token gate can tell whether a
+  /// figure in a draft matches an approved fact rather than only whether some placeholder
+  /// was used. Null for a fact that is not numeric (a form's applicability, say).
+  numericValue Decimal? @db.Decimal(18, 4)
+
+  /// "USD", "%", "days". Null where `value` speaks for itself.
+  unit String?
+
+  /// `US-FED`, `US-CA`, `IN`, `TREATY-US-IN`.
+  jurisdiction String
+
+  /// The statute, regulation or form this rests on: "31 CFR 1010.350".
+  authority String?
+
+  /// Where it was read, and the passage that says it. Both required on an approved fact:
+  /// a citation without the quoted span cannot be checked by anyone but its author, which
+  /// is the situation the register exists to end.
+  sourceUrl     String
+  sourceExcerpt String
+
+  /// Tax facts expire. A threshold with no end date is a claim that it is current, and
+  /// `effectiveTo` is what lets a published article be re-checked against the year it
+  /// was written for.
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  status FactStatus @default(draft)
+
+  /// The named human who cleared it, and when. Not a boolean: §3.4 wants the person
+  /// recorded, because "approved" with nobody attached is not an approval.
+  reviewerEmail String?
+  reviewedAt    DateTime?
+  /// What the reviewer said — a qualification, a caveat, the reason it was refused.
+  reviewNote    String?
+
+  /// The fact this one replaces. A new rate does not edit the old row: articles published
+  /// under the old one need it to still exist and still say what it said.
+  supersedesId String?       @unique
+  supersedes   VerifiedFact? @relation("Supersedes", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy VerifiedFact? @relation("Supersedes")
+
+  notes     String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([jurisdiction])
+  @@map("verified_fact")
+}
+
 // ─── AI, notifications, audit ─────────────────────────────────────────────────
 
 /// A generated insight. `provider` records what produced it — "anthropic" for a real
