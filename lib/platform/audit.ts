@@ -49,6 +49,7 @@ const WRITTEN_PHRASING: Record<AuditAction, string> = {
   'integration.connect': 'connected an integration',
   'integration.disconnect': 'disconnected an integration',
   'seo.indexnow': 'notified search engines of changed pages',
+  'seo.ai_report_import': 'imported the Search Console AI report',
   'leads.rebalance': 'rebalanced the lead queue',
   // The registry is the descriptive half of a sequence — owner, service line, sending
   // domain. Named as such rather than as "edited a sequence", which is what a change to
@@ -153,6 +154,7 @@ export type AuditAction =
   | 'integration.connect'
   | 'integration.disconnect'
   | 'seo.indexnow'
+  | 'seo.ai_report_import'
   | 'leads.rebalance'
   | 'sequence.registry'
   | 'settings.currency'
