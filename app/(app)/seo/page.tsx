@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/platform/prisma';
 import type { PageParams } from '@/lib/shared/range';
-import { searchTrend, seoOverview, webVitals } from '@/lib/analytics/seo';
+import { marketSplit, searchTrend, seoOverview, webVitals } from '@/lib/analytics/seo';
 import { currencySettings } from '@/lib/platform/settings';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
@@ -96,12 +96,13 @@ async function SeoBody({
     return <Card><NoDatabaseState /></Card>;
   }
 
-  const [data, providers, search, fx, vitals] = await Promise.all([
+  const [data, providers, search, fx, vitals, markets] = await Promise.all([
     seoOverview(),
     cards(),
     searchTrend(),
     currencySettings(),
     webVitals(),
+    marketSplit(),
   ]);
   const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
@@ -345,6 +346,8 @@ async function SeoBody({
 
       <WebVitals vitals={vitals} />
 
+      <MarketSplit markets={markets} />
+
       {/* Not side by side. Twenty-five issue cards stack far past the pages table, so
           the pair left ~800px of empty column under Pages. Each takes the full width
           and lays its own content across it — the fix the insights list needed too. */}
@@ -551,5 +554,121 @@ function WebVitals({ vitals }: { vitals: Awaited<ReturnType<typeof webVitals>> }
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The US against India, per page and per query.
+ *
+ * Every other figure on this page is the two markets added together, which hides the
+ * thing the firm most needs to see: the two audiences — Indian founders opening a US
+ * entity, and NRIs already living in the States — arrive on different pages for different
+ * reasons, and a page carrying the whole of one market and none of the other reads as
+ * merely average once they are summed.
+ *
+ * Rendered from `countries` rather than from two hardcoded columns, so adding a third
+ * market is a change to TRACKED_COUNTRIES in the provider and nothing here.
+ */
+function MarketSplit({ markets }: { markets: Awaited<ReturnType<typeof marketSplit>> }) {
+  // Null means the country breakdown has never synced — not that both markets are zero.
+  // Search Console only began reporting it when the split shipped, so an older connection
+  // shows nothing here until its next sync rather than an empty table implying no traffic.
+  if (!markets) return null;
+
+  const { countries, totals, pages, queries } = markets;
+
+  const table = (
+    rows: typeof pages,
+    heading: string,
+    mono: boolean,
+  ) => (
+    <Card className="overflow-hidden">
+      <CardHeader>
+        <CardTitle>{heading}</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Top {fmtNumber(rows.length)} by clicks across both markets
+        </p>
+      </CardHeader>
+      {rows.length === 0 ? (
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            Nothing reported for either market in the last sync window.
+          </p>
+        </CardContent>
+      ) : (
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR>
+                <TH>{mono ? 'URL' : 'Query'}</TH>
+                {countries.map((c) => (
+                  <TH key={c.code} className="text-right">
+                    {c.label}
+                  </TH>
+                ))}
+                <TH className="text-right">Split</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {rows.map((row) => (
+                <TR key={row.entity}>
+                  <TD className={mono ? 'font-mono text-xs' : 'text-xs'}>{row.entity}</TD>
+                  {countries.map((c) => {
+                    const f = row.markets[c.code];
+                    return (
+                      <TD key={c.code} className="text-right tnum">
+                        {fmtNumber(f.clicks)}
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({fmtNumber(f.impressions)} impr
+                          {f.position === null ? '' : `, pos ${f.position.toFixed(1)}`})
+                        </span>
+                      </TD>
+                    );
+                  })}
+                  {/* The point of the table in one column: what share of this row's
+                      clicks came from the US. Undefined with no clicks at all, and an
+                      em dash says so rather than 0% implying the US sent none. */}
+                  <TD className="text-right tnum text-muted-foreground">
+                    {row.total === 0
+                      ? '—'
+                      : fmtPercent((row.markets[countries[0].code].clicks / row.total) * 100, 0)}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      )}
+    </Card>
+  );
+
+  return (
+    <div className="mb-4 grid gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Markets</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Search Console clicks and impressions by country, over the days synced.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {countries.map((c) => (
+              <div key={c.code} className="rounded-lg border p-3">
+                <p className="text-xs text-muted-foreground">{c.label}</p>
+                <p className="text-2xl tnum">{fmtNumber(totals[c.code].clicks)}</p>
+                <p className="text-xs text-muted-foreground">
+                  clicks · {fmtNumber(totals[c.code].impressions)} impressions ·{' '}
+                  {fmtPercent(totals[c.code].ctr, 2)} CTR
+                </p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {table(pages, 'Pages by market', true)}
+      {table(queries, 'Queries by market', false)}
+    </div>
   );
 }

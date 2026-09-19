@@ -33,7 +33,11 @@ type QueryRow = { keys?: string[]; clicks?: number; impressions?: number; ctr?: 
  * expanding to the US, and NRIs already living there. Everywhere else is one bucket nobody
  * reads.
  */
-const TRACKED_COUNTRIES = ['usa', 'ind'] as const;
+export const TRACKED_COUNTRIES = ['usa', 'ind'] as const;
+export type TrackedCountry = (typeof TRACKED_COUNTRIES)[number];
+
+/** How each market is written on screen. */
+export const COUNTRY_LABEL: Record<TrackedCountry, string> = { usa: 'United States', ind: 'India' };
 
 /** Restricts a query to one country. */
 const inCountry = (country: string) => ({

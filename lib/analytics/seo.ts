@@ -1,6 +1,12 @@
 import { db } from '../platform/prisma.ts';
 import { TAGS, cached } from '../platform/cache.ts';
 import { num, rate } from '../shared/calc.ts';
+import {
+  COUNTRY_LABEL,
+  TRACKED_COUNTRIES,
+  splitCountryKey,
+  type TrackedCountry,
+} from '../integrations/providers/search-console.ts';
 
 // SEO reads its own tables rather than MetricSnapshot: a keyword's position on a date is
 // an attribute of the keyword, and SeoKeywordRanking already stores that history. The
@@ -306,6 +312,145 @@ async function readWebVitals() {
   };
 }
 
+/**
+ * The US against India, per page and per query.
+ *
+ * The firm sells into two markets that want different things — Indian founders opening a
+ * US entity, and NRIs already living there — and every figure elsewhere on this page is
+ * the two of them added together. A page can be carrying the whole of one market and
+ * nothing of the other and read as merely average.
+ *
+ * ## Why this does not sum
+ *
+ * `site_country` is a daily series and sums the way the trend does. `seo_page_country` and
+ * `seo_keyword_country` do not: the sync writes each one as a *window total* — 28 days of
+ * clicks for that URL in that country — stamped with a single date. Summing those across
+ * sync dates would add one 28-day total per day the sync ran, so a month of nightly syncs
+ * would report roughly thirty times the real traffic, growing forever. Only the newest
+ * date is read, which is the whole answer for the window, and `position` is a mean that
+ * could never be summed in any case.
+ */
+const MARKET_PAGES = 12;
+
+/**
+ * `ctr` and `position` are nullable and zero is not a stand-in for either. A page with no
+ * impressions in a market has no click-through rate — printing 0% would say it was shown
+ * and ignored, when it was never shown. Same for a position that Search Console never
+ * reported.
+ */
+type MarketFigures = {
+  clicks: number;
+  impressions: number;
+  ctr: number | null;
+  position: number | null;
+};
+
+const emptyFigures = (): MarketFigures => ({ clicks: 0, impressions: 0, ctr: null, position: null });
+
+/** Every row of an entity type at its most recent date. See the note above on why. */
+async function readLatestRows(entityType: string) {
+  const latest = await db().metricSnapshot.aggregate({ where: { entityType }, _max: { date: true } });
+  const date = latest._max.date;
+  if (!date) return [];
+  return db().metricSnapshot.findMany({
+    where: { entityType, date },
+    select: { entityId: true, metricKey: true, value: true },
+  });
+}
+
+/** Folds `country|entity` rows into one record per entity holding both markets. */
+export function foldByEntity(rows: { entityId: string; metricKey: string; value: unknown }[]) {
+  const byEntity = new Map<string, Record<TrackedCountry, MarketFigures>>();
+
+  for (const row of rows) {
+    const { country, entity } = splitCountryKey(row.entityId);
+    if (!entity) continue;
+    if (!TRACKED_COUNTRIES.includes(country as TrackedCountry)) continue;
+
+    const markets =
+      byEntity.get(entity) ??
+      (Object.fromEntries(TRACKED_COUNTRIES.map((c) => [c, emptyFigures()])) as Record<
+        TrackedCountry,
+        MarketFigures
+      >);
+    const figures = markets[country as TrackedCountry];
+    const value = num(row.value);
+
+    if (row.metricKey === 'clicks') figures.clicks = value;
+    if (row.metricKey === 'impressions') figures.impressions = value;
+    // Stored, but recomputed below from clicks and impressions so the column can never
+    // disagree with the two beside it.
+    if (row.metricKey === 'position') figures.position = value || null;
+
+    byEntity.set(entity, markets);
+  }
+
+  for (const markets of byEntity.values()) {
+    for (const country of TRACKED_COUNTRIES) {
+      const f = markets[country];
+      f.ctr = rate(f.clicks, f.impressions);
+    }
+  }
+  return byEntity;
+}
+
+/** Busiest first, counting both markets, so the table opens on what matters. */
+export function rank(byEntity: Map<string, Record<TrackedCountry, MarketFigures>>, take: number) {
+  return [...byEntity.entries()]
+    .map(([entity, markets]) => ({
+      entity,
+      markets,
+      total: TRACKED_COUNTRIES.reduce((t, c) => t + markets[c].clicks, 0),
+      impressions: TRACKED_COUNTRIES.reduce((t, c) => t + markets[c].impressions, 0),
+    }))
+    // A page with no clicks in either market still has impressions worth seeing, so the
+    // tie is broken on those rather than leaving the order to insertion.
+    .sort((a, b) => b.total - a.total || b.impressions - a.impressions)
+    .slice(0, take);
+}
+
+async function readMarketSplit() {
+  const [siteRows, pageRows, queryRows] = await Promise.all([
+    db().metricSnapshot.groupBy({
+      by: ['entityId', 'metricKey'],
+      where: {
+        entityType: 'site_country',
+        metricKey: { in: ['search_clicks', 'search_impressions'] },
+      },
+      _sum: { value: true },
+    }),
+    readLatestRows('seo_page_country'),
+    readLatestRows('seo_keyword_country'),
+  ]);
+
+  // Nothing has synced the breakdown yet. Distinct from "both markets are zero", and the
+  // page needs to be able to tell the difference rather than drawing an empty table.
+  if (!siteRows.length && !pageRows.length && !queryRows.length) return null;
+
+  const totals = Object.fromEntries(
+    TRACKED_COUNTRIES.map((c) => [c, emptyFigures()]),
+  ) as Record<TrackedCountry, MarketFigures>;
+
+  for (const row of siteRows) {
+    const country = row.entityId as TrackedCountry;
+    if (!TRACKED_COUNTRIES.includes(country)) continue;
+    const value = num(row._sum.value);
+    if (row.metricKey === 'search_clicks') totals[country].clicks = value;
+    if (row.metricKey === 'search_impressions') totals[country].impressions = value;
+  }
+  for (const country of TRACKED_COUNTRIES) {
+    totals[country].ctr = rate(totals[country].clicks, totals[country].impressions);
+  }
+
+  return {
+    countries: TRACKED_COUNTRIES.map((code) => ({ code, label: COUNTRY_LABEL[code] })),
+    totals,
+    pages: rank(foldByEntity(pageRows), MARKET_PAGES),
+    queries: rank(foldByEntity(queryRows), MARKET_PAGES),
+  };
+}
+
 export const seoOverview = cached('seo:overview', [TAGS.seo], readSeoOverview);
 export const searchTrend = cached('seo:search-trend', [TAGS.seo], readSearchTrend);
 export const webVitals = cached('seo:web-vitals', [TAGS.seo], readWebVitals);
+export const marketSplit = cached('seo:market-split', [TAGS.seo], readMarketSplit);
