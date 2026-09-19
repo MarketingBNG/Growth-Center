@@ -189,3 +189,39 @@ test('a draft with no figures at all is fine', () => {
 test('an empty draft does not throw', () => {
   assert.equal(checkFacts('', FACTS).ok, true);
 });
+
+// ── the gate is wired in, not merely importable ──────────────────────────────────────
+//
+// A rule nothing calls is a library. These read the source rather than the behaviour,
+// because approveContent needs a database and this suite deliberately has none — the same
+// approach tools/permission-idiom.test.ts takes to the same problem.
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const contentSource = readFileSync(
+  join(import.meta.dirname, '..', 'lib', 'content', 'content.ts'),
+  'utf8',
+);
+
+test('approving a content piece runs the facts gate', () => {
+  assert.match(contentSource, /checkFacts\(/, 'approveContent no longer calls the gate');
+  assert.match(
+    contentSource,
+    /throw new ApprovalError\(\s*`This piece cannot be approved until its figures/,
+    'the gate is called but its result is not acted on',
+  );
+});
+
+test('the approval records which facts it rested on', () => {
+  // "Approved on the 19th" means little without the version of the numbers that were
+  // true that day, and a fact can be superseded afterwards.
+  assert.match(contentSource, /facts: gate\.used/);
+});
+
+// The known limit, asserted so it is visible rather than discovered. When WP10's draft
+// body arrives, factsText is the one place that has to change.
+test('the text the gate reads is named in one place', () => {
+  assert.match(contentSource, /const factsText = /);
+  assert.match(contentSource, /checkFacts\(factsText\(piece\)/);
+});

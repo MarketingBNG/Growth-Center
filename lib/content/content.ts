@@ -13,6 +13,8 @@ import { COMPANY_SEGMENTS } from '../crm/company-facts.ts';
 import { FORMATS, MAX_BRIEF, SERVICE_LINES, TOPIC_CLUSTERS } from './content-fields.ts';
 import { rate } from '../shared/calc.ts';
 import { recordAudit } from '../platform/audit.ts';
+import { checkFacts } from './facts.ts';
+import { factsForGate } from './facts-store.ts';
 import { email } from '../platform/fields.ts';
 
 export const contentInput = z.object({
@@ -358,6 +360,12 @@ export async function setContentStatus(
 
 export class ApprovalError extends Error {}
 
+/** The prose a fact check should read. Today that is the title and the brief, which is
+ *  all a ContentPiece holds; when WP10's draft body lands it belongs here and nowhere
+ *  else, so the gate picks it up without approveContent changing. */
+const factsText = (piece: { title: string; brief: string | null }) =>
+  [piece.title, piece.brief ?? ''].filter(Boolean).join('\n\n');
+
 const APPROVABLE = {
   title: true,
   brief: true,
@@ -383,6 +391,20 @@ export async function approveContent(id: string, actorEmail: string) {
     throw new ApprovalError(`Only a piece in review can be approved; this one is ${piece.status}.`);
   }
 
+  // The facts gate, §3.1. An approval is the last human decision before a piece can be
+  // published, so it is the right place to refuse a figure no approved fact stands behind.
+  //
+  // It runs over the title and brief, which is all the text a ContentPiece holds today.
+  // That is a real check on real prose — a brief promising "the $10,000 threshold" is
+  // caught — and it is deliberately not presented as more: once the draft body of WP10
+  // exists, this is the call that should read it, and the assertion in the test says so.
+  const gate = checkFacts(factsText(piece), await factsForGate());
+  if (!gate.ok) {
+    throw new ApprovalError(
+      `This piece cannot be approved until its figures come from the facts register. ${gate.summary}`,
+    );
+  }
+
   const hash = contentHash(piece);
   await db().contentPiece.update({
     where: { id },
@@ -405,7 +427,10 @@ export async function approveContent(id: string, actorEmail: string) {
     // The hash goes in the log as well as on the row. The row records the current
     // approval; the log records that this exact version was approved on this date, and
     // survives the row being approved again later.
-    detail: { title: piece.title, hash },
+    // The facts it rests on are recorded with the approval. "Approved on the 19th" is
+    // only meaningful alongside which version of which numbers was true that day, and a
+    // fact can be superseded afterwards.
+    detail: { title: piece.title, hash, facts: gate.used },
   
   });
 
