@@ -1,6 +1,8 @@
 import { db } from '../platform/prisma.ts';
 import { TAGS, cached } from '../platform/cache.ts';
 import { num, rate } from '../shared/calc.ts';
+import { thresholds } from '../platform/settings.ts';
+import { WINDOW_DAYS, detectDecay, type PageWindow } from './page-decay.ts';
 import {
   COUNTRY_LABEL,
   TRACKED_COUNTRIES,
@@ -450,7 +452,75 @@ async function readMarketSplit() {
   };
 }
 
+/**
+ * Pages that have lost the traffic they used to have.
+ *
+ * The windows come from `seo_page` rows rather than a daily series, because a daily series
+ * per page is not stored: the sync writes each page's totals for the whole synced range,
+ * stamped with the range's last day. Consecutive syncs therefore leave exactly what the
+ * detector needs — the same URL's 28-day totals at a succession of dates — and comparing
+ * two of those at least 28 days apart compares two separate periods.
+ *
+ * Six months is read and no more. Older rows cannot become the comparison window for a
+ * current one, so they are weight without an answer in them.
+ */
+const DECAY_HISTORY_DAYS = 180;
+
+async function readPageDecay() {
+  const since = new Date();
+  since.setUTCDate(since.getUTCDate() - DECAY_HISTORY_DAYS);
+
+  const [limits, rows] = await Promise.all([
+    thresholds(),
+    db().metricSnapshot.findMany({
+      where: {
+        entityType: 'seo_page',
+        metricKey: { in: ['clicks', 'impressions', 'position'] },
+        date: { gte: since },
+      },
+      select: { entityId: true, metricKey: true, value: true, date: true },
+    }),
+  ]);
+  if (!rows.length) return null;
+
+  // url -> date -> the window being assembled from three separate metric rows.
+  const byUrl = new Map<string, Map<number, PageWindow>>();
+  for (const row of rows) {
+    const url = row.entityId;
+    if (!url) continue;
+    const dates = byUrl.get(url) ?? new Map<number, PageWindow>();
+    const stamp = row.date.getTime();
+    const window = dates.get(stamp) ?? {
+      date: row.date,
+      clicks: 0,
+      impressions: 0,
+      position: null,
+    };
+    if (row.metricKey === 'clicks') window.clicks = num(row.value);
+    if (row.metricKey === 'impressions') window.impressions = num(row.value);
+    // Zero is Search Console reporting no position at all, not a page ranking first.
+    if (row.metricKey === 'position') window.position = num(row.value) || null;
+    dates.set(stamp, window);
+    byUrl.set(url, dates);
+  }
+
+  const findings = detectDecay(
+    [...byUrl.entries()].map(([url, dates]) => ({ url, windows: [...dates.values()] })),
+    {
+      clicksDrop: limits['seo.decayClicksDrop'],
+      positionFloor: limits['seo.decayPositionFloor'],
+      impressionFloor: limits['seo.decayImpressionFloor'],
+    },
+  );
+
+  return { findings, limits: {
+    clicksDrop: limits['seo.decayClicksDrop'],
+    positionFloor: limits['seo.decayPositionFloor'],
+  }, windowDays: WINDOW_DAYS };
+}
+
 export const seoOverview = cached('seo:overview', [TAGS.seo], readSeoOverview);
 export const searchTrend = cached('seo:search-trend', [TAGS.seo], readSearchTrend);
 export const webVitals = cached('seo:web-vitals', [TAGS.seo], readWebVitals);
 export const marketSplit = cached('seo:market-split', [TAGS.seo], readMarketSplit);
+export const pageDecay = cached('seo:page-decay', [TAGS.seo], readPageDecay);

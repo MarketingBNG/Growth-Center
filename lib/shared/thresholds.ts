@@ -100,6 +100,24 @@ export const THRESHOLDS = {
     default: 1,
     hint: 'A page above the impressions floor whose click-through sits under this is a title and meta rewrite.',
   },
+  'seo.decayClicksDrop': {
+    label: 'Page decay: clicks fall by',
+    unit: '%',
+    default: 20,
+    hint: 'A page whose clicks over the last 28 days fall by this much against the 28 before it has decayed and is a refresh candidate. 20 is the spec’s default: small enough to catch a slide early, large enough to sit outside normal week-to-week movement.',
+  },
+  'seo.decayPositionFloor': {
+    label: 'Page decay: position falls past',
+    unit: 'rank',
+    default: 10,
+    hint: 'A page whose average position was inside this and is no longer has left the first page of results, which costs most of its clicks whatever the click figure says yet.',
+  },
+  'seo.decayImpressionFloor': {
+    label: 'Page decay: ignore pages under',
+    unit: 'impressions',
+    default: 100,
+    hint: 'A page with almost no impressions can lose "half its clicks" by going from two to one. Below this the percentages are arithmetic on noise, so the page is not judged at all.',
+  },
   'crm.renewalWindowDays': {
     label: 'Renewal window',
     unit: 'days',

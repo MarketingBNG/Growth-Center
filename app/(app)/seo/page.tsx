@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from '@/components/ui/table';
 import { hasDb } from '@/lib/platform/prisma';
 import type { PageParams } from '@/lib/shared/range';
-import { marketSplit, searchTrend, seoOverview, webVitals } from '@/lib/analytics/seo';
+import { marketSplit, pageDecay, searchTrend, seoOverview, webVitals } from '@/lib/analytics/seo';
 import { currencySettings } from '@/lib/platform/settings';
 import { cards } from '@/lib/integrations/service';
 import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
@@ -96,13 +96,14 @@ async function SeoBody({
     return <Card><NoDatabaseState /></Card>;
   }
 
-  const [data, providers, search, fx, vitals, markets] = await Promise.all([
+  const [data, providers, search, fx, vitals, markets, decay] = await Promise.all([
     seoOverview(),
     cards(),
     searchTrend(),
     currencySettings(),
     webVitals(),
     marketSplit(),
+    pageDecay(),
   ]);
   const searchConsole = providers.find((p) => p.id === 'google_search_console');
 
@@ -347,6 +348,8 @@ async function SeoBody({
       <WebVitals vitals={vitals} />
 
       <MarketSplit markets={markets} />
+
+      <PageDecay decay={decay} />
 
       {/* Not side by side. Twenty-five issue cards stack far past the pages table, so
           the pair left ~800px of empty column under Pages. Each takes the full width
@@ -670,5 +673,84 @@ function MarketSplit({ markets }: { markets: Awaited<ReturnType<typeof marketSpl
       {table(pages, 'Pages by market', true)}
       {table(queries, 'Queries by market', false)}
     </div>
+  );
+}
+
+/**
+ * Pages that have lost the traffic they used to have.
+ *
+ * Deliberately a short list and often an empty one. The detector ignores pages too small
+ * to measure and pages with no separate earlier window to compare against, so a quiet card
+ * here means "nothing has slipped", not "nothing was checked" — and the empty state says
+ * which it is.
+ */
+function PageDecay({ decay }: { decay: Awaited<ReturnType<typeof pageDecay>> }) {
+  // Null is "no page history stored yet", which the first sync fixes. Distinct from an
+  // empty findings list, which is genuinely good news.
+  if (!decay) return null;
+
+  const { findings, limits, windowDays } = decay;
+
+  return (
+    <Card className="mb-4 overflow-hidden">
+      <CardHeader>
+        <CardTitle>Decaying pages ({fmtNumber(findings.length)})</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Clicks down more than {fmtNumber(limits.clicksDrop)}% against the previous{' '}
+          {fmtNumber(windowDays)} days, or an average position that has fallen past{' '}
+          {fmtNumber(limits.positionFloor)}. Both thresholds are editable in Settings.
+        </p>
+      </CardHeader>
+      {findings.length === 0 ? (
+        <CardContent>
+          <p className="text-xs text-muted-foreground">
+            No page has slipped past either threshold.
+          </p>
+        </CardContent>
+      ) : (
+        <TableWrap>
+          <Table>
+            <THead>
+              <TR>
+                <TH>URL</TH>
+                <TH>Why</TH>
+                <TH className="text-right">Clicks</TH>
+                <TH className="text-right">Change</TH>
+                <TH className="text-right">Position</TH>
+              </TR>
+            </THead>
+            <TBody>
+              {findings.map((f) => (
+                <TR key={f.url}>
+                  <TD className="font-mono text-xs">{f.url}</TD>
+                  <TD>
+                    <Badge tone={f.reason === 'both' ? 'danger' : 'warning'}>
+                      {f.reason === 'both'
+                        ? 'Clicks and position'
+                        : f.reason === 'clicks'
+                          ? 'Clicks'
+                          : 'Position'}
+                    </Badge>
+                  </TD>
+                  {/* Both figures, because a percentage on its own cannot be judged:
+                      "down 90%" is a different morning at 8 clicks and at 4,000. */}
+                  <TD className="text-right tnum">
+                    {fmtNumber(f.clicksBefore)} → {fmtNumber(f.clicksNow)}
+                  </TD>
+                  <TD className="text-right tnum text-muted-foreground">
+                    {f.dropPercent === null ? '—' : `−${fmtPercent(f.dropPercent, 0)}`}
+                  </TD>
+                  <TD className="text-right tnum text-muted-foreground">
+                    {f.positionBefore === null || f.positionNow === null
+                      ? '—'
+                      : `${f.positionBefore.toFixed(1)} → ${f.positionNow.toFixed(1)}`}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </TableWrap>
+      )}
+    </Card>
   );
 }
