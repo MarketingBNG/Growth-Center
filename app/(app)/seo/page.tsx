@@ -17,6 +17,9 @@ import { fmtDate, fmtMoney, fmtNumber, fmtPercent } from '@/lib/shared/format';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { Sparkline } from '@/components/charts/Sparkline';
 import { Pager } from '@/components/patterns/pager';
+import { can } from '@/lib/access/roles';
+import { currentUser } from '@/lib/access/auth';
+import { ImportAiReportButton } from './ImportAiReportButton';
 
 export const metadata = { title: 'SEO · Growth Center' };
 
@@ -61,7 +64,7 @@ export default function SeoPage({
         }
         actions={
           <Suspense fallback={null}>
-            <SeoState />
+            <SeoActions />
           </Suspense>
         }
       />
@@ -81,10 +84,25 @@ async function SeoSubtitle() {
 
 /** Its own boundary: the integration cards are a separate read from the SEO data, and
  *  the badge should not hold the subtitle back. */
-async function SeoState() {
+/**
+ * The connection badge, and the AI report upload beside it.
+ *
+ * The upload is gated on the same permission as the route it posts to. Hiding a control
+ * somebody cannot use is a courtesy, not the enforcement — POST /api/seo/ai-report checks
+ * for itself, because a hidden button is not a closed door.
+ */
+async function SeoActions() {
   if (!hasDb()) return null;
-  const searchConsole = (await cards()).find((p) => p.id === 'google_search_console');
-  return searchConsole ? <StateBadge state={searchConsole.state} /> : null;
+  const [providers, user] = await Promise.all([cards(), currentUser()]);
+  const searchConsole = providers.find((p) => p.id === 'google_search_console');
+  const canImport = can(user?.role, 'integrations:manage');
+
+  return (
+    <div className="flex items-center gap-2">
+      {searchConsole ? <StateBadge state={searchConsole.state} /> : null}
+      {canImport ? <ImportAiReportButton /> : null}
+    </div>
+  );
 }
 
 async function SeoBody({
