@@ -170,6 +170,9 @@ export function SidebarNav({
                         onMouseEnter={() => prefetch(item.href)}
                         onFocus={() => prefetch(item.href)}
                         prefetch={false}
+                        {...(/^https?:/.test(item.href)
+                          ? { target: '_blank', rel: 'noopener noreferrer' }
+                          : {})}
                         aria-current={active ? 'page' : undefined}
                         title={collapsed ? item.label : undefined}
                         aria-label={collapsed ? item.label : undefined}
