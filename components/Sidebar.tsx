@@ -34,7 +34,8 @@ function usePrefetchOnHover() {
   const seen = useRef(new Set<string>());
   return useCallback(
     (href: string) => {
-      if (seen.current.has(href)) return;
+      // An external module (SEO lives on its own site) has nothing for the router to fetch.
+      if (seen.current.has(href) || /^https?:/.test(href)) return;
       seen.current.add(href);
       router.prefetch(href);
     },

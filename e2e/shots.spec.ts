@@ -16,7 +16,6 @@ const PAGES: [string, string][] = [
   ['ads', '/ads'],
   ['analytics', '/analytics'],
   ['integrations', '/integrations'],
-  ['seo', '/seo'],
   ['social', '/social'],
   ['outreach', '/outreach'],
   ['content', '/content'],

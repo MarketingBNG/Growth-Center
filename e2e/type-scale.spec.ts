@@ -48,7 +48,7 @@ test('every step of the type scale resolves', async ({ page, context, baseURL })
 // lose and passes even when tailwind-merge is stripping the size off every real
 // component — which is exactly what happened: every badge in the app rendered at the
 // browser's default 16px while the test above was green.
-const PAGES = ['/', '/integrations', '/leads', '/pipeline', '/crm', '/seo', '/settings'];
+const PAGES = ['/', '/integrations', '/leads', '/pipeline', '/crm', '/settings'];
 
 test('elements that ask for a step actually get it', async ({ page, context, baseURL }) => {
   test.setTimeout(600_000);

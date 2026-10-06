@@ -14,7 +14,6 @@ import {
   readCursor as smartleadCursor,
   sequenceStatus,
 } from '../lib/integrations/providers/smartlead.ts';
-import { seoLiveness } from '../lib/analytics/seo.ts';
 import { PROVIDERS } from '../lib/integrations/registry.ts';
 import { splitName } from '../lib/integrations/service.ts';
 import {
@@ -87,19 +86,6 @@ test('a bare domain is read as a domain property', () => {
 
 test('an unusable property string is rejected at the form, not at the first sync', () => {
   assert.throws(() => normaliseSite('my website'), /sc-domain/);
-});
-
-test('seoLiveness reports per row, so live and seeded can coexist', () => {
-  assert.deepEqual(seoLiveness([]), { live: 0, seeded: 0, hasLive: false, allLive: false });
-
-  // An empty table is not "all live" — the page must not drop its warning over no rows.
-  assert.equal(seoLiveness([]).allLive, false);
-
-  const mixed = seoLiveness([{ source: 'google_search_console' }, { source: null }]);
-  assert.deepEqual(mixed, { live: 1, seeded: 1, hasLive: true, allLive: false });
-
-  const all = seoLiveness([{ source: 'google_search_console' }]);
-  assert.equal(all.allLive, true);
 });
 
 test('the new providers are registered under the ids their Integration rows already use', () => {

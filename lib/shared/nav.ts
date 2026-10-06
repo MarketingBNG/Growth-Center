@@ -44,7 +44,8 @@ export const NAV: NavSection[] = [
       { label: 'CRM', href: '/crm', icon: 'Users' },
       { label: 'Pipeline', href: '/pipeline', icon: 'Kanban' },
       { label: 'Marketing', href: '/marketing', icon: 'Megaphone' },
-      { label: 'SEO', href: '/seo', icon: 'Search' },
+      // SEO moved out to its own app; the old /seo route redirects there too (next.config.ts).
+      { label: 'SEO', href: 'https://seo.usaindiacfo.us', icon: 'Search' },
       { label: 'Paid Ads', href: '/ads', icon: 'BadgeDollarSign' },
       { label: 'Social', href: '/social', icon: 'Share2' },
       { label: 'Outreach', href: '/outreach', icon: 'Send' },
