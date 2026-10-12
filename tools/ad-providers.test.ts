@@ -103,6 +103,86 @@ test('LinkedIn sync errors retain HTTP status and a safe provider error code', (
   );
 });
 
+test('LinkedIn stores the access token separately from its refresh token', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousClientId = process.env.LINKEDIN_CLIENT_ID;
+  const previousClientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  process.env.LINKEDIN_CLIENT_ID = 'test-client';
+  process.env.LINKEDIN_CLIENT_SECRET = 'test-secret';
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        access_token: 'test-access-token',
+        expires_in: 5_184_000,
+        refresh_token: 'test-refresh-token',
+        refresh_token_expires_in: 31_536_000,
+      }),
+      { status: 200 },
+    );
+
+  try {
+    const connected = await linkedinAds.connect({
+      kind: 'oauth2',
+      code: 'test-code',
+      redirectUri: 'https://example.test/callback',
+    });
+    const stored = JSON.parse(connected.secret);
+    assert.equal(stored.accessToken, 'test-access-token');
+    assert.equal(stored.refreshToken, 'test-refresh-token');
+    assert.ok(Date.parse(stored.refreshTokenExpiresAt) > Date.now());
+    assert.ok(connected.expiresAt);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousClientId === undefined) delete process.env.LINKEDIN_CLIENT_ID;
+    else process.env.LINKEDIN_CLIENT_ID = previousClientId;
+    if (previousClientSecret === undefined) delete process.env.LINKEDIN_CLIENT_SECRET;
+    else process.env.LINKEDIN_CLIENT_SECRET = previousClientSecret;
+  }
+});
+
+test('LinkedIn refresh exchanges the refresh token and keeps the access token for API calls', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousClientId = process.env.LINKEDIN_CLIENT_ID;
+  const previousClientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  process.env.LINKEDIN_CLIENT_ID = 'test-client';
+  process.env.LINKEDIN_CLIENT_SECRET = 'test-secret';
+  let requestBody = '';
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body);
+    return new Response(
+      JSON.stringify({
+        access_token: 'renewed-access-token',
+        expires_in: 5_184_000,
+        refresh_token: 'rotated-refresh-token',
+      }),
+      { status: 200 },
+    );
+  };
+
+  try {
+    const refresh = linkedinAds.refresh;
+    assert.ok(refresh);
+    const renewed = await refresh(
+      JSON.stringify({
+        accessToken: 'old-access-token',
+        refreshToken: 'old-refresh-token',
+      }),
+    );
+    assert.equal(new URLSearchParams(requestBody).get('grant_type'), 'refresh_token');
+    assert.equal(new URLSearchParams(requestBody).get('refresh_token'), 'old-refresh-token');
+    assert.deepEqual(JSON.parse(renewed?.secret ?? '{}'), {
+      accessToken: 'renewed-access-token',
+      refreshToken: 'rotated-refresh-token',
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousClientId === undefined) delete process.env.LINKEDIN_CLIENT_ID;
+    else process.env.LINKEDIN_CLIENT_ID = previousClientId;
+    if (previousClientSecret === undefined) delete process.env.LINKEDIN_CLIENT_SECRET;
+    else process.env.LINKEDIN_CLIENT_SECRET = previousClientSecret;
+  }
+});
+
 // The repository had two names for this channel — `linkedin_ads` in resolveCampaign and
 // `linkedin` in the badge metadata — and an unknown id degrades silently rather than
 // failing. The provider takes the id that routes data.

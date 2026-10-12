@@ -30,7 +30,58 @@ const VERSION = '202609';
 
 const SCOPE = 'r_ads r_ads_reporting';
 
-type Stored = { refreshToken: string; expiresAt?: string };
+type Stored = {
+  accessToken?: string;
+  refreshToken?: string;
+  refreshTokenExpiresAt?: string;
+};
+
+type LinkedInTokenResponse = {
+  access_token?: string;
+  expires_in?: number;
+  refresh_token?: string;
+  refresh_token_expires_in?: number;
+};
+
+function tokenExpiry(seconds: number | undefined): Date | undefined {
+  return seconds ? new Date(Date.now() + seconds * 1000) : undefined;
+}
+
+function storedCredential(json: LinkedInTokenResponse, previous?: Stored): Stored {
+  if (!json.access_token) throw new IntegrationError('LinkedIn returned no access token.');
+  const refreshToken = json.refresh_token ?? previous?.refreshToken;
+  const refreshTokenExpiresAt = tokenExpiry(json.refresh_token_expires_in)?.toISOString()
+    ?? previous?.refreshTokenExpiresAt;
+  return {
+    accessToken: json.access_token,
+    ...(refreshToken ? { refreshToken } : {}),
+    ...(refreshTokenExpiresAt ? { refreshTokenExpiresAt } : {}),
+  };
+}
+
+async function exchangeRefreshToken(refreshToken: string, previous?: Stored): Promise<{
+  secret: string;
+  expiresAt?: Date;
+}> {
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: process.env.LINKEDIN_CLIENT_ID ?? '',
+      client_secret: process.env.LINKEDIN_CLIENT_SECRET ?? '',
+    }),
+    signal: httpTimeout(),
+  });
+  if (!res.ok) throw new IntegrationError(`LinkedIn token refresh failed (${res.status}).`);
+
+  const json = (await res.json()) as LinkedInTokenResponse;
+  return {
+    secret: JSON.stringify(storedCredential(json, previous ?? { refreshToken })),
+    expiresAt: tokenExpiry(json.expires_in),
+  };
+}
 
 function headers(token: string): Record<string, string> {
   return {
@@ -204,29 +255,28 @@ export const linkedinAds: IntegrationProvider = {
     });
     if (!res.ok) throw new IntegrationError(`Token exchange failed (${res.status}).`);
 
-    const json = (await res.json()) as {
-      access_token?: string;
-      refresh_token?: string;
-      expires_in?: number;
-    };
-    if (!json.access_token) throw new IntegrationError('LinkedIn returned no access token.');
-
-    // LinkedIn issues a refresh token only to apps approved for it; others get a
-    // 60-day access token and nothing else. Both are stored the same way and `refresh`
-    // below handles the difference, rather than failing a connection that would work
-    // for two months.
-    const expiresAt = json.expires_in
-      ? new Date(Date.now() + json.expires_in * 1000).toISOString()
-      : undefined;
+    const json = (await res.json()) as LinkedInTokenResponse;
+    const stored = storedCredential(json);
+    const expiresAt = tokenExpiry(json.expires_in);
 
     return {
-      secret: JSON.stringify({ refreshToken: json.refresh_token ?? json.access_token, expiresAt } satisfies Stored),
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      secret: JSON.stringify(stored),
+      expiresAt,
     };
   },
 
+  async refresh(credential) {
+    const stored = JSON.parse(credential) as Stored;
+    if (!stored.refreshToken) return null;
+    return exchangeRefreshToken(stored.refreshToken, stored);
+  },
+
   async sync(credential, config, range) {
-    const { refreshToken: token } = JSON.parse(credential) as Stored;
+    const stored = JSON.parse(credential) as Stored;
+    // Older credentials stored the access token under `refreshToken` when LinkedIn did
+    // not issue a separate refresh token.
+    const token = stored.accessToken ?? stored.refreshToken;
+    if (!token) throw new IntegrationError('LinkedIn access token is missing. Reconnect the integration.');
 
     const account = str(config.adAccountId) ?? (await firstAccount(token));
 
