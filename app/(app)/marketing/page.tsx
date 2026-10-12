@@ -22,6 +22,7 @@ import { can } from '@/lib/access/roles';
 import { ChannelFilter } from './ChannelFilter';
 import { AttributionHealth } from './AttributionHealth';
 import { BudgetEnvelopes } from './BudgetEnvelopes';
+import { cards as integrationCards } from '@/lib/integrations/service';
 
 export const metadata = { title: 'Marketing · Growth Center' };
 
@@ -44,7 +45,7 @@ export default async function MarketingPage({
   const user = await currentUser();
   const canSetBudget = can(user?.role, 'settings:manage');
 
-  const [channels, allChannels, rows, band, health, envelopes] = await Promise.all([
+  const [channels, allChannels, rows, band, health, envelopes, integrations] = await Promise.all([
     channelPerformance(current),
     // Only channels that actually hold a campaign. Every channel in the workspace was
     // offered before, and eleven of the twelve had nothing to show: clicking one swapped
@@ -64,6 +65,7 @@ export default async function MarketingPage({
     // Always the quarter we are in, not the report window: an envelope is a quarterly
     // instruction, and showing a 7-day slice of one would say almost nothing was spent.
     envelopesFor(quarter.periodStart, quarter.periodEnd),
+    integrationCards(),
   ]);
 
   // Money renders in the workspace's reporting currency. Aliased so a call site cannot
@@ -117,6 +119,10 @@ export default async function MarketingPage({
   // with the dashboard, and would have silently switched off the G4 note explaining why.
   const totals = campaignTotals(bySource);
   const active = filtered.filter(hasActivity);
+  const linkedinAds = integrations.find((provider) => provider.id === 'linkedin_ads');
+  const hasLinkedInActivity = rows.some(
+    (campaign) => campaign.source === 'linkedin_ads' && hasActivity(campaign),
+  );
 
   // Whether anything downstream of a click is attributed to a campaign. Zoho stamps a
   // CHANNEL on a lead but never a campaign — Campaign_Source is null on all 27,256 — so
@@ -234,6 +240,12 @@ export default async function MarketingPage({
       <Card className="overflow-hidden">
         <CardHeader>
           <CardTitle>Campaigns</CardTitle>
+          {linkedinAds?.state === 'connected' && !hasLinkedInActivity ? (
+            <p className="text-meta text-muted-foreground">
+              LinkedIn Ads is connected, but no LinkedIn campaign metrics are recorded for this
+              report. Check Analytics → Recent syncs for the latest import details.
+            </p>
+          ) : null}
           {active.length > 0 && !attributed ? (
             <p className="text-meta text-muted-foreground">
               Delivery only. The CRM records which channel a lead came from but never which

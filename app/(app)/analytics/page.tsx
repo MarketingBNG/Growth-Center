@@ -142,7 +142,9 @@ export default async function AnalyticsPage({
                       provider needing two of them pushed the badge out of the card. */}
                   <p className="text-meta break-words text-muted-foreground">
                     {p.state === 'connected'
-                      ? `Last sync ${fmtRelative(p.lastSyncAt)}`
+                      ? p.id === 'linkedin_ads' && !writing.has(p.id)
+                        ? `Last sync ${fmtRelative(p.lastSyncAt)} — no LinkedIn metrics recorded`
+                        : `Last sync ${fmtRelative(p.lastSyncAt)}`
                       : p.state === 'demo_data'
                         ? 'Seeded demo figures — not a live connection'
                         : p.missingEnv.length

@@ -109,6 +109,16 @@ export default async function AdsPage({
     }))
     .sort((a, b) => b.spend - a.spend);
 
+  // Keep a connected platform visible even when the selected range contains no campaign
+  // metrics for it. Omitting it made a successful-but-empty LinkedIn sync look like the
+  // integration was not part of this report at all.
+  const platformRows = [
+    ...platforms.map((platform) => ({ ...platform, noData: false })),
+    ...live
+      .filter((provider) => !platforms.some((platform) => platform.name === provider.name))
+      .map((provider) => ({ name: provider.name, noData: true as const })),
+  ];
+
   // What the platform does bill on, for the two tiles the outcome metrics cannot fill.
   const cpc = costPer(totals.spend, totals.clicks);
   const cpm = totals.impressions ? (totals.spend / totals.impressions) * 1000 : null;
@@ -216,7 +226,7 @@ export default async function AdsPage({
           </Button>
         </CardHeader>
 
-        {platforms.length === 0 ? (
+        {platformRows.length === 0 ? (
           <EmptyState
             icon={<Megaphone className="size-6" />}
             title="No paid spend in this period"
@@ -238,24 +248,35 @@ export default async function AdsPage({
                 </TR>
               </THead>
               <TBody>
-                {platforms.map((p) => (
+                {platformRows.map((p) => (
                   <TR key={p.name}>
-                    <TD className="font-medium">{p.name}</TD>
-                    <TD className="text-right tnum text-muted-foreground">
-                      {fmtNumber(p.campaigns)}
+                    <TD className="font-medium">
+                      {p.name}
+                      {p.noData ? (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          Connected; no campaign data in this date range
+                        </span>
+                      ) : null}
                     </TD>
-                    <TD className="text-right tnum">{money(p.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {fmtNumber(p.impressions)}
+                      {p.noData ? '—' : fmtNumber(p.campaigns)}
                     </TD>
-                    <TD className="text-right tnum text-muted-foreground">{fmtNumber(p.clicks)}</TD>
+                    <TD className="text-right tnum">{p.noData ? '—' : money(p.spend)}</TD>
                     <TD className="text-right tnum text-muted-foreground">
-                      {p.ctr === null ? '—' : fmtPercent(p.ctr, 2)}
+                      {p.noData ? '—' : fmtNumber(p.impressions)}
+                    </TD>
+                    <TD className="text-right tnum text-muted-foreground">
+                      {p.noData ? '—' : fmtNumber(p.clicks)}
+                    </TD>
+                    <TD className="text-right tnum text-muted-foreground">
+                      {p.noData || p.ctr === null ? '—' : fmtPercent(p.ctr, 2)}
                     </TD>
                     <TD className="text-right tnum">
-                      {p.cpc === null ? '—' : fmtMoney(p.cpc, true, fx.reporting)}
+                      {p.noData || p.cpc === null ? '—' : fmtMoney(p.cpc, true, fx.reporting)}
                     </TD>
-                    <TD className="text-right tnum">{p.cpm === null ? '—' : money(p.cpm)}</TD>
+                    <TD className="text-right tnum">
+                      {p.noData || p.cpm === null ? '—' : money(p.cpm)}
+                    </TD>
                   </TR>
                 ))}
                 {/* Ratios recomputed from the totals rather than averaged down the rows,
