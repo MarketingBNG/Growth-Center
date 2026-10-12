@@ -26,7 +26,7 @@ const API = 'https://api.linkedin.com/rest';
  * unpinned call is not possible — the header is mandatory — so the only choice is which
  * known version to fail loudly on.
  */
-const VERSION = '202411';
+const VERSION = '202609';
 
 const SCOPE = 'r_ads r_ads_reporting';
 
