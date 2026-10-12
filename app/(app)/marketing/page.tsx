@@ -73,7 +73,11 @@ export default async function MarketingPage({
   // Which sources actually appear in this period, so the filter never offers an option
   // that would return nothing.
   const hasActivity = (r: (typeof rows)[number]) =>
-    r.spend > 0 || (r.leads ?? 0) > 0 || (r.revenue ?? 0) > 0;
+    r.spend > 0 ||
+    r.impressions > 0 ||
+    r.clicks > 0 ||
+    (r.leads ?? 0) > 0 ||
+    (r.revenue ?? 0) > 0;
 
   const presentSources = [...new Set(rows.filter(hasActivity).map((r) => r.source ?? DEMO_SOURCE))].map((id) => ({
     id,
@@ -242,7 +246,7 @@ export default async function MarketingPage({
           <EmptyState
             icon={<Megaphone className="size-6" />}
             title="No campaign activity in this period"
-            hint="Widen the date range, or connect Meta Ads and Google Ads to pull spend automatically."
+            hint="Widen the date range, or connect LinkedIn Ads, Meta Ads or Google Ads on the Integrations page."
           />
         ) : (
           <TableWrap>

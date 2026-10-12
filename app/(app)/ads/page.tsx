@@ -41,7 +41,10 @@ export default async function AdsPage({
   ]);
 
   const rows = all.filter((r) => r.channelKind === 'paid' || r.channelKind === 'social');
-  const active = rows.filter((r) => r.spend > 0);
+  // Some platforms report delivery before cost is available (or on zero-cost rows).
+  // Keep those campaign/platform rows visible instead of treating spend as the only
+  // evidence that a successful sync returned data.
+  const active = rows.filter((r) => r.spend > 0 || r.impressions > 0 || r.clicks > 0);
   const totals = campaignTotals(active);
 
   // No metrics band on this page, so the reporting currency is read directly. Spend here
@@ -217,7 +220,7 @@ export default async function AdsPage({
           <EmptyState
             icon={<Megaphone className="size-6" />}
             title="No paid spend in this period"
-            hint="Widen the range, or connect an ad platform on the Integrations page."
+            hint="Widen the range, or connect an ad platform such as LinkedIn Ads, Meta Ads or Google Ads on the Integrations page."
           />
         ) : (
           <TableWrap>
@@ -279,4 +282,3 @@ export default async function AdsPage({
     </>
   );
 }
-
