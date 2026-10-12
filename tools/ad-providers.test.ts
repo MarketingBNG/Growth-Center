@@ -183,21 +183,138 @@ test('LinkedIn refresh exchanges the refresh token and keeps the access token fo
   }
 });
 
-test('LinkedIn empty analytics response explains likely account and access causes', async () => {
+test('LinkedIn starts an all-history backfill in monthly slices, including empty months', async () => {
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ elements: [] }), { status: 200 });
+  let analyticsUrl = '';
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes('/adAnalytics?')) {
+      analyticsUrl = url;
+      return new Response(
+        JSON.stringify({
+          elements: [
+            {
+              pivotValues: ['urn:li:sponsoredCampaign:42'],
+              dateRange: { start: { year: 2016, month: 10, day: 12 } },
+              costInLocalCurrency: { amount: '12.34', currencyCode: 'USD' },
+              impressions: 12,
+              clicks: 3,
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }
+    return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+  };
 
   try {
-    assert.ok(linkedinAds.sync);
-    await assert.rejects(
-      linkedinAds.sync(
+    assert.ok(linkedinAds.syncPaged);
+    const result = await linkedinAds.syncPaged(
+      JSON.stringify({ accessToken: 'test-access-token' }),
+      { adAccountId: '123456789' },
+      {
+        cursor: null,
+        since: null,
+        deadline: Date.now() + 60_000,
+        range: {
+          from: new Date('2026-09-12T00:00:00Z'),
+          to: new Date('2026-10-12T00:00:00Z'),
+        },
+      },
+    );
+    assert.equal(result.points.length, 3);
+    assert.ok(result.points.every((point) => point.date.toISOString() === '2016-10-31T00:00:00.000Z'));
+    assert.ok(result.cursor);
+    assert.equal(result.cursor.phase, 'monthly');
+    assert.equal(result.cursor.nextDate, '2016-11-01');
+    assert.match(analyticsUrl, /timeGranularity=MONTHLY/);
+    assert.match(analyticsUrl, /start:\(year:2016,month:10,day:12\)/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('LinkedIn continues backfill with daily slices for recent reporting data', async () => {
+  const previousFetch = globalThis.fetch;
+  let analyticsUrl = '';
+  globalThis.fetch = async (input) => {
+    analyticsUrl = String(input);
+    return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+  };
+
+  try {
+    assert.ok(linkedinAds.syncPaged);
+    const result = await linkedinAds.syncPaged(
+      JSON.stringify({ accessToken: 'test-access-token' }),
+      {},
+      {
+        cursor: {
+          phase: 'daily',
+          nextDate: '2026-05-01',
+          endDate: '2026-10-12',
+          dailyStart: '2026-05-01',
+          monthlyEnd: '2026-04-30',
+          account: '123456789',
+          names: {},
+        },
+        since: null,
+        deadline: Date.now() + 60_000,
+        range: {
+          from: new Date('2026-09-12T00:00:00Z'),
+          to: new Date('2026-10-12T00:00:00Z'),
+        },
+      },
+    );
+    assert.equal(result.points.length, 0);
+    assert.equal(result.cursor?.nextDate, '2026-05-08');
+    assert.match(analyticsUrl, /timeGranularity=DAILY/);
+    assert.match(analyticsUrl, /start:\(year:2026,month:5,day:1\)/);
+    assert.match(analyticsUrl, /end:\(year:2026,month:5,day:7\)/);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('LinkedIn historical cursor walks from ten years ago through the current day', async () => {
+  const previousFetch = globalThis.fetch;
+  let analyticsRequests = 0;
+  let monthlyRequests = 0;
+  let dailyRequests = 0;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (!url.includes('/adAnalytics?')) {
+      return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+    }
+    analyticsRequests++;
+    if (url.includes('timeGranularity=MONTHLY')) monthlyRequests++;
+    if (url.includes('timeGranularity=DAILY')) dailyRequests++;
+    return new Response(JSON.stringify({ elements: [] }), { status: 200 });
+  };
+
+  try {
+    assert.ok(linkedinAds.syncPaged);
+    let cursor: Record<string, unknown> | null = null;
+    for (let attempt = 0; attempt < 200 && (attempt === 0 || cursor); attempt++) {
+      const result = await linkedinAds.syncPaged(
         JSON.stringify({ accessToken: 'test-access-token' }),
         { adAccountId: '123456789' },
-        { from: new Date('2026-09-01T00:00:00Z'), to: new Date('2026-10-01T00:00:00Z') },
-      ),
-      /no campaign report rows.*lacks access/i,
-    );
+        {
+          cursor,
+          since: null,
+          deadline: Date.now() + 60_000,
+          range: {
+            from: new Date('2026-09-12T00:00:00Z'),
+            to: new Date('2026-10-12T00:00:00Z'),
+          },
+        },
+      );
+      cursor = result.cursor;
+    }
+    assert.equal(cursor, null, 'the complete history must eventually finish');
+    assert.ok(monthlyRequests > 100, 'historical reporting should use bounded monthly requests');
+    assert.ok(dailyRequests > 10, 'recent reporting should use bounded daily requests');
+    assert.equal(analyticsRequests, monthlyRequests + dailyRequests);
   } finally {
     globalThis.fetch = previousFetch;
   }

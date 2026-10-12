@@ -143,6 +143,9 @@ export interface IntegrationProvider {
    */
   readonly ownSchedule?: boolean;
 
+  /** Fetches historical metrics once when this source has no imported campaigns. */
+  readonly backfillHistoryWhenEmpty?: boolean;
+
   /** Non-secret settings this provider needs before it can sync. */
   readonly configFields?: ConfigField[];
   /** Documentation the person connecting it will need. */

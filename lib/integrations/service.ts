@@ -22,6 +22,8 @@ import { linkConvertedLeads, writeCrmActivity, writeCrmRecords, writeRevenueFrom
 import { writeOutreach } from './writers/outreach.ts';
 import { recordAudit } from '../platform/audit.ts';
 
+const HISTORY_BACKFILL_COMPLETE_KEY = '_historyBackfillComplete';
+
 // Everything that reads or writes integration state goes through here, so the rule
 // "state is read from the row, never inferred" holds in one place.
 //
@@ -106,7 +108,10 @@ async function readCards(): Promise<Card[]> {
   return providerList().map((p) => {
     const row = byProvider.get(p.id);
     const hasCredential = !!row?.credential;
-    const config = (row?.config as Record<string, unknown> | null) ?? {};
+    const storedConfig = (row?.config as Record<string, unknown> | null) ?? {};
+    const config = Object.fromEntries(
+      Object.entries(storedConfig).filter(([key]) => key !== HISTORY_BACKFILL_COMPLETE_KEY),
+    );
     const missingEnv = p.requiredEnv.filter((e) => !process.env[e.name]);
 
     // Widened deliberately: Card.state is a string because not every state the badge can
@@ -245,13 +250,16 @@ export async function connect(id: string, input: ConnectInput, actorEmail: strin
 }
 
 export async function disconnect(id: string, actorEmail: string) {
-  requireProvider(id);
+  const provider = requireProvider(id);
 
   const integration = await db().integration.findUnique({
     where: { provider: id },
-    select: { id: true },
+    select: { id: true, config: true },
   });
   if (!integration) return { ok: true as const };
+
+  const retainedConfig = (integration.config as Record<string, unknown> | null) ?? {};
+  delete retainedConfig[HISTORY_BACKFILL_COMPLETE_KEY];
 
   // The credential goes first: if this fails halfway, an integration with no
   // credential reads as disconnected, which is true. The reverse would leave a stored
@@ -272,7 +280,9 @@ export async function disconnect(id: string, actorEmail: string) {
       // account, the Search Console site URL, all typed by hand on the card's Settings
       // form — so keeping it costs nothing and saves re-typing them on the next connect.
       // The secret is the credential row, and that is deleted above.
-      config: undefined,
+      config: provider.backfillHistoryWhenEmpty
+        ? (retainedConfig as Prisma.InputJsonValue)
+        : undefined,
       // The sync watermark is the opposite case: reconnecting means starting clean. Without this the watermark survives, so the
       // next sync would ask only for records modified since the old connection and quietly
       // skip everything already imported — which is also the only way to re-pull records
@@ -473,8 +483,20 @@ export async function sync(
 
     const config = (integration.config as Record<string, unknown>) ?? {};
 
+    const backfillHistory =
+      provider.backfillHistoryWhenEmpty === true &&
+      config[HISTORY_BACKFILL_COMPLETE_KEY] !== true;
+
     const outcome = provider.syncPaged
-      ? await runPaged(provider, integration, credential, config, { from, to }, budgetMs)
+      ? await runPaged(
+          provider,
+          integration,
+          credential,
+          config,
+          { from, to },
+          budgetMs,
+          backfillHistory,
+        )
       : await runWhole(provider, integration, credential, config, { from, to });
 
     await db().integration.update({
@@ -538,6 +560,7 @@ async function runPaged(
   config: Record<string, unknown>,
   range: DateRange,
   budgetMs: number,
+  backfillHistory: boolean,
 ): Promise<SyncResult> {
   const startedAt = new Date();
   const deadline = Date.now() + budgetMs;
@@ -546,7 +569,7 @@ async function runPaged(
 
   // Mid-backfill, keep pulling everything: a watermark applied now would skip the records
   // the backfill has not reached yet. The watermark only takes effect on a fresh pass.
-  const since = cursor ? null : integration.syncedThrough;
+  const since = cursor || backfillHistory ? null : integration.syncedThrough;
 
   const total = noCounts();
 
@@ -570,7 +593,17 @@ async function runPaged(
     // was running falls inside the next window instead of into the gap between them.
     await db().integration.update({
       where: { id: integration.id },
-      data: { syncedThrough: startedAt },
+      data: {
+        syncedThrough: startedAt,
+        ...(provider.backfillHistoryWhenEmpty
+          ? {
+              config: {
+                ...config,
+                [HISTORY_BACKFILL_COMPLETE_KEY]: true,
+              } as Prisma.InputJsonValue,
+            }
+          : {}),
+      },
     });
   }
 
@@ -798,6 +831,10 @@ export async function setConfig(
     if (field.required && !value) throw new IntegrationError(`${field.label} is required.`);
 
     config[field.name] = value;
+  }
+
+  if (provider.backfillHistoryWhenEmpty && input.adAccountId !== undefined) {
+    delete config[HISTORY_BACKFILL_COMPLETE_KEY];
   }
 
   await db().integration.upsert({

@@ -1,4 +1,12 @@
-import { IntegrationError, httpTimeout, type IntegrationProvider, type Json, type MetricPoint } from '../types.ts';
+import {
+  IntegrationError,
+  httpTimeout,
+  type IntegrationProvider,
+  type Json,
+  type MetricPoint,
+  type SyncContext,
+  type SyncCursor,
+} from '../types.ts';
 import { rateLimited, requestFailed, tokenRejected } from '../messages.ts';
 import { num, str } from '../coerce.ts';
 
@@ -11,10 +19,8 @@ import { num, str } from '../coerce.ts';
 // — the side that actually routes data — and the seeder's orphaned `linkedin_ads` row now
 // has a provider behind it instead of rendering as a pending connection that does nothing.
 //
-// **Blocked on LinkedIn, not on this code.** The Marketing Developer Platform application
-// gates every endpoint used here; until it is approved the calls return 403. The provider
-// is written anyway because the approval and the build are independent, and the approval
-// is the slow half.
+// A first successful connection backfills the maximum historical reporting window in
+// bounded monthly and daily slices. Later syncs fetch only changes since the last pass.
 
 const TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken';
 const API = 'https://api.linkedin.com/rest';
@@ -35,6 +41,20 @@ type Stored = {
   refreshToken?: string;
   refreshTokenExpiresAt?: string;
 };
+
+type ReportCursor = {
+  phase: 'monthly' | 'daily';
+  nextDate: string;
+  endDate: string;
+  dailyStart: string;
+  monthlyEnd: string;
+  account: string;
+  names: Record<string, string>;
+};
+
+const HISTORY_YEARS = 10;
+const DAILY_WINDOW_MONTHS = 5;
+const MAX_ANALYTICS_ELEMENTS = 15_000;
 
 type LinkedInTokenResponse = {
   access_token?: string;
@@ -185,6 +205,201 @@ function dateParam(d: Date): string {
   return `(year:${d.getUTCFullYear()},month:${d.getUTCMonth() + 1},day:${d.getUTCDate()})`;
 }
 
+function dateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function fromDateString(value: string): Date {
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+function shiftDays(date: Date, days: number): Date {
+  const shifted = new Date(date);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted;
+}
+
+function lastOfMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+}
+
+function firstOfNextMonth(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+}
+
+function earlierDate(a: Date, b: Date): Date {
+  return a <= b ? a : b;
+}
+
+function laterDate(a: Date, b: Date): Date {
+  return a >= b ? a : b;
+}
+
+function dateCursor(value: SyncCursor | null): ReportCursor | null {
+  if (!value) return null;
+  const cursor = value as Partial<ReportCursor>;
+  if (
+    (cursor.phase !== 'monthly' && cursor.phase !== 'daily') ||
+    typeof cursor.nextDate !== 'string' ||
+    typeof cursor.endDate !== 'string' ||
+    typeof cursor.dailyStart !== 'string' ||
+    typeof cursor.monthlyEnd !== 'string' ||
+    typeof cursor.account !== 'string' ||
+    !cursor.names ||
+    typeof cursor.names !== 'object'
+  ) {
+    throw new IntegrationError('LinkedIn historical sync cursor is invalid. Restart the sync.');
+  }
+  return cursor as ReportCursor;
+}
+
+async function analyticsElements(
+  token: string,
+  account: string,
+  from: Date,
+  to: Date,
+  granularity: 'DAILY' | 'MONTHLY',
+): Promise<Json[]> {
+  const params = [
+    'q=analytics',
+    'pivot=CAMPAIGN',
+    `timeGranularity=${granularity}`,
+    `dateRange=(start:${dateParam(from)},end:${dateParam(to)})`,
+    `accounts=List(urn%3Ali%3AsponsoredAccount%3A${account})`,
+    'fields=costInLocalCurrency,impressions,clicks,dateRange,pivotValues',
+  ].join('&');
+
+  const payload = await get(`${API}/adAnalytics?${params}`, token);
+  const elements = Array.isArray(payload.elements) ? (payload.elements as Json[]) : [];
+  if (elements.length >= MAX_ANALYTICS_ELEMENTS) {
+    throw new IntegrationError(
+      `LinkedIn returned ${MAX_ANALYTICS_ELEMENTS.toLocaleString()} campaign report rows for one date slice, reaching its response limit. The account needs smaller report slices.`,
+    );
+  }
+  return elements;
+}
+
+function metricPoints(
+  elements: Json[],
+  names: Map<string, string>,
+  monthlyDate?: Date,
+): MetricPoint[] {
+  const points: MetricPoint[] = [];
+  for (const row of elements) {
+    const pivots = Array.isArray(row.pivotValues) ? row.pivotValues : [];
+    const id = urnId(pivots[0]);
+    if (!id) continue;
+
+    const range = (row.dateRange ?? {}) as Json;
+    const date = monthlyDate ?? readDate(range.start);
+    if (!date) continue;
+
+    const cost = readMoney(row.costInLocalCurrency);
+    const meta = { currency: cost.currency ?? undefined };
+
+    for (const [metricKey, value] of [
+      ['spend', cost.amount],
+      ['impressions', num(row.impressions)],
+      ['clicks', num(row.clicks)],
+    ] as const) {
+      points.push({
+        entityType: 'ad_campaign',
+        entityId: id,
+        entityLabel: names.get(id) ?? `Campaign ${id}`,
+        metricKey,
+        date,
+        value,
+        entityMeta: meta,
+      });
+    }
+  }
+  return points;
+}
+
+async function initialCursor(
+  token: string,
+  accountSetting: unknown,
+  ctx: SyncContext,
+): Promise<ReportCursor> {
+  const end = ctx.range.to;
+  const endDate = dateString(end);
+  const historyStart = new Date(end);
+  historyStart.setUTCFullYear(historyStart.getUTCFullYear() - HISTORY_YEARS);
+
+  // Daily reporting is limited to the recent period. Keeping a full five calendar
+  // months daily stays inside LinkedIn's six-month daily-retention window with margin.
+  const dailyStart = new Date(end);
+  dailyStart.setUTCDate(1);
+  dailyStart.setUTCMonth(dailyStart.getUTCMonth() - DAILY_WINDOW_MONTHS);
+  const dailyStartString = dateString(dailyStart);
+  const monthlyEnd = dateString(shiftDays(dailyStart, -1));
+
+  const account =
+    str(accountSetting) ? urnId(accountSetting) ?? str(accountSetting)! : await firstAccount(token);
+  const names = await campaignNames(token, account);
+
+  const requestedSince = ctx.since ? shiftDays(ctx.since, -1) : null;
+  const firstDate = requestedSince
+    ? laterDate(historyStart, requestedSince)
+    : historyStart;
+  const phase = dateString(firstDate) <= monthlyEnd ? 'monthly' : 'daily';
+
+  return {
+    phase,
+    nextDate: dateString(firstDate),
+    endDate,
+    dailyStart: dailyStartString,
+    monthlyEnd,
+    account,
+    names: Object.fromEntries(names),
+  };
+}
+
+function nextWindow(cursor: ReportCursor): {
+  from: Date;
+  to: Date;
+  granularity: 'DAILY' | 'MONTHLY';
+  next: ReportCursor | null;
+} {
+  let phase = cursor.phase;
+  let nextDate = cursor.nextDate;
+
+  if (phase === 'monthly' && nextDate > cursor.monthlyEnd) {
+    phase = 'daily';
+    nextDate = cursor.dailyStart;
+  }
+
+  const end = fromDateString(cursor.endDate);
+  const start = fromDateString(nextDate);
+  if (phase === 'monthly') {
+    const to = earlierDate(lastOfMonth(start), fromDateString(cursor.monthlyEnd));
+    const next = firstOfNextMonth(start);
+    const followingPhase = dateString(next) > cursor.monthlyEnd ? 'daily' : 'monthly';
+    return {
+      from: start,
+      to,
+      granularity: 'MONTHLY',
+      next: {
+        ...cursor,
+        phase: followingPhase,
+        nextDate: followingPhase === 'daily' ? cursor.dailyStart : dateString(next),
+      },
+    };
+  }
+
+  const to = earlierDate(shiftDays(start, 6), end);
+  const nextDateAfterWindow = dateString(shiftDays(to, 1));
+  return {
+    from: start,
+    to,
+    granularity: 'DAILY',
+    next:
+      nextDateAfterWindow > cursor.endDate
+        ? null
+        : { ...cursor, phase: 'daily', nextDate: nextDateAfterWindow },
+  };
+}
+
 export const linkedinAds: IntegrationProvider = {
   // Matches `resolveCampaign`, which is the side that routes data. The badge metadata's
   // `linkedin` is the one that was wrong.
@@ -192,7 +407,7 @@ export const linkedinAds: IntegrationProvider = {
   name: 'LinkedIn Ads',
   category: 'ads',
   authKind: 'oauth2',
-  summary: 'Sponsored content spend, impressions and clicks, per campaign per day.',
+  summary: 'Sponsored content spend, impressions and clicks, daily recently and monthly historically.',
   provides: ['Spend', 'Impressions', 'Clicks', 'CPC', 'CPM'],
   requiredEnv: [
     {
@@ -203,6 +418,7 @@ export const linkedinAds: IntegrationProvider = {
     { name: 'LINKEDIN_CLIENT_SECRET', description: 'That app’s secret.' },
   ],
   docsUrl: 'https://learn.microsoft.com/en-us/linkedin/marketing/',
+  backfillHistoryWhenEmpty: true,
 
   channel: { slug: 'linkedin-ads', name: 'LinkedIn Ads', kind: 'paid' },
 
@@ -271,71 +487,34 @@ export const linkedinAds: IntegrationProvider = {
     return exchangeRefreshToken(stored.refreshToken, stored);
   },
 
-  async sync(credential, config, range) {
+  async syncPaged(credential, config, ctx) {
     const stored = JSON.parse(credential) as Stored;
     // Older credentials stored the access token under `refreshToken` when LinkedIn did
     // not issue a separate refresh token.
     const token = stored.accessToken ?? stored.refreshToken;
     if (!token) throw new IntegrationError('LinkedIn access token is missing. Reconnect the integration.');
 
-    const account = str(config.adAccountId) ?? (await firstAccount(token));
+    const cursor = dateCursor(ctx.cursor);
+    const state = cursor ?? (await initialCursor(token, config.adAccountId, ctx));
+    const window = nextWindow(state);
+    const elements = await analyticsElements(
+      token,
+      state.account,
+      window.from,
+      window.to,
+      window.granularity,
+    );
 
-    // Analytics pivoted by campaign, one row per campaign per day. `timeGranularity:DAILY`
-    // is what makes it per-day; without it LinkedIn returns one aggregated row for the
-    // whole range and every day would carry the same total.
-    const params = [
-      'q=analytics',
-      'pivot=CAMPAIGN',
-      'timeGranularity=DAILY',
-      `dateRange=(start:${dateParam(range.from)},end:${dateParam(range.to)})`,
-      `accounts=List(urn%3Ali%3AsponsoredAccount%3A${account})`,
-      'fields=costInLocalCurrency,impressions,clicks,dateRange,pivotValues',
-    ].join('&');
-
-    const payload = await get(`${API}/adAnalytics?${params}`, token);
-    const elements = Array.isArray(payload.elements) ? (payload.elements as Json[]) : [];
-    if (elements.length === 0) {
-      throw new IntegrationError(
-        'LinkedIn returned no campaign report rows. LinkedIn returns an empty report when this ad account has no reportable activity in the selected date range, or when the connected member lacks access to its advertising data. Verify the configured ad account and member access in Campaign Manager.',
-      );
-    }
-
-    // Campaign names come from a second call: analytics returns the URN and no label, and
-    // a campaign showing as its own id is not something anybody can act on.
-    const names = await campaignNames(token, account);
-
-    const points: MetricPoint[] = [];
-
-    for (const row of elements) {
-      const pivots = Array.isArray(row.pivotValues) ? row.pivotValues : [];
-      const id = urnId(pivots[0]);
-      if (!id) continue;
-
-      const range_ = (row.dateRange ?? {}) as Json;
-      const date = readDate(range_.start);
-      if (!date) continue;
-
-      const cost = readMoney(row.costInLocalCurrency);
-      const meta = { currency: cost.currency ?? undefined };
-
-      for (const [metricKey, value] of [
-        ['spend', cost.amount],
-        ['impressions', num(row.impressions)],
-        ['clicks', num(row.clicks)],
-      ] as const) {
-        points.push({
-          entityType: 'ad_campaign',
-          entityId: id,
-          entityLabel: names.get(id) ?? `Campaign ${id}`,
-          metricKey,
-          date,
-          value,
-          entityMeta: meta,
-        });
-      }
-    }
-
-    return points;
+    return {
+      // The storage model keys spend by calendar date, so place each monthly aggregate
+      // on that month’s final day. This keeps it in range when a report starts mid-month.
+      points: metricPoints(
+        elements,
+        new Map(Object.entries(state.names)),
+        window.granularity === 'MONTHLY' ? window.to : undefined,
+      ),
+      cursor: window.next as SyncCursor | null,
+    };
   },
 };
 
