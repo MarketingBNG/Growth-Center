@@ -294,6 +294,11 @@ export const linkedinAds: IntegrationProvider = {
 
     const payload = await get(`${API}/adAnalytics?${params}`, token);
     const elements = Array.isArray(payload.elements) ? (payload.elements as Json[]) : [];
+    if (elements.length === 0) {
+      throw new IntegrationError(
+        'LinkedIn returned no campaign report rows. LinkedIn returns an empty report when this ad account has no reportable activity in the selected date range, or when the connected member lacks access to its advertising data. Verify the configured ad account and member access in Campaign Manager.',
+      );
+    }
 
     // Campaign names come from a second call: analytics returns the URN and no label, and
     // a campaign showing as its own id is not something anybody can act on.

@@ -657,7 +657,9 @@ async function persist(
     // After the CRM records too: activities are attached to the leads and deals above.
     activityRows: await writeCrmActivity(provider.id, points),
     // After the CRM records, never before: it reads the deals that step just wrote.
-    revenueRows: await writeRevenueFromWonDeals(),
+    // This materialiser derives revenue from CRM opportunities; running it for every
+    // provider made unrelated syncs (including LinkedIn Ads) claim those rows as theirs.
+    revenueRows: provider.category === 'crm' ? await writeRevenueFromWonDeals() : 0,
     outreachRows: await writeOutreach(provider.id, points),
   };
 }

@@ -183,6 +183,26 @@ test('LinkedIn refresh exchanges the refresh token and keeps the access token fo
   }
 });
 
+test('LinkedIn empty analytics response explains likely account and access causes', async () => {
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ elements: [] }), { status: 200 });
+
+  try {
+    assert.ok(linkedinAds.sync);
+    await assert.rejects(
+      linkedinAds.sync(
+        JSON.stringify({ accessToken: 'test-access-token' }),
+        { adAccountId: '123456789' },
+        { from: new Date('2026-09-01T00:00:00Z'), to: new Date('2026-10-01T00:00:00Z') },
+      ),
+      /no campaign report rows.*lacks access/i,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 // The repository had two names for this channel — `linkedin_ads` in resolveCampaign and
 // `linkedin` in the badge metadata — and an unknown id degrades silently rather than
 // failing. The provider takes the id that routes data.
