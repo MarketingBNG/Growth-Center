@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { customerId, describeError, fromMicros, googleAds } from '../lib/integrations/providers/google-ads.ts';
-import { linkedinAds, readDate, readMoney, urnId } from '../lib/integrations/providers/linkedin-ads.ts';
+import { describeError as describeLinkedInError, linkedinAds, readDate, readMoney, urnId } from '../lib/integrations/providers/linkedin-ads.ts';
 import { getProvider } from '../lib/integrations/registry.ts';
 
 // ── Google Ads ───────────────────────────────────────────────────────────────────────
@@ -86,6 +86,21 @@ test('cost arrives as a string beside its currency and both are kept', () => {
   // spend, so the two have to agree.
   assert.deepEqual(readMoney({ amount: '0' }), { amount: 0, currency: null });
   assert.deepEqual(readMoney(undefined), { amount: 0, currency: null });
+});
+
+test('LinkedIn sync errors retain HTTP status and a safe provider error code', () => {
+  assert.match(
+    describeLinkedInError(401, '{"status":401,"code":"INVALID_ACCESS_TOKEN","message":"Not authorized"}'),
+    /HTTP 401.*INVALID_ACCESS_TOKEN/,
+  );
+  assert.match(
+    describeLinkedInError(403, '{"errors":[{"serviceErrorCode":65600,"message":"Forbidden"}]}'),
+    /HTTP 403.*65600/,
+  );
+  assert.doesNotMatch(
+    describeLinkedInError(401, '{"code":"INVALID_ACCESS_TOKEN","message":"private response detail"}'),
+    /private response detail/,
+  );
 });
 
 // The repository had two names for this channel — `linkedin_ads` in resolveCampaign and

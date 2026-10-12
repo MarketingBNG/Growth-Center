@@ -78,15 +78,48 @@ export function readMoney(value: unknown): { amount: number; currency: string | 
   return { amount: num(m.amount), currency: str(m.currencyCode) };
 }
 
-function describeError(status: number, body: string): string {
+function errorCode(body: string): string | number | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+
+  const objects: Record<string, unknown>[] = [];
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const root = parsed as Record<string, unknown>;
+    objects.push(root);
+    if (Array.isArray(root.errors)) {
+      for (const error of root.errors) {
+        if (error && typeof error === 'object' && !Array.isArray(error)) {
+          objects.push(error as Record<string, unknown>);
+        }
+      }
+    }
+  }
+
+  for (const entry of objects) {
+    for (const key of ['serviceErrorCode', 'code', 'errorCode']) {
+      const value = entry[key];
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value)) return value;
+    }
+  }
+  return null;
+}
+
+export function describeError(status: number, body: string): string {
+  const code = errorCode(body);
+  const diagnostic = code === null ? '' : ` LinkedIn error code: ${code}.`;
   if (/REVOKED_ACCESS_TOKEN|EXPIRED/i.test(body) || status === 401) {
-    return tokenRejected('LinkedIn');
+    return `${tokenRejected('LinkedIn')} HTTP ${status}.${diagnostic}`;
   }
   if (status === 403) {
-    return 'LinkedIn refused the request. This usually means the Marketing Developer Platform application has not been approved for this app yet — it gates every advertising endpoint.';
+    return `LinkedIn refused the request. This usually means the Marketing Developer Platform application has not been approved for this app yet — it gates every advertising endpoint. HTTP ${status}.${diagnostic}`;
   }
-  if (status === 429) return rateLimited('LinkedIn');
-  return requestFailed('LinkedIn', status);
+  if (status === 429) return `${rateLimited('LinkedIn')} HTTP ${status}.${diagnostic}`;
+  return `${requestFailed('LinkedIn', status)}${diagnostic}`;
 }
 
 async function get(url: string, token: string): Promise<Json> {
