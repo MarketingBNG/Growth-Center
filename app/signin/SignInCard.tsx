@@ -1,7 +1,7 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { TrendingUp } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ErrorBanner } from '@/components/patterns/state';
@@ -34,9 +34,7 @@ export function SignInCard({
       <Card className="w-full max-w-sm">
         <CardContent className="pt-6">
           <div className="flex items-center gap-2.5 pb-5">
-            <span className="grid size-9 place-items-center rounded-md bg-primary/15 text-primary">
-              <TrendingUp className="size-5" />
-            </span>
+            <Logo className="size-9" />
             <div>
               <p className="text-sm font-semibold">Growth Center</p>
               <p className="text-xs text-muted-foreground">BNG Advisors</p>

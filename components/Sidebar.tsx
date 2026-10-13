@@ -5,11 +5,12 @@ import { useDismiss } from '@/components/use-dismiss';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
-import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen, TrendingUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, LogOut, PanelLeft, PanelLeftOpen } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { usePersisted } from './use-persisted';
 import { LinkProgress } from './NavProgress';
 import { ACCOUNT_NAV, NAV } from '@/lib/shared/nav';
+import { Logo } from './Logo';
 import { cn } from '@/lib/shared/utils';
 import type { CurrentUser } from '@/lib/access/auth';
 
@@ -72,9 +73,7 @@ export function Sidebar({ user }: { user: CurrentUser }) {
         {open ? (
           <>
             <Link href="/" className="flex min-w-0 items-center gap-2.5">
-              <span className="grid size-[30px] shrink-0 place-items-center rounded-[9px] bg-primary text-on-primary">
-                <TrendingUp className="size-[17px]" />
-              </span>
+              <Logo className="size-[30px] shrink-0" />
               <span className="whitespace-nowrap text-lead font-bold tracking-[-0.02em]">
                 Growth Center
               </span>
