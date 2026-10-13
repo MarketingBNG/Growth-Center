@@ -86,6 +86,7 @@ test('cost arrives as a string beside its currency and both are kept', () => {
   // spend, so the two have to agree.
   assert.deepEqual(readMoney({ amount: '0' }), { amount: 0, currency: null });
   assert.deepEqual(readMoney(undefined), { amount: 0, currency: null });
+  assert.deepEqual(readMoney('875.710000883123299994'), { amount: 875.710000883123299994, currency: null });
 });
 
 test('LinkedIn sync errors retain HTTP status and a safe provider error code', () => {

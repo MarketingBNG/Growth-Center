@@ -143,8 +143,12 @@ export function readDate(value: unknown): Date | null {
   return new Date(Date.UTC(year, month - 1, day));
 }
 
-/** LinkedIn returns cost as `{amount: "12.34", currencyCode: "USD"}`, the amount a string. */
+/**
+ * adAnalytics returns cost as a bare decimal string (`"875.71000088"`); other endpoints use
+ * `{amount: "12.34", currencyCode: "USD"}`. Reading only the object form zeroed all spend.
+ */
 export function readMoney(value: unknown): { amount: number; currency: string | null } {
+  if (typeof value === 'string' || typeof value === 'number') return { amount: num(value), currency: null };
   const m = (value ?? {}) as Json;
   return { amount: num(m.amount), currency: str(m.currencyCode) };
 }
